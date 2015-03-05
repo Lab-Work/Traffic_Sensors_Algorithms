@@ -1,0 +1,20 @@
+*** Creating Trace Output File 'test.tra' Ok.
+### Preparing for ADS-LD.
+### Creating ADS-LD Command Line
+### List of Objects: adding '"startup_stm32f4xx.o"'
+### List of Objects: adding '"main.o"'
+### List of Objects: adding '"system_stm32f4xx.o"'
+### ADS-LD Command completed:
+--cpu Cortex-M4.fp "startup_stm32f4xx.o" "main.o" "system_stm32f4xx.o" --ro-base 0x08000000 --entry 0x08000000 --rw-base 0x20000000 --entry Reset_Handler --first __Vectors --strict --autoat --summary_stderr --info summarysizes --map --xref --callgraph --symbols 
+--info sizes --info totals --info unused --info veneers 
+ --list ".\test.map" -o "test.axf"### Preparing Environment (PrepEnvAds)
+### ADS-LD Output File: 'test.axf'
+### ADS-LD Command File: 'test.lnp'
+### Checking for dirty Components...
+### Creating CmdFile 'test.lnp', Handle=0x00000420
+### Writing '.lnp' file
+### ADS-LD Command file 'test.lnp' is ready.
+### ADS-LD: About to start ADS-LD Thread.
+### ADS-LD: executed with 0 errors
+### Updating obj list
+### LDADS_file() completed.

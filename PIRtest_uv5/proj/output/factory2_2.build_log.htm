@@ -1,0 +1,347 @@
+<html>
+<body>
+<pre>
+<h1>礦ision Build Log</h1>
+<h2>Tool Versions:</h2>
+IDE-Version: 礦ision V5.13.0.0
+Copyright (C) 2014 ARM Ltd and ARM Germany GmbH. All rights reserved.
+License Information: Yanning Li, uiuc, LIC=----
+ 
+Tool Versions:
+Toolchain:       MDK-Lite  Version: 5.13.0.0
+Toolchain Path:  C:\Keil_v5\ARM\ARMCC\Bin
+C Compiler:      Armcc.exe V5.05 update 1 (build 106)
+Assembler:       Armasm.exe V5.05 update 1 (build 106)
+Linker/Locator:  ArmLink.exe V5.05 update 1 (build 106)
+Library Manager: ArmAr.exe V5.05 update 1 (build 106)
+Hex Converter:   FromElf.exe V5.05 update 1 (build 106)
+CPU DLL:         SARMCM3.DLL V5.13.0.0
+Dialog DLL:      DCM.DLL V1.13.1.0
+Target DLL:      Segger\JL2CM3.dll V2.99.11.0
+Dialog DLL:      TCM.DLL V1.14.4.0
+ 
+<h2>Project:</h2>
+C:\Users\Yanning\GoogleDrive\SensorCode\PIRtest_uv5\proj\test.uvprojx
+Project File Date:  02/27/2015
+
+<h2>Output:</h2>
+Rebuild target 'Target 1'
+assembling startup_stm32f4xx.s...
+compiling system_stm32f4xx.c...
+compiling maincpp01.cpp...
+compiling btest_allsensors_v3.cpp...
+..\src\btest_allsensors_v3.cpp(252): warning:  #186-D: pointless comparison of unsigned integer with zero
+    if(randomNumber<0){
+..\src\btest_allsensors_v3.cpp: 1 warning, 0 errors
+compiling stm32f4xx_it.c...
+compiling sdio_sd.c...
+compiling WaspXBeeCore.cpp...
+..\src\WaspXBeeCore.cpp(2050): warning:  #550-D: variable "previous" was set but never used
+      long previous=0;
+..\src\WaspXBeeCore.cpp(2051): warning:  #177-D: variable "aux" was declared but never referenced
+      uint16_t aux=0;
+..\src\WaspXBeeCore.cpp(2054): warning:  #177-D: variable "estado" was declared but never referenced
+      uint8_t estado=1;
+..\src\WaspXBeeCore.cpp(2056): warning:  #177-D: variable "ByteIN" was declared but never referenced
+      uint8_t ByteIN[20];
+..\src\WaspXBeeCore.cpp(2057): warning:  #177-D: variable "old_netAddress" was declared but never referenced
+      uint8_t old_netAddress[2];
+..\src\WaspXBeeCore.cpp(2058): warning:  #177-D: variable "net_Address_changed" was declared but never referenced
+      uint8_t net_Address_changed = 0;
+..\src\WaspXBeeCore.cpp(2764): warning:  #550-D: variable "lenrecapi" was set but never used
+        uint8_t lenrecapi=0;
+..\src\WaspXBeeCore.cpp(2883): warning:  #550-D: variable "lenrecapi" was set but never used
+        uint8_t lenrecapi=0;
+..\src\WaspXBeeCore.cpp(3917): warning:  #111-D: statement is unreachable
+                                                                break;
+..\src\WaspXBeeCore.cpp(4175): warning:  #111-D: statement is unreachable
+                        packet_finished[finishIndex]->RSSI=0;    
+..\src\WaspXBeeCore.cpp(3889): warning:  #550-D: variable "aux" was set but never used
+      uint16_t aux=0;
+..\src\WaspXBeeCore.cpp(3890): warning:  #177-D: variable "aux2" was declared but never referenced
+      uint16_t aux2=0;
+..\src\WaspXBeeCore.cpp(3891): warning:  #177-D: variable "error" was declared but never referenced
+      int8_t error=2;
+..\src\WaspXBeeCore.cpp(3892): warning:  #177-D: variable "cont3" was declared but never referenced
+      uint16_t cont3=0;
+..\src\WaspXBeeCore.cpp(3894): warning:  #550-D: variable "temp" was set but never used
+      uint16_t temp=0;
+..\src\WaspXBeeCore.cpp(3895): warning:  #177-D: variable "index1" was declared but never referenced
+      uint8_t index1=0;
+..\src\WaspXBeeCore.cpp(3896): warning:  #177-D: variable "index2" was declared but never referenced
+      uint8_t index2=0;
+..\src\WaspXBeeCore.cpp(3897): warning:  #177-D: variable "time" was declared but never referenced
+      long time=0;
+..\src\WaspXBeeCore.cpp(6280): warning:  #177-D: variable "aux_array" was declared but never referenced
+        char aux_array[15];
+..\src\WaspXBeeCore.cpp(6284): warning:  #177-D: variable "error_sd" was declared but never referenced
+        bool error_sd = false;
+..\src\WaspXBeeCore.cpp(6744): warning:  #225-D: the format string ends before this argument
+                                sprintf(sdfilename,"boot.zhp",firm_info.name_file);
+..\src\WaspXBeeCore.cpp(6656): warning:  #177-D: variable "data_bin" was declared but never referenced
+        uint8_t data_bin[92];
+..\src\WaspXBeeCore.cpp(6657): warning:  #177-D: variable "sd_index" was declared but never referenced
+        uint16_t sd_index=0;
+..\src\WaspXBeeCore.cpp(7092): warning:  #186-D: pointless comparison of unsigned integer with zero
+                                if( millis()-previous < 0 ) previous=millis(); //avoid millis overflow problem
+..\src\WaspXBeeCore.cpp(6909): warning:  #177-D: variable "num_lines" was declared but never referenced
+        uint16_t num_lines = 0;
+..\src\WaspXBeeCore.cpp(6911): warning:  #177-D: variable "offset" was declared but never referenced
+        uint16_t offset = 0;
+..\src\WaspXBeeCore.cpp(6917): warning:  #177-D: variable "num_bytes" was declared but never referenced
+        uint8_t num_bytes = 0;
+..\src\WaspXBeeCore.cpp(6921): warning:  #177-D: variable "reintentos" was declared but never referenced
+        uint8_t reintentos=0;
+..\src\WaspXBeeCore.cpp(7303): warning:  #225-D: the format string ends before this argument
+                        sprintf(sdfilename,"boot.zhp",firm_info.name_file);                       
+..\src\WaspXBeeCore.cpp(7251): warning:  #177-D: variable "num_lines" was declared but never referenced
+        uint16_t num_lines = 0;
+..\src\WaspXBeeCore.cpp(7252): warning:  #177-D: variable "id_exist" was declared but never referenced
+        bool id_exist = true;
+..\src\WaspXBeeCore.cpp(7253): warning:  #177-D: variable "offset" was declared but never referenced
+        uint16_t offset = 0;
+..\src\WaspXBeeCore.cpp(7260): warning:  #177-D: variable "num_bytes" was declared but never referenced
+        uint8_t num_bytes = 0;
+..\src\WaspXBeeCore.cpp(7261): warning:  #177-D: variable "reset" was declared but never referenced
+        bool reset = false;
+..\src\WaspXBeeCore.cpp(7464): warning:  #177-D: variable "m" was declared but never referenced
+        uint8_t m = 0;
+..\src\WaspXBeeCore.cpp(7585): warning:  #177-D: variable "buf_sd_aux" was declared but never referenced
+        char buf_sd_aux[47];
+..\src\WaspXBeeCore.cpp(7587): warning:  #177-D: variable "num_bytes" was declared but never referenced
+        uint8_t num_bytes = 0;
+..\src\WaspXBeeCore.cpp(7591): warning:  #177-D: variable "file_aux" was declared but never referenced
+        char* file_aux = "FILEAUX";
+..\src\WaspXBeeCore.cpp(7872): warning:  #186-D: pointless comparison of unsigned integer with zero
+           if( (millis()-firm_info.time_arrived)<0 ) total_time=millis();//we don't count time till zero
+..\src\WaspXBeeCore.cpp: 39 warnings, 0 errors
+compiling WaspEEPROM.cpp...
+compiling WaspFLASH.cpp...
+compiling WaspPWR.cpp...
+compiling WaspRTC.cpp...
+compiling WaspSD.cpp...
+compiling WaspSensor.cpp...
+compiling WaspUtils.cpp...
+compiling WaspXBee802.cpp...
+compiling WaspXBee.cpp...
+compiling test_usb.c...
+compiling matrix.c...
+..\src\matrix.c(133): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+        if(a<0.0)return -a;
+..\src\matrix.c(150): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+                if((panbie0>-0.0001)&&(panbie0<0.0001));
+..\src\matrix.c(166): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+                if((panbie0>-0.0001)&&(panbie0<0.0001))continue;
+..\src\matrix.c(182): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+        if((*(a+i*col+j)>0.9999)&&(*(a+i*col+j)<1.0001))return;
+..\src\matrix.c(182): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+        if((*(a+i*col+j)>0.9999)&&(*(a+i*col+j)<1.0001))return;
+..\src\matrix.c(196): warning:  #1035-D: single-precision operand implicitly converted to double-precision
+        if((bei>-0.0001)&&(bei<0.0001))return;
+..\src\matrix.c(208): warning:  #177-D: variable "m" was declared but never referenced
+        uint16_t m,n;
+..\src\matrix.c(208): warning:  #177-D: variable "n" was declared but never referenced
+        uint16_t m,n;
+..\src\matrix.c(211): warning:  #177-D: variable "i1" was declared but never referenced
+        uint16_t i1;
+..\src\matrix.c(408): warning:  #186-D: pointless comparison of unsigned integer with zero
+      if (IS_VALID_XY(mat,x,y) ) //判断xy有效
+..\src\matrix.c(408): warning:  #186-D: pointless comparison of unsigned integer with zero
+      if (IS_VALID_XY(mat,x,y) ) //判断xy有效
+..\src\matrix.c(410): warning:  #188-D: enumerated type mixed with another type
+                ptr = (uchar*)(mat->data.ptr + y * mat->step + x * mSizeOf(mat->type));
+..\src\matrix.c(534): warning:  #223-D: function "memset" declared implicitly
+        memset(tmat->data.ptr,0,rows *tmat->step);
+..\src\matrix.c(537): warning:  #223-D: function "memcpy" declared implicitly
+                memcpy(tmat->data.ptr,data,rows *tmat->step);
+..\src\matrix.c(560): warning:  #223-D: function "memcpy" declared implicitly
+      memcpy(mat->data.ptr,data,mat->rows *mat->step);
+..\src\matrix.c(615): warning:  #188-D: enumerated type mixed with another type
+                val = mGetRealData(ptr,mat->type);
+..\src\matrix.c(652): warning:  #188-D: enumerated type mixed with another type
+                if (mSetRealData(ptr,mat->type,val) != val)
+..\src\matrix.c(747): warning:  #188-D: enumerated type mixed with another type
+        mat->step = cols * mSizeOf(mat->type);
+..\src\matrix.c(788): warning:  #188-D: enumerated type mixed with another type
+                        mat = CreateMat(cols,rows,mat1->type,NULL);
+..\src\matrix.c(822): warning:  #188-D: enumerated type mixed with another type
+                        mat->data.ptr = malloc(rows * cols * mSizeOf(mat->type));//重新分配空间,按照mat的数据类型
+..\src\matrix.c(828): warning:  #188-D: enumerated type mixed with another type
+                                        if (SetData2D(mat,j,i,val,mat->type) != val)
+..\src\matrix.c(842): warning:  #188-D: enumerated type mixed with another type
+                                        if (SetData2D(mat,j,i,val,mat->type) != val)
+..\src\matrix.c(884): warning:  #188-D: enumerated type mixed with another type
+                        if (SetData2D(mat2,i,j,val,mat2->type) != val)
+..\src\matrix.c(931): warning:  #188-D: enumerated type mixed with another type
+                        mat = CreateMat(cols,rows,mat1->type,NULL);
+..\src\matrix.c(965): warning:  #188-D: enumerated type mixed with another type
+                        mat->data.ptr = malloc(rows * cols * mSizeOf(mat->type));//重新分配空间,按照mat的数据类型
+..\src\matrix.c(971): warning:  #188-D: enumerated type mixed with another type
+                                        if (SetData2D(mat,j,i,val,mat->type) != val)
+..\src\matrix.c(985): warning:  #188-D: enumerated type mixed with another type
+                                        if (SetData2D(mat,j,i,val,mat->type) != val)
+..\src\matrix.c(1033): warning:  #188-D: enumerated type mixed with another type
+                        mat = CreateMat(cols,rows,mat1->type,NULL);
+..\src\matrix.c(1071): warning:  #188-D: enumerated type mixed with another type
+                        mat->data.ptr = malloc(rows * cols * mSizeOf(mat->type));//重新分配空间,按照mat的数据类型
+..\src\matrix.c(1081): warning:  #188-D: enumerated type mixed with another type
+                                        if (SetData2D(mat,j,i,val,mat->type) != val)
+..\src\matrix.c(1099): warning:  #188-D: enumerated type mixed with another type
+                                        if (SetData2D(mat,j,i,val,mat->type) != val)
+..\src\matrix.c: 31 warnings, 0 errors
+compiling mysdfat.c...
+compiling dingke_timer.c...
+..\src\dingke_timer.c(68): warning:  #177-D: variable "flagerr" was declared but never referenced
+        int flagerr;
+..\src\dingke_timer.c: 1 warning, 0 errors
+compiling dingke_uart.c...
+..\src\dingke_uart.c(1567): warning:  #550-D: variable "i" was set but never used
+        int i;
+..\src\dingke_uart.c: 1 warning, 0 errors
+compiling dingke_smbus.c...
+compiling dingke_i2c.c...
+compiling dingke_spi.c...
+compiling dingke_pwr.c...
+compiling dingke_exti.c...
+..\src\dingke_exti.c(153): warning:  #177-D: variable "temp" was declared but never referenced
+        uint8_t temp;
+..\src\dingke_exti.c(154): warning:  #177-D: variable "flagerr" was declared but never referenced
+        int flagerr;    
+..\src\dingke_exti.c: 2 warnings, 0 errors
+compiling dingke_delay.c...
+compiling dingke_retarget.c...
+compiling dingke_sysclkchange.c...
+compiling test_xbeeonnlyforzhp.cpp...
+compiling dingke_wdg.c...
+compiling stm32f4xx_wwdg.c...
+compiling stm32f4xx_rcc.c...
+compiling stm32f4xx_gpio.c...
+compiling stm32f4xx_usart.c...
+compiling misc.c...
+compiling stm32f4xx_tim.c...
+compiling stm32f4xx_spi.c...
+compiling stm32f4xx_iwdg.c...
+compiling stm32f4xx_sdio.c...
+compiling stm32f4xx_dma.c...
+compiling stm32f4xx_exti.c...
+compiling stm32f4xx_flash.c...
+compiling stm32f4xx_pwr.c...
+compiling stm32f4xx_syscfg.c...
+compiling usbd_core.c...
+compiling usbd_ioreq.c...
+compiling usbd_req.c...
+compiling usbd_hid_core.c...
+compiling usb_dcd_int.c...
+compiling usb_core.c...
+compiling usb_dcd.c...
+compiling usb_bsp.c...
+compiling usbd_desc.c...
+compiling usbd_usr.c...
+compiling ff.c...
+compiling diskio.c...
+compiling MLX620_API.c...
+..\src\MLX620_API.c(106): error:  #28: expression must have a constant value
+                             startAddr,
+..\src\MLX620_API.c(107): error:  #28: expression must have a constant value
+                             addrStep,
+..\src\MLX620_API.c(108): error:  #28: expression must have a constant value
+                             nWords};
+..\src\MLX620_API.c(175): error:  #28: expression must have a constant value
+                      (uint8_t)((configReg & 0xFF) - 0x55),
+..\src\MLX620_API.c(176): error:  #28: expression must have a constant value
+                      (uint8_t)(configReg & 0xFF),
+..\src\MLX620_API.c(177): error:  #28: expression must have a constant value
+                      (uint8_t)((configReg >> 8) - 0x55),
+..\src\MLX620_API.c(178): error:  #28: expression must have a constant value
+                      (uint8_t)(configReg >> 8)};
+..\src\MLX620_API.c(195): error:  #28: expression must have a constant value
+        (uint8_t)((trimReg & 0xFF) - 0xAA),
+..\src\MLX620_API.c(196): error:  #28: expression must have a constant value
+        (uint8_t)(trimReg & 0xFF),
+..\src\MLX620_API.c(197): error:  #28: expression must have a constant value
+        (uint8_t)((trimReg >> 8) - 0xAA),
+..\src\MLX620_API.c(198): error:  #28: expression must have a constant value
+        (uint8_t)(trimReg >> 8)};
+..\src\MLX620_API.c(277): error:  #268: declaration may not appear after executable statement in block
+    int end = start + count * step;
+..\src\MLX620_API.c(285): error:  #268: declaration may not appear after executable statement in block
+      int irEnd = (MLX620_RAM_IR_BEG + MLX620_IR_SENSORS - start) / step;
+..\src\MLX620_API.c(288): error:  #268: declaration may not appear after executable statement in block
+      int caddr = start + irStart * step;
+..\src\MLX620_API.c(291): error:  #29: expected an expression
+      for (int i = 0; i < irEnd; ++i)
+..\src\MLX620_API.c(291): error:  #20: identifier "i" is undefined
+      for (int i = 0; i < irEnd; ++i)
+..\src\MLX620_API.c(320): error:  #268: declaration may not appear after executable statement in block
+    double d = (MLX620_DKT1*MLX620_DKT1 - 4 * MLX620_DKT2 * (1 - ptat / MLX620_DVtho));
+..\src\MLX620_API.c(335): error:  #268: declaration may not appear after executable statement in block
+    double dt = MLX620_DLastTa + 273.15;    //convert to Kelvin
+..\src\MLX620_API.c(339): error:  #268: declaration may not appear after executable statement in block
+    double d = (data - (MLX620_Ai[idxIr] + MLX620_Bi[idxIr] * (MLX620_DLastTa - 25)) - MLX620_CyclopsData) /(MLX620_Ke * MLX620_Alphai[idxIr]) + dt;
+..\src\MLX620_API.c(344): error:  #268: declaration may not appear after executable statement in block
+    double dTo = pow(d, 0.25);    //4th square
+..\src\MLX620_API.c(412): error:  #29: expected an expression
+    for (int i = 0; i < MLX620_IR_SENSORS; ++i)
+..\src\MLX620_API.c(412): error:  #20: identifier "i" is undefined
+    for (int i = 0; i < MLX620_IR_SENSORS; ++i)
+..\src\MLX620_API.c(354): warning:  #177-D: variable "s_val16" was declared but never referenced
+    int16_t s_val16;
+..\src\MLX620_API.c: 1 warning, 22 errors
+compiling MLX620_Demo.c...
+compiling MLX620_I2C_Driver.c...
+..\src\MLX620_I2C_Driver.c(105): error:  #147-D: declaration is incompatible with "void MLX620_I2C_Driver_Init(uint32_t, uint32_t, uint32_t, uint32_t)" (declared at line 137 of "..\src\MLX620_I2C_Driver.h")
+  void MLX620_I2C_Driver_Init(void)
+..\src\MLX620_I2C_Driver.c(109): warning:  #223-D: function "SMBus_poweron" declared implicitly
+        SMBus_poweron();
+..\src\MLX620_I2C_Driver.c(157): error:  #20: identifier "asm" is undefined
+    _NOP();
+..\src\MLX620_I2C_Driver.c(157): error:  #65: expected a ";"
+    _NOP();
+..\src\MLX620_I2C_Driver.c(158): error:  #65: expected a ";"
+    _NOP();
+..\src\MLX620_I2C_Driver.c(162): error:  #65: expected a ";"
+    _NOP();
+..\src\MLX620_I2C_Driver.c(164): error:  #65: expected a ";"
+    _NOP();
+..\src\MLX620_I2C_Driver.c(165): error:  #65: expected a ";"
+    _NOP();
+..\src\MLX620_I2C_Driver.c(166): error:  #65: expected a ";"
+    _NOP();
+..\src\MLX620_I2C_Driver.c(175): error:  #65: expected a ";"
+    _NOP();
+..\src\MLX620_I2C_Driver.c(195): error:  #20: identifier "asm" is undefined
+       _NOP();
+..\src\MLX620_I2C_Driver.c(195): error:  #65: expected a ";"
+       _NOP();
+..\src\MLX620_I2C_Driver.c(196): error:  #65: expected a ";"
+       _NOP();
+..\src\MLX620_I2C_Driver.c(197): error:  #65: expected a ";"
+       _NOP();
+..\src\MLX620_I2C_Driver.c(212): error:  #20: identifier "asm" is undefined
+     _NOP();
+..\src\MLX620_I2C_Driver.c(212): error:  #65: expected a ";"
+     _NOP();
+..\src\MLX620_I2C_Driver.c(219): error:  #65: expected a ";"
+     _NOP();
+..\src\MLX620_I2C_Driver.c(223): error:  #65: expected a ";"
+     _NOP();
+..\src\MLX620_I2C_Driver.c(224): error:  #65: expected a ";"
+     _NOP();
+..\src\MLX620_I2C_Driver.c(225): error:  #65: expected a ";"
+     _NOP();
+..\src\MLX620_I2C_Driver.c(227): error:  #65: expected a ";"
+     _NOP();
+..\src\MLX620_I2C_Driver.c(228): error:  #65: expected a ";"
+     _NOP();
+..\src\MLX620_I2C_Driver.c: 1 warning, 21 errors
+".\output\factory2_2.axf" - 43 Error(s), 77 Warning(s).
+
+<h2>Collection of Component include folders:</h2>
+  C:\Users\Yanning\GoogleDrive\SensorCode\PIRtest_uv5\proj\RTE
+  C:\Keil_v5\ARM\PACK\Keil\STM32F4xx_DFP\2.3.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include
+
+<h2>Collection of Component Files used:</h2>
+Target not created.
+</pre>
+</body>
+</html>
