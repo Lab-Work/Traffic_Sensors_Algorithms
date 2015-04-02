@@ -1,9 +1,0 @@
-.\output\mlx620_api.o: ..\src\MLX620_API.c
-.\output\mlx620_api.o: ..\src\MLX620_API.h
-.\output\mlx620_api.o: ..\src\MLX620_I2C_Device.h
-.\output\mlx620_api.o: ..\src\MLX620_I2C_Driver.h
-.\output\mlx620_api.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
-.\output\mlx620_api.o: ..\src\MLX620_RAM.h
-.\output\mlx620_api.o: ..\src\MLX620_EEPROM.h
-.\output\mlx620_api.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
-.\output\mlx620_api.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
