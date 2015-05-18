@@ -116,7 +116,7 @@ classdef readSerial < handle
                         
                         figure(1)
                         imagesc(meas_mat);
-                        caxis([30,40]);
+                        caxis([10,30]);
                         colorbar;
                         
                     end
@@ -147,7 +147,8 @@ classdef readSerial < handle
         % mins.
         % each row is one measurement
         % time, 1st row,... 4th row, T_a, counter
-        function readSaveNewPIR(obj)
+        % input: save data to file every minutes
+        function readSaveNewPIR(obj, minutes, T_low, T_high)
             
             timeStamp = [];
             
@@ -191,6 +192,7 @@ classdef readSerial < handle
                 if current_ID == packetID
                     % ambient temperature
                     T_a = str2double(str_line(end-5:end));
+                    T_a = T_a - 273.15; % convert to Celcius
                     str_line(end-5:end) = [];
                     
                     % concatenate two string
@@ -212,7 +214,7 @@ classdef readSerial < handle
                         
                         figure(1)
                         imagesc(meas_mat);
-                        caxis([30,40]);
+                        caxis([T_low,T_high]);
                         colorbar;
                         
                         
@@ -222,7 +224,7 @@ classdef readSerial < handle
                                            [cur_time, tmp_data , T_a, current_ID]];
                         
                         % save every 1 min
-                        if (cur_time - obj.data_to_save(1,1))*86400 >= 1*60
+                        if (cur_time - obj.data_to_save(1,1))*86400 >= minutes*60
                             formatOut = 'yy_mm_dd_HH_MM_SS_FFF';
                             name = datestr(now,formatOut);
                             dlmwrite(name, obj.data_to_save, 'precision',18); 

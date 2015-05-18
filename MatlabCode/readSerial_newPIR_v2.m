@@ -17,12 +17,19 @@ clear
 % s = serial('/dev/tty.usbserial-AM0211V4');
 % s = serial('COM8');de
 
-port = 'COM8';
+% for windows
+% port = 'COM8';
+% for mac
+port = '/dev/tty.usbserial-AM0211V4';
+
 
 newPIR_data = readSerial(port, 115200);
 
-newPIR_data.readNewPIR();
+% save data every 5 minutes
+newPIR_data.readSaveNewPIR(5, 18, 35);
 
+
+% following code is just for computing the mean and standard deviation
 data = newPIR_data.all_data;
 
 mean_temp = zeros(4,16);
@@ -41,8 +48,8 @@ for i=1:4
         plot(tmp_array,'Color',[rand, rand, rand]);  
     
         % compute mean and std
-        mean_temp = mean(tmp_array);
-        std_temp = std(tmp_array);
+        mean_temp(i,j) = mean(tmp_array);
+        std_temp(i,j) = std(tmp_array);
         
     end
 end
