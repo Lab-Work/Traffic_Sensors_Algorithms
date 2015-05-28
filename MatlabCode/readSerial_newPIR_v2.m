@@ -20,13 +20,15 @@ clear
 % for windows
 % port = 'COM8';
 % for mac
-port = '/dev/tty.usbserial-AM0211V4';
+% port = '/dev/tty.usbserial-AM0211V4';
+port = '/dev/tty.usbmodemfd121';
 
 
 newPIR_data = readSerial(port, 115200);
 
 % save data every 5 minutes
-newPIR_data.readSaveNewPIR(5, 18, 35);
+% newPIR_data.readSaveNewPIR(5, 18, 35);
+newPIR_data.readPIRFromArduino(18,35);
 
 
 % following code is just for computing the mean and standard deviation

@@ -145,9 +145,7 @@ classdef readSerial < handle
         %==================================================================
         % same function as readNewPIR, but save data into files every 5
         % mins.
-        % each row is one measurement
-        % time, 1st row,... 4th row, T_a, counter
-        % input: save data to file every minutes
+        % output: save data to file every minutes
         function readSaveNewPIR(obj, minutes, T_low, T_high)
             
             timeStamp = [];
@@ -290,6 +288,67 @@ classdef readSerial < handle
             
         end
         
+        
+        
+        
+        %===========================
+        % read an plot data collected using arduino
+        function readPIRFromArduino(obj, T_min, T_max)
+            
+            timeStamp = [];
+            
+            s = serial(obj.port);
+            
+            set(s,'BaudRate',obj.baudrate);
+            
+            fopen(s);
+            
+            
+            loop_cnt = 1;
+            while loop_cnt <= 120
+                % start read data
+                str_line = fscanf(s);
+                
+                % wait until data comes
+                if length(str_line) ~= 388
+                    continue
+                end
+                
+                % remove the end of line character
+                % #23.23,.....,23.23,*
+                str_line(1) = [];
+                str_line(end-3:end) = [];
+                
+                obj.all_time = [obj.all_time; now];
+                
+                % convert to a matrix
+                str_array = strsplit(str_line,',');
+                temp_array = str2double(str_array);
+                
+                meas_mat = reshape(temp_array, 4, 16);
+                    
+                % save to all data
+                obj.all_data(:,:,loop_cnt) = meas_mat;
+                loop_cnt = loop_cnt +1;
+                
+                if ~isempty(meas_mat) && mod(loop_cnt,12)==0
+                    
+                    % plot the result
+                    disp(meas_mat)
+                    
+                    figure(1)
+                    imagesc(meas_mat);
+                    caxis([T_min,T_max]);
+                    colorbar;
+                    
+                end
+                
+                
+            end
+            
+            
+            
+        end
         
         
         
