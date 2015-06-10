@@ -1,8 +1,8 @@
 # This is the Class for PIR90620 sensor.
-# The goal of this class is to
-# 1. easily integrate PIR data in data collection code
-# 2. visualize data
-# 3. post process data from files
+# This class can:
+# 1. import the EEPROM register values and copmute the temperature from IRraw data
+# 2. Save all data in clean data structure, either from serial port reading or data files
+# 3. visualize the data, heat_map or time series of a single pixel
 
 
 import numpy as np
@@ -13,12 +13,16 @@ from MLX90620_register import *
 
 class PIR_MLX90620:
 
-    def __init__(self, pir_id, alpha_ij, eepromData):
-        # alpha matrix for each PIR sensor
-        self.pir_id = pir_id
-        self.alpha_ij = np.copy(alpha_ij)
-        self.eepromData = np.copy(eepromData)
+    def __init__(self, pir_id):
 
+        self.pir_id = pir_id
+
+        # The following properties declared here are used for computing from IRraw to temperature
+        # alpha matrix for each PIR sensor, should be set using import_eeprom function
+        self.alpha_ij = None    # will be set later
+        self.eepromData = None
+
+        # Following constant are used to compute the temperature from IRraw
         # constants needs to be first computed and then used
         self.v_th = 0
         self.a_cp = 0
@@ -32,12 +36,16 @@ class PIR_MLX90620:
         self.a_ij = np.zeros(64)  # 64 array
         self.b_ij = np.zeros(64)
 
-        # raw data to be received
+        # all temperature data
+        # time stamps [epoch time, millis_pir1, millis_pir2, millis_pir3]
         # a list of 64 arrays. each array is a time series temperature data for one pixel
+        self.time_stamps = []
         self.all_temperatures = []
         for i in range(0,64):
             self.all_temperatures.append([])
+        self.all_Ta = []
 
+        # the following are the latest frame of data
         self.temperatures = np.zeros((4, 16))
         self.Tambient = 0
 
@@ -46,7 +54,13 @@ class PIR_MLX90620:
         self.fig_handles = []
         self.pixel_id = 0   # by default 0
 
+    # PIR LIBRARY
+    # import EEPROM, must be called if want to compute temperature from IRraw data.
+    def import_eeprom(self, alpha_ij, eepromData):
+        self.alpha_ij = np.copy(alpha_ij)
+        self.eepromData = np.copy(eepromData)
 
+    # PIR LIBRARY
     # initialize the constant parameters
     def const_init(self):
         self.v_th = 256*self.eepromData[VTH_H] + self.eepromData[VTH_L]
@@ -95,7 +109,7 @@ class PIR_MLX90620:
         # for i in range(0, 64):
         #     print self.b_ij[i]
 
-
+    # PIR LIBRARY
     # compute the Ta and To
     # Due to data corruption, if Ta is negative, then stop and do not compute To
     def calculate_temperature(self, ptat, irData, cpix):
@@ -107,7 +121,7 @@ class PIR_MLX90620:
         else:
             self.calculate_TO(irData, cpix)
 
-
+    # PIR LIBRARY
     # calculate TA
     def calculate_TA(self, ptat):
         self.Tambient = (-self.k_t1 + np.sqrt(np.power(self.k_t1, 2) -
@@ -115,6 +129,7 @@ class PIR_MLX90620:
         # print 'ambient temperature: '
         # print self.Tambient
 
+    # PIR LIBRARY
     # calculate object temperature
     # irData: a np(4,16) matrix with raw data
     # output saved in temperatures(4,16)
@@ -139,7 +154,7 @@ class PIR_MLX90620:
                 self.all_temperatures[i].append(self.temperatures[row, col])
 
 
-
+    # statistic analysis
     # calculate the mean and std of the measurement of each pixel
     def calculate_std(self):
 
@@ -158,6 +173,8 @@ class PIR_MLX90620:
             print 'std of each pix:{0}'.format(np.reshape(std, (16, 4) ).T)
 
 
+    # visualization
+    # init_fig and update_fig are used for real-time plotting from serial stream data.
     # initialize the plotting for time series of chosen pixels
     def init_fig(self, pixel_id, T_min, T_max):
 
@@ -187,7 +204,7 @@ class PIR_MLX90620:
         plt.show(block=False)
         plt.ylim((T_min,T_max))
 
-
+    # visualization
     def update_fig(self):
 
         if len(self.all_temperatures) >= self.pixel_id:
@@ -207,11 +224,32 @@ class PIR_MLX90620:
             self.fig_handles[0][0].canvas.draw()
 
 
+    # visualization
+    # The following function is used for plot the time series of one or multiple pixel in a given time range
+    # input: t_start, and t_end are the epoch time of the interested interval
+    #       pixel_id is a list of pixel index tuples [(0,0),(3,4)] in the 4x16 matrix
+    def plot_time_series_of_pixel(self, t_start, t_end, pixel_id):
+        pass
+
+    # visualization
+    # The following function plot a static single 4x16 pixel frame given the time interval
+    # input: each frame in the [t_start, t_end] interval will be plotted in separate figures
+    def plot_heat_map(self, t_start, t_end):
+        pass
+
+
+    # visualization
+    # The following function plot the heat map video given a time interval
+    # input: t_start and t_end are in epoch time,
+    #        fps is the number of frames per second
+    def plot_heat_map_video(self, t_start, t_end, fps):
+        pass
 
 
 
-# This class plots the temperature heat map
-# it plots three subfigures in three rows and one colume, each figure use imshow to plot a 4x16 matrix
+
+# This class plots the heat map for three PIR sensors
+# it plots three subfigures in three rows and one column, each figure use imshow to plot a 4x16 matrix
 # theoretically this plot can refresh as fast as 300 frames/s
 class PlotPIR:
     def __init__(self, num_plot, T_min, T_max):
