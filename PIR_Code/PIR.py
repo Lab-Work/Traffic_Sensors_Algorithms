@@ -4,6 +4,10 @@
 # 2. Save all data in clean data structure, either from serial port reading or data files
 # 3. visualize the data, heat_map or time series of a single pixel
 
+# if a comment for a function starts with:
+# LIBRARY: for computing IRraw data to temperature. Not needed to process data which is already in temperature form
+# Visualization: methods for visualizing data
+# statistic analysis: some handy functions for checking the statistic property
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -152,6 +156,12 @@ class PIR_MLX90620:
 
                 # save into all_temperatures
                 self.all_temperatures[i].append(self.temperatures[row, col])
+
+
+    # FILE HANDLE
+    # This function read the data file and save all data in its properties
+    def read_temp_data_file(self, file_name_str):
+        pass
 
 
     # statistic analysis
