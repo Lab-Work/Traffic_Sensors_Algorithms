@@ -12,10 +12,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
+from datetime import datetime
+import time
 from MLX90620_register import *
 
 
-# This is the class for MLX90620
+# This is the class for a single MLX90620
 # including the library for computing the temperature from IRraw
 # also a variety of visualization methods
 class PIR_MLX90620:
@@ -44,14 +46,13 @@ class PIR_MLX90620:
         self.b_ij = np.zeros(64)
 
         # all temperature data
-        # time stamps [epoch time]
-        # a list of 64 arrays. each array is a time series temperature data for one pixel
-        self.time_stamps = []
-        self.t_millis = []
-        self.all_temperatures = []
-        for i in range(0,64):
-            self.all_temperatures.append([])
-        self.all_Ta = []
+        # timestamps [epoch time] np array; t_millis np array
+        self.time_stamps = None
+        self.t_millis = None
+        # all_temperatures, a np matrix: 64 row x n_sample; each column is a frame
+        self.all_temperatures = None
+        # all ambient temperature, np array
+        self.all_Ta = None
 
         # the following are the latest frame of data
         self.temperatures = np.zeros((4, 16))
@@ -237,21 +238,264 @@ class PIR_MLX90620:
     # input: t_start, and t_end are the epoch time of the interested interval
     #       pixel_id is a list of pixel index tuples [(0,0),(3,4)] in the 4x16 matrix
     def plot_time_series_of_pixel(self, t_start, t_end, pixel_id):
-        pass
+
+        # extract data to plot from the properties
+        index = np.nonzero(t_start <= self.time_stamps <= t_end)[0]
+
+        data_to_plot = []
+        # only extract the pixels data to be plotted
+        for i in range(0, len(pixel_id)):
+            pixel_index = pixel_id[i][0]*4 + pixel_id[i][1]
+            data_to_plot.append(self.all_temperatures[pixel_index, index])
+
+        fig = plt.figure(figsize=(16,8), dpi=100)
+        for i in range(0, len(pixel_id)):
+            plt.plot(self.time_stamps, data_to_plot[i])
+
+        plt.title('Time series of PIR {0}, pixel {1}'.format(self.pir_id, pixel_id))
+        plt.ylabel('Temperature ($^{\circ}C$)')
+        plt.xlabel('Time stamps in EPOCH')
+        plt.show()
+
 
     # visualization
     # The following function plot a static single 4x16 pixel frame given the time interval
     # input: each frame in the [t_start, t_end] interval will be plotted in separate figures
-    def plot_heat_map(self, t_start, t_end):
-        pass
+    #        T_min and T_max are the limit for the color bar
+    def plot_heat_map(self, t_start, t_end, T_min, T_max):
+        # extract data to plot from the properties
+        index = np.nonzero(t_start <= self.time_stamps <= t_end)[0]
+        data_to_plot = self.all_temperatures[:, index]
+
+        for i in range(0, data_to_plot.shape[1]):
+            fig = plt.figure(figsize=(16,8), dpi=100)
+            im = plt.imshow(data_to_plot[i][:,i].reshape(16,4).T,
+                            cmap=plt.get_cmap('jet'),
+                            interpolation='nearest',
+                            vmin=T_min, vmax=T_max)
+
+            cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
+            fig.colorbar(im[2], cax=cax)
+            plt.title('heat map of PIR {0}'.format(self.pir_id))
+            plt.show()
 
 
     # visualization
-    # The following function plot the heat map video given a time interval
+    # The following function plot the heat map video given a time interval for just one PIR sensor
     # input: t_start and t_end are in epoch time,
+    #        T_min and T_max are the limits for color bar
     #        fps is the number of frames per second
-    def plot_heat_map_video(self, t_start, t_end, fps):
-        pass
+    def plot_heat_map_video(self, t_start, t_end, T_min, T_max, fps):
+        # initialize figure
+        fig, ax = plt.subplots()
+
+        ax.set_aspect('equal')
+        ax.set_xlim(-0.5, 15.5)
+        ax.set_ylim(-0.5, 3.5)
+        ax.hold(True)
+
+        # cache the background
+        background = fig.canvas.copy_from_bbox(ax.bbox)
+
+        im = []
+        T_init = np.zeros((4, 16)) + T_min
+        im.append(ax.imshow(T_init, cmap=plt.get_cmap('jet'), interpolation='nearest', vmin=T_min, vmax=T_max))
+
+        cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
+        fig.colorbar(im[2], cax=cax)
+
+        ax.set_ylabel('PIR {0}'.format(self.pir_id))
+        # self.ax[i].get_xaxis().set_visible(False)
+        # self.ax[i].get_yaxis().set_visible(False)
+
+        plt.show(False)
+        plt.draw()
+
+        # extract data to play from the properties
+        index = np.nonzero(t_start <= self.time_stamps <= t_end)[0]
+        # each columnn is one frame
+        data_to_play = self.all_temperatures[:, index]
+
+        timer_start = time.time()
+        for frame_index in range(0, data_to_play.shape[1]):
+
+            # wait using the fps
+            while time.time() - timer_start <= 1/fps:
+                time.sleep(0.005)   # sleep 5 ms
+                continue
+
+            # reset timer
+            timer_start = time.time()
+
+            # update figure
+            # print 'T[{0}]: {1}'.format(i, T[i])
+            im.set_data(data_to_play[:,frame_index].reshape(16,4).T)
+
+            fig.canvas.restore_region(background)
+            ax.draw_artist(im)
+            fig.canvas.blit(ax.bbox)
+
+
+
+# This is the class for three MLX90620 PIR sensors
+# Sometimes we need to process three PIR sensors at the same time, such as plotting a heat map video in 3 subfigures,
+# or read 3 PIR data from a file
+class PIR_3_MLX90620:
+
+    def __init__(self):
+
+        # create three PIR objects
+        self.pir1 = PIR_MLX90620(1)
+        self.pir2 = PIR_MLX90620(2)
+        self.pir3 = PIR_MLX90620(3)
+
+    # read all three PIR data from a file
+    def read_data_from_file(self, file_name_str):
+
+        data_set = csv.reader(file_name_str)
+
+        # save in a list, then save to pir np matrix
+        time_stamps = []
+        all_temperatures_1 = []
+        all_temperatures_2 = []
+        all_temperatures_3 = []
+        for i in range(0,64):
+            all_temperatures_1.append([])
+            all_temperatures_2.append([])
+            all_temperatures_3.append([])
+
+        t_millis_1 = []
+        t_millis_2 = []
+        t_millis_3 = []
+
+        all_Ta_1 = []
+        all_Ta_2 = []
+        all_Ta_3 = []
+
+        # parse line into the list
+        for line in data_set:
+            time_stamps.append(float(line[0]))
+
+            # pir sensor 1
+            index = 1
+            t_millis_1.append(int(line[index]))
+            index +=1
+
+            for i in range(0,64):
+                all_temperatures_1[i].append(float(line[i + index]))
+            index +=1
+
+            all_Ta_1.append(float(line[index]))
+            index +=1
+            # skip ultrasonic sensor
+            index +=1
+
+            # pir sensor 2
+            t_millis_2.append(int(line[index]))
+            index +=1
+
+            for i in range(0,64):
+                all_temperatures_2[i].append(float(line[i + index]))
+                index +=1
+
+            all_Ta_2.append(float(line[index]))
+            index +=1
+            # skip ultrasonic sensor
+            index +=1
+
+            # pir sensor 3
+            t_millis_3.append(int(line[index]))
+            index +=1
+
+            for i in range(0,64):
+                all_temperatures_3[i].append(float(line[i + index]))
+                index +=1
+
+            all_Ta_3.append(float(line[index]))
+            index +=1
+            # skip ultrasonic sensor
+            index +=1
+
+        # save and convert those into np matrix for each PIR object
+        self.pir1.time_stamps = np.array(time_stamps)
+        self.pir1.t_millis = t_millis_1
+        self.pir1.all_temperatures = np.array(all_temperatures_1)
+        self.pir1.all_Ta = np.array(all_Ta_1)
+
+        self.pir2.time_stamps = np.array(time_stamps)
+        self.pir2.t_millis = t_millis_2
+        self.pir2.all_temperatures = np.array(all_temperatures_2)
+        self.pir2.all_Ta = np.array(all_Ta_2)
+
+        self.pir3.time_stamps = np.array(time_stamps)
+        self.pir3.t_millis = t_millis_3
+        self.pir3.all_temperatures = np.array(all_temperatures_3)
+        self.pir3.all_Ta = np.array(all_Ta_3)
+
+
+    # plot PIR heat map video from saved data (For real-time play from serial ports, refer to PlotPIR class)
+    # t_start and t_end are the starting and end time of the video
+    # T_min, T_max are the colorbar limits
+    # fps is frames per second (theoretically up to 300 fps
+    def play_video(self, t_start, t_end, T_min, T_max, fps):
+
+        # initialize figure
+        fig, ax = plt.subplot(3,1)
+        for i in range(0,3):
+            ax[i].set_aspect('equal')
+            ax[i].set_xlim(-0.5, 15.5)
+            ax[i].set_ylim(-0.5, 3.5)
+            ax[i].hold(True)
+
+        # cache the background
+        background = fig.canvas.copy_from_bbox(ax[0].bbox)
+
+        im = []
+        T_init = np.zeros((4, 16)) + T_min
+        for i in range(0, 3):
+            im.append(ax[i].imshow(T_init, cmap=plt.get_cmap('jet'), interpolation='nearest', vmin=T_min, vmax=T_max))
+
+        cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
+        fig.colorbar(im[2], cax=cax)
+
+        # set labels
+        for i in range(0, 3):
+            ax[i].set_ylabel('PIR {0}'.format(i+1))
+            # self.ax[i].get_xaxis().set_visible(False)
+            # self.ax[i].get_yaxis().set_visible(False)
+
+        plt.show(False)
+        plt.draw()
+
+        # extract data to play from the properties
+        index = np.nonzero(t_start <= self.pir1.time_stamps <= t_end)[0]
+        # each columnn is one frame
+        data_to_play = []
+        data_to_play.append(self.pir1.all_temperatures[:, index])
+        data_to_play.append(self.pir2.all_temperatures[:, index])
+        data_to_play.append(self.pir3.all_temperatures[:, index])
+
+
+        timer_start = time.time()
+        for frame_index in range(0, data_to_play[0].shape[1]):
+
+            # wait using the fps
+            while time.time() - timer_start <= 1/fps:
+                time.sleep(0.005)   # sleep 5 ms
+                continue
+
+            # reset timer
+            timer_start = time.time()
+
+            # update figure
+            for i in range(0, 3):
+                # print 'T[{0}]: {1}'.format(i, T[i])
+                im[i].set_data(data_to_play[i][:,frame_index].reshape(16,4).T)
+
+                fig.canvas.restore_region(background)
+                ax[i].draw_artist(im[i])
+                fig.canvas.blit(ax[i].bbox)
+
 
 
 
@@ -269,6 +513,7 @@ class PlotPIR:
             self.ax[i].hold(True)
 
         # cache the background
+        # in fact, they can share the background
         self.background_1 = self.fig.canvas.copy_from_bbox(self.ax[0].bbox)
         self.background_2 = self.fig.canvas.copy_from_bbox(self.ax[1].bbox)
         self.background_3 = self.fig.canvas.copy_from_bbox(self.ax[2].bbox)
@@ -281,7 +526,7 @@ class PlotPIR:
         cax = self.fig.add_axes([0.9, 0.1, 0.03, 0.8])
         self.fig.colorbar(self.im[2], cax=cax)
 
-        # set
+        # set axis
         for i in range(0, 3):
             self.ax[i].set_ylabel('PIR {0}'.format(i+1))
             # self.ax[i].get_xaxis().set_visible(False)
@@ -290,6 +535,7 @@ class PlotPIR:
         plt.show(False)
         plt.draw()
 
+    # T is a list of three element, each element is a 4x16 matrix corresponding to three PIR
     def update(self, T):
         # tic = time.time()
 
@@ -307,75 +553,7 @@ class PlotPIR:
 
 
 
-# This class is the File class for reading data from files
-class Read_PIR_Data_File:
 
-    def __init__(self, file_name_str):
-
-        self.file_name_str = file_name_str
-
-        # initialize PIR
-        self.pir1 = PIR_MLX90620(1)
-        self.pir2 = PIR_MLX90620(2)
-        self.pir3 = PIR_MLX90620(3)
-
-    # read data file and return MLX90620 class object
-    def read_file(self):
-
-        data_set = csv.reader(self.file_name_str)
-
-        for line in data_set:
-            self.parse_line(line)
-
-        return [self.pir1, self.pir2, self.pir3]
-
-
-    # we may change the format later, hence write a paser for each one.
-    def parse_line(self, line):
-
-        self.pir1.time_stamps.append(float(line[0]))
-        self.pir2.time_stamps.append(float(line[0]))
-        self.pir3.time_stamps.append(float(line[0]))
-
-        # pir sensor 1
-        index = 1
-        self.pir1.t_millis.append(int(line[index]))
-        index +=1
-
-        for i in range(0,64):
-            self.pir1.all_temperatures[i].append(float(line[i + index]))
-            index +=1
-
-        self.pir1.all_Ta.append(float(line[index]))
-        index +=1
-        # skip ultrasonic sensor
-        index +=1
-
-        # pir sensor 2
-        self.pir2.t_millis.append(int(line[index]))
-        index +=1
-
-        for i in range(0,64):
-            self.pir2.all_temperatures[i].append(float(line[i + index]))
-            index +=1
-
-        self.pir2.all_Ta.append(float(line[index]))
-        index +=1
-        # skip ultrasonic sensor
-        index +=1
-
-        # pir sensor 3
-        self.pir3.t_millis.append(int(line[index]))
-        index +=1
-
-        for i in range(0,64):
-            self.pir3.all_temperatures[i].append(float(line[i + index]))
-            index +=1
-
-        self.pir3.all_Ta.append(float(line[index]))
-        index +=1
-        # skip ultrasonic sensor
-        index +=1
 
 
 
