@@ -250,7 +250,7 @@ class PIR_MLX90620:
         data_to_plot = []
         # only extract the pixels data to be plotted
         for i in range(0, len(pixel_id)):
-            pixel_index = pixel_id[i][0]*4 + pixel_id[i][1]
+            pixel_index = pixel_id[i][1]*4 + pixel_id[i][0]
             data_to_plot.append(self.all_temperatures[pixel_index, index])
 
         fig = plt.figure(figsize=(16,8), dpi=100)
