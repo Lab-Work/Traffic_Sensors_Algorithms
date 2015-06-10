@@ -11,10 +11,13 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import csv
 from MLX90620_register import *
 
 
-
+# This is the class for MLX90620
+# including the library for computing the temperature from IRraw
+# also a variety of visualization methods
 class PIR_MLX90620:
 
     def __init__(self, pir_id):
@@ -41,9 +44,10 @@ class PIR_MLX90620:
         self.b_ij = np.zeros(64)
 
         # all temperature data
-        # time stamps [epoch time, millis_pir1, millis_pir2, millis_pir3]
+        # time stamps [epoch time]
         # a list of 64 arrays. each array is a time series temperature data for one pixel
         self.time_stamps = []
+        self.t_millis = []
         self.all_temperatures = []
         for i in range(0,64):
             self.all_temperatures.append([])
@@ -156,12 +160,6 @@ class PIR_MLX90620:
 
                 # save into all_temperatures
                 self.all_temperatures[i].append(self.temperatures[row, col])
-
-
-    # FILE HANDLE
-    # This function read the data file and save all data in its properties
-    def read_temp_data_file(self, file_name_str):
-        pass
 
 
     # statistic analysis
@@ -304,3 +302,87 @@ class PlotPIR:
             self.ax[i].draw_artist(self.im[i])
 
             self.fig.canvas.blit(self.ax[i].bbox)
+
+
+
+
+
+# This class is the File class for reading data from files
+class Read_PIR_Data_File:
+
+    def __init__(self, file_name_str):
+
+        self.file_name_str = file_name_str
+
+        # initialize PIR
+        self.pir1 = PIR_MLX90620(1)
+        self.pir2 = PIR_MLX90620(2)
+        self.pir3 = PIR_MLX90620(3)
+
+    # read data file and return MLX90620 class object
+    def read_file(self):
+
+        data_set = csv.reader(self.file_name_str)
+
+        for line in data_set:
+            self.parse_line(line)
+
+        return [self.pir1, self.pir2, self.pir3]
+
+
+    # we may change the format later, hence write a paser for each one.
+    def parse_line(self, line):
+
+        self.pir1.time_stamps.append(float(line[0]))
+        self.pir2.time_stamps.append(float(line[0]))
+        self.pir3.time_stamps.append(float(line[0]))
+
+        # pir sensor 1
+        index = 1
+        self.pir1.t_millis.append(int(line[index]))
+        index +=1
+
+        for i in range(0,64):
+            self.pir1.all_temperatures[i].append(float(line[i + index]))
+            index +=1
+
+        self.pir1.all_Ta.append(float(line[index]))
+        index +=1
+        # skip ultrasonic sensor
+        index +=1
+
+        # pir sensor 2
+        self.pir2.t_millis.append(int(line[index]))
+        index +=1
+
+        for i in range(0,64):
+            self.pir2.all_temperatures[i].append(float(line[i + index]))
+            index +=1
+
+        self.pir2.all_Ta.append(float(line[index]))
+        index +=1
+        # skip ultrasonic sensor
+        index +=1
+
+        # pir sensor 3
+        self.pir3.t_millis.append(int(line[index]))
+        index +=1
+
+        for i in range(0,64):
+            self.pir3.all_temperatures[i].append(float(line[i + index]))
+            index +=1
+
+        self.pir3.all_Ta.append(float(line[index]))
+        index +=1
+        # skip ultrasonic sensor
+        index +=1
+
+
+
+
+
+
+
+
+
+
