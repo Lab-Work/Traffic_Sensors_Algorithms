@@ -357,7 +357,8 @@ class PIR_3_MLX90620:
     # read all three PIR data from a file
     def read_data_from_file(self, file_name_str):
 
-        data_set = csv.reader(file_name_str)
+        f_handle = open(file_name_str, 'r')
+        data_set = csv.reader(f_handle)
 
         # save in a list, then save to pir np matrix
         time_stamps = []
@@ -379,16 +380,22 @@ class PIR_3_MLX90620:
 
         # parse line into the list
         for line in data_set:
+            #print line
+            #print len(line)
+            # the first line may be \n
+            if len(line) < 100:
+                continue
+
             time_stamps.append(float(line[0]))
 
             # pir sensor 1
             index = 1
-            t_millis_1.append(int(line[index]))
+            t_millis_1.append(float(line[index]))
             index +=1
 
             for i in range(0,64):
-                all_temperatures_1[i].append(float(line[i + index]))
-            index +=1
+                all_temperatures_1[i].append(float(line[index]))
+                index +=1
 
             all_Ta_1.append(float(line[index]))
             index +=1
@@ -396,11 +403,11 @@ class PIR_3_MLX90620:
             index +=1
 
             # pir sensor 2
-            t_millis_2.append(int(line[index]))
+            t_millis_2.append(float(line[index]))
             index +=1
 
             for i in range(0,64):
-                all_temperatures_2[i].append(float(line[i + index]))
+                all_temperatures_2[i].append(float(line[index]))
                 index +=1
 
             all_Ta_2.append(float(line[index]))
@@ -409,17 +416,19 @@ class PIR_3_MLX90620:
             index +=1
 
             # pir sensor 3
-            t_millis_3.append(int(line[index]))
+            t_millis_3.append(float(line[index]))
             index +=1
 
             for i in range(0,64):
-                all_temperatures_3[i].append(float(line[i + index]))
+                all_temperatures_3[i].append(float(line[index]))
                 index +=1
 
             all_Ta_3.append(float(line[index]))
             index +=1
             # skip ultrasonic sensor
             index +=1
+
+        f_handle.close()
 
         # save and convert those into np matrix for each PIR object
         self.pir1.time_stamps = np.array(time_stamps)
@@ -445,7 +454,8 @@ class PIR_3_MLX90620:
     def play_video(self, t_start, t_end, T_min, T_max, fps):
 
         # initialize figure
-        fig, ax = plt.subplot(3,1)
+        fig, ax = plt.subplots(3,1, figsize=(15,15))
+
         for i in range(0,3):
             ax[i].set_aspect('equal')
             ax[i].set_xlim(-0.5, 15.5)
@@ -473,13 +483,16 @@ class PIR_3_MLX90620:
         plt.draw()
 
         # extract data to play from the properties
-        index = np.nonzero(t_start <= self.pir1.time_stamps <= t_end)[0]
+        if t_start is None or t_end is None:
+            # if none, then play the entire date set
+            index = np.nonzero(self.pir1.time_stamps)[0]
+        else:
+            index = np.nonzero(t_start <= self.pir1.time_stamps <= t_end)[0]
         # each columnn is one frame
         data_to_play = []
         data_to_play.append(self.pir1.all_temperatures[:, index])
         data_to_play.append(self.pir2.all_temperatures[:, index])
         data_to_play.append(self.pir3.all_temperatures[:, index])
-
 
         timer_start = time.time()
         for frame_index in range(0, data_to_play[0].shape[1]):
@@ -494,7 +507,11 @@ class PIR_3_MLX90620:
 
             # update figure
             for i in range(0, 3):
+                # print 'refreshed figure'
                 # print 'T[{0}]: {1}'.format(i, T[i])
+
+                print 'pir-{0}:{1}'.format(i+1,data_to_play[i][:,frame_index].reshape(16,4).T)
+
                 im[i].set_data(data_to_play[i][:,frame_index].reshape(16,4).T)
 
                 fig.canvas.restore_region(background)
