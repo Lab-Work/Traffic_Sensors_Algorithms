@@ -1,13 +1,17 @@
+# Created by Yanning Li and Fangyu Wu
+# On June 9th 2015
+
 # This is the Class for PIR90620 sensor.
 # This class can:
-# 1. import the EEPROM register values and copmute the temperature from IRraw data
+# 1. Import the EEPROM register values and copmute the temperature from IRraw data
 # 2. Save all data in clean data structure, either from serial port reading or data files
-# 3. visualize the data, heat_map or time series of a single pixel
+# 3. Visualize the data, heat_map or time series of a single pixel
 
-# if a comment for a function starts with:
-# LIBRARY: for computing IRraw data to temperature. Not needed to process data which is already in temperature form
-# Visualization: methods for visualizing data
-# statistic analysis: some handy functions for checking the statistic property
+# If a comment for a function starts with:
+# LIBRARY: for computing IRraw data to temperature. Not needed to process data which 
+# is already in temperature form
+# VISUALIZATION: methods for visualizing data
+# STATISTICS: some handy functions for checking the statistic property
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,11 +19,13 @@ import csv
 from datetime import datetime
 import time
 from MLX90620_register import *
+from astroML.plotting import setup_text_plots
+setup_text_plots(fontsize=14, usetex=True)
 
 
 # This is the class for a single MLX90620
 # including the library for computing the temperature from IRraw
-# also a variety of visualization methods
+# and also a variety of visualization methods
 class PIR_MLX90620:
 
     def __init__(self, pir_id):
