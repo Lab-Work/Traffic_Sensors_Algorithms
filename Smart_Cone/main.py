@@ -1,12 +1,12 @@
 from SmartCone import SmartCone
 import warnings
 
-emulator = SmartCone('adaptiveThreshold')
+emulator = SmartCone(estimatorType='adaptiveThreshold')
 
 while True:
     try:
         emulator.estimate()
-        emulator.updateBuffer()
+        emulator.update()
     except KeyboardInterrupt:
         break
     except:

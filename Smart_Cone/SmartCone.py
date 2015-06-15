@@ -31,7 +31,7 @@ from Estimators import Estimators
 class SmartCone: 
 
     #LIABRARY
-    def __init__(self,mode='read',buffer='inf',estor=None):
+    def __init__(self,mode='read',bufferSize='inf',estimatorType=None):
 
         if mode == 'read':
 
@@ -47,33 +47,35 @@ class SmartCone:
             self.DATASETS = []
             for file in self.FILES:
                 with open(file,'r') as dataset:
-                    file = csv.reader(file)
-                    for line in file:
+                    fileReader = csv.reader(dataset)
+                    for line in fileReader:
+                        #print line
                         self.DATASETS.append(line)
 
             #Store data in buffer, which essentially acts like a queue.
             self.BUFFER = []
-            if buffer == 'inf':
+            if bufferSize == 'inf':
                 print 'Buffer size is infinitive.'
                 self.BUFFER = self.DATASETS
 
-            elif isinstance(buffer,int) and buffer > 0:
+            elif isinstance(bufferSize,int) and bufferSize > 0:
                 print 'Buffer size is a positive integer.'
                 self.BUFFER = self.DATASETS[0:buffer]
+                self.currLocation = bufferSize
 
             else:
-                sys.exit('ERROR: Buffer needs to be a positive integer. Abort!')
+                sys.exit('ERROR: Buffer needs to be a positive integer.')
         
         #TODO: Read data from serial port.
         elif mode == 'listen':
-            sys.exit('WARNING: Mode to be defined. Abort!')
+            sys.exit('WARNING: Mode to be defined.')
             pass
 
         else:
-            sys.exit('ERROR: Mode not defined. Abort!')
+            sys.exit('ERROR: Mode not defined.')
             
         #Instantiate an estimator class.
-        Estor = Estimators(BUFFER=self.BUFFER,estimator=estor)
+        Estimator = Estimators(BUFFER=self.BUFFER,estimator=estimatorType)
 
 
     #VISUALIZATION
@@ -92,7 +94,7 @@ class SmartCone:
 
     #ESTIMATION
     def estimate(self):
-        
+        Estimator.run()
         
 
     #VALIDATION
@@ -105,11 +107,14 @@ class SmartCone:
 
     #HLPER FUNCTIONS
 
-    #Change MATLAB time format to Python datetime format
-    def timeFormat(matlab_datenum):
-        return datetime.fromordinal(int(matlab_datenum)) + \
-               timedelta(days=matlab_datenum%1) - timedelta(days = 366)
-
     #Update buffer
-    def updateBuffer(self,data):
+    def update(self,step=1):
 
+        if mode == 'read': 
+            for i in range(step):
+                self.BUFFER.pop(0)
+                self.BUFFER.append(self.DATASETS[self.curr])
+            Estimator.update(self.BUFFER)
+
+        else:  
+            sys.exit('WARNING: Mode to be defined.') #Listen to serial
