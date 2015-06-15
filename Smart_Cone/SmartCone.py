@@ -20,7 +20,7 @@ import warnings
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
+import datetime
 from sklearn import linear_model
 from sklearn import cross_validation
 from astroML.plotting import setup_text_plots
@@ -33,6 +33,7 @@ class SmartCone:
     #LIABRARY
     def __init__(self,mode='read',bufferSize='inf',estimatorType=None):
 
+        self.timeDiff = datetime.timedelta(hours=21,minutes=39,seconds=46,milliseconds=472.497)
         if mode == 'read':
 
             #Get the relative paths of data in data/.
@@ -75,7 +76,7 @@ class SmartCone:
             sys.exit('ERROR: Mode not defined.')
             
         #Instantiate an estimator class.
-        Estimator = Estimators(BUFFER=self.BUFFER,estimator=estimatorType)
+        self.Estimator = Estimators(BUFFER=self.BUFFER,estimator=estimatorType)
 
 
     #VISUALIZATION
@@ -94,7 +95,7 @@ class SmartCone:
 
     #ESTIMATION
     def estimate(self):
-        Estimator.run()
+        self.Estimator.run()
         
 
     #VALIDATION

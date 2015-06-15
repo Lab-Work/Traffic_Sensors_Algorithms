@@ -1,3 +1,13 @@
+'''
+Authors: Yanning Li, Fangyu Wu
+Date: Summer 2015
+
+This module contains Estimators class, which further includes all the experimental algorithms:
+    1) Adapative threshold (baseline algorithm)
+    2) ...
+'''
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
@@ -7,6 +17,7 @@ class Estimators:
 
     def __init__(self,BUFFER,estimator=None):
 
+        self.estimator = estimator
         #Data parsed into useful form
         self.time = np.array([])   #Time stamp
         self.elapse = np.array([]) #Time elapsed from the starting time stamp
@@ -30,55 +41,54 @@ class Estimators:
         self.t0 = self.timeFormat(float(BUFFER[0][0]))
         print self.t0
         for data in BUFFER:
-            print data
             self.time = np.append(self.time,self.timeFormat(float(data[0])))
             self.elapse = np.append(self.elapse,self.t0-self.timeFormat(float(data[0])))
 
             self.millis1 = np.append(self.millis1,float(data[1]))
             self.pir1 = np.append(self.pir1,[float(i) for i in data[2:66]])
-            self.amb1 = np.append(self.amb1,float(data[67]))
-            self.ultra1 = np.append(self.ultra1,float(data[68]))
+            self.amb1 = np.append(self.amb1,float(data[66]))
+            self.ultra1 = np.append(self.ultra1,float(data[67]))
             
-            self.millis2 = np.append(self.millis2,float(data[69]))
-            self.pir2 = np.append(self.pir2,[float(i) for i in data[70:134]])
-            self.amb2 = np.append(self.amb2,float(data[135]))
-            self.ultra2 = np.append(self.ultra2,float(data[136]))
+            self.millis2 = np.append(self.millis2,float(data[68]))
+            self.pir2 = np.append(self.pir2,[float(i) for i in data[69:133]])
+            self.amb2 = np.append(self.amb2,float(data[133]))
+            self.ultra2 = np.append(self.ultra2,float(data[134]))
 
-            self.millis3 = np.append(self.millis3,float(data[137]))
-            self.pir3 = np.append(self.pir3,[float(i) for i in data[138:202]])
-            self.amb3 = np.append(self.amb3,float(data[203]))
-            self.ultra3 = np.append(self.ultra3,float(data[204]))
+            self.millis3 = np.append(self.millis3,float(data[135]))
+            self.pir3 = np.append(self.pir3,[float(i) for i in data[136:200]])
+            self.amb3 = np.append(self.amb3,float(data[200]))
+            self.ultra3 = np.append(self.ultra3,float(data[201]))
 
     def run(self):
-        if estimator == None:
+        if self.estimator == None:
             sys.exit('Please input estimator type.')
-        elif estimator == 'adaptiveThreshold':
+        elif self.estimator == 'adaptiveThreshold':
             self.adaptiveThreshold()
         else:
             sys.exit('ERROR: Estimator not defined.')
 
     def update(self,BUFFER):
         for data in BUFFER:
-            self.time = np.append(self.time,self.timeFormat(data[0]))
-            self.elapse = np.append(self.elapse,self.t0-self.timeFormat(data[0]))
+            self.time = np.append(self.time,self.timeFormat(float(data[0])))
+            self.elapse = np.append(self.elapse,self.t0-self.timeFormat(float(data[0])))
 
             self.millis1 = np.append(self.millis1,float(data[1]))
-            self.pir1 = np.append(self.pir1,float(data[2:66]))
-            self.amb1 = np.append(self.amb1,float(data[67]))
-            self.ultra1 = np.append(self.ultra1,float(data[68]))
+            self.pir1 = np.append(self.pir1,[float(i) for i in data[2:66]])
+            self.amb1 = np.append(self.amb1,float(data[66]))
+            self.ultra1 = np.append(self.ultra1,float(data[67]))
             
-            self.millis2 = np.append(self.millis2,float(data[69]))
-            self.pir2 = np.append(self.pir2,float(data[70:134]))
-            self.amb2 = np.append(self.amb2,float(data[135]))
-            self.ultra2 = np.append(self.ultra2,float(data[136]))
+            self.millis2 = np.append(self.millis2,float(data[68]))
+            self.pir2 = np.append(self.pir2,[float(i) for i in data[69:133]])
+            self.amb2 = np.append(self.amb2,float(data[133]))
+            self.ultra2 = np.append(self.ultra2,float(data[134]))
 
-            self.millis3 = np.append(self.millis3,float(data[137]))
-            self.pir3 = np.append(self.pir3,float(data[138:202]))
-            self.amb3 = np.append(self.amb3,float(data[203]))
-            self.ultra3 = np.append(self.ultra3,float(data[204]))
+            self.millis3 = np.append(self.millis3,float(data[135]))
+            self.pir3 = np.append(self.pir3,[float(i) for i in data[136:200]])
+            self.amb3 = np.append(self.amb3,float(data[200]))
+            self.ultra3 = np.append(self.ultra3,float(data[201]))
 
     def adaptiveThreshold(self):
-        print BUFFER
+        print 'Hi there, it is connected!'
 
     #HLPER FUNCTIONS
 
