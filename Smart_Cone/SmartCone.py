@@ -20,6 +20,7 @@ import warnings
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import argrelextrema
 import datetime
 from sklearn import linear_model
 from sklearn import cross_validation
@@ -75,7 +76,7 @@ class SmartCone:
         else:
             sys.exit('ERROR: Mode not defined.')
             
-        #Instantiate an estimator class.
+        #Instantiate an estimator class. Comment the code while testing to improve speed.
         #self.Estimator = Estimators(BUFFER=self.BUFFER,estimator=estimatorType)
 
 
@@ -86,10 +87,34 @@ class SmartCone:
             #plt.ion()
             print 'Plotting mean...'
             pir2Mean = [np.average([float(i) for i in line[69:133]]) for line in self.DATASETS]
+            pir2Mean = np.array(pir2Mean)
+            locMax = [argrelextrema(pir2Mean, np.greater)[0]]
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
-            plt.plot(timeStamp, pir2Mean)
+            timeStamp = np.array(timeStamp)
+            #print pir2Mean[locMax]
+            
+            plt.figure()
+            H = np.histogram(pir2Mean[locMax],bins=300)
+            print len(H[1])
+            h = H[0]
+            plt.plot(H[1][:-1],h)
+            hMax = np.argmax(h)
+            norm0 = range(hMax)
+            norm1 = range(hMax+1,2*hMax+1)[::-1]
+            h[norm1] = h[norm1] - h[norm0]
+            h[norm0] = 0
+            h[hMax] = 0
+            hMax1 = np.argmax(h)
+            plt.plot(H[1][:-1],h)
+            print (hMax1-hMax)*(H[1][1]-H[1][0])
+
+            #plt.figure()
+            #plt.hist(pir2Mean[locMax],bins=250,histtype='stepfilled',color='b',label='Peak')
+            #plt.hist(pir2Mean,bins=250,histtype='stepfilled',color='r',alpha=0.5,label='Normal')
+            #plt.scatter(timeStamp[locMax], pir2Mean[locMax])
+            #plt.plot(timeStamp, pir2Mean)
             plt.show(block=False)
-            print 'done.'
+            print 'Done.'
 
         elif parameter == 'variance':
             print 'Plotting variance...'
@@ -97,7 +122,18 @@ class SmartCone:
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
             plt.plot(timeStamp, pir2Var)
             plt.show(block=False)
-            print 'done.'
+            print 'Done.'
+
+        elif parameter == 'difference':
+            print 'Plotting difference...'
+            pir2Mean = [np.average([float(i) for i in line[69:133]]) for line in self.DATASETS]
+            pir2Diff = [0]
+            for i in range(1,len(pir2Mean)):
+                pir2Diff.append(pir2Mean[i] - pir2Mean[i-1])
+            timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
+            plt.plot(timeStamp,pir2Diff)
+            plt.show(block=False)
+            print 'Done.'
 
         elif parameter == 'ultrasonic':
             print 'Plotting ultrasonic sensor data...'
@@ -105,7 +141,7 @@ class SmartCone:
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
             plt.plot(timeStamp, ultrasonic)
             plt.show(block=False)
-            print 'done.'
+            print 'Done.'
         else:
             sys.exit('ERROR: Parameter not defined.')
         plt.show()

@@ -20,46 +20,46 @@ class Estimators:
         self.timeDiff = timedelta(hours=21,minutes=39,seconds=46,milliseconds=472.497)
         self.estimator = estimator
         #Data parsed into useful form
-        self.time = np.array([])   #Time stamp
-        self.elapse = np.array([]) #Time elapsed from the starting time stamp
+        self.time = []   #Time stamp
+        self.elapse = [] #Time elapsed from the starting time stamp
 
-        self.millis1 = np.array([])#The millisecs from the start of Arduino to time of measure
-        self.pir1 = np.array([])   #The leftmost PIR reading
-        self.amb1 = np.array([])   #The leftmost PIR ambient temperature reading 
-        self.ultra1 = np.array([]) #The corresponding ultrasonic sensor reading
+        self.millis1 = []#The millisecs from the start of Arduino to time of measure
+        self.pir1 = []   #The leftmost PIR reading
+        self.amb1 = []   #The leftmost PIR ambient temperature reading 
+        self.ultra1 = [] #The corresponding ultrasonic sensor reading
 
-        self.millis2 = np.array([])#The millisecs from the start of Arduino to time of measure
-        self.pir2 = np.array([])   #The middle PIR reading
-        self.amb2 = np.array([])   #The middle PIR ambient temperature reading
-        self.ultra2 = np.array([]) #The corresponding ultrasonic sensor reading
+        self.millis2 = []#The millisecs from the start of Arduino to time of measure
+        self.pir2 = []   #The middle PIR reading
+        self.amb2 = []   #The middle PIR ambient temperature reading
+        self.ultra2 = [] #The corresponding ultrasonic sensor reading
 
-        self.millis3 = np.array([])#The millisecs from the start of Arduino to time of measure
-        self.pir3 = np.array([])   #The rightmost PIR reading
-        self.amb3 = np.array([])   #The rightmost PIR ambient temperature reading
-        self.ultra3 = np.array([]) #The corresponding ultrasonic sensor reading
+        self.millis3 = []#The millisecs from the start of Arduino to time of measure
+        self.pir3 = []   #The rightmost PIR reading
+        self.amb3 = []   #The rightmost PIR ambient temperature reading
+        self.ultra3 = [] #The corresponding ultrasonic sensor reading
         
         #Initialize the properties defined above.
         self.t0 = self.timeFormat(float(BUFFER[0][0]))
         print 'Starting measurement at:'
         print self.t0 + self.timeDiff
         for data in BUFFER:
-            self.time = np.append(self.time,self.timeFormat(float(data[0])))
-            self.elapse = np.append(self.elapse,self.t0-self.timeFormat(float(data[0])))
+            self.time.append(self.timeFormat(float(data[0])))
+            self.elapse.append(self.t0-self.timeFormat(float(data[0])))
 
-            self.millis1 = np.append(self.millis1,float(data[1]))
-            self.pir1 = np.append(self.pir1,[float(i) for i in data[2:66]])
-            self.amb1 = np.append(self.amb1,float(data[66]))
-            self.ultra1 = np.append(self.ultra1,float(data[67]))
+            self.millis1.append(float(data[1]))
+            self.pir1.append([float(i) for i in data[2:66]])
+            self.amb1.append(float(data[66]))
+            self.ultra1.append(float(data[67]))
             
-            self.millis2 = np.append(self.millis2,float(data[68]))
-            self.pir2 = np.append(self.pir2,[float(i) for i in data[69:133]])
-            self.amb2 = np.append(self.amb2,float(data[133]))
-            self.ultra2 = np.append(self.ultra2,float(data[134]))
+            self.millis2.append(float(data[68]))
+            self.pir2.append([float(i) for i in data[69:133]])
+            self.amb2.append(float(data[133]))
+            self.ultra2.append(float(data[134]))
 
-            self.millis3 = np.append(self.millis3,float(data[135]))
-            self.pir3 = np.append(self.pir3,[float(i) for i in data[136:200]])
-            self.amb3 = np.append(self.amb3,float(data[200]))
-            self.ultra3 = np.append(self.ultra3,float(data[201]))
+            self.millis3.append(float(data[135]))
+            self.pir3.append([float(i) for i in data[136:200]])
+            self.amb3.append(float(data[200]))
+            self.ultra3.append(float(data[201]))
 
     def run(self):
         if self.estimator == None:
@@ -71,23 +71,23 @@ class Estimators:
 
     def update(self,BUFFER):
         for data in BUFFER:
-            self.time = np.append(self.time,self.timeFormat(float(data[0])))
-            self.elapse = np.append(self.elapse,self.t0-self.timeFormat(float(data[0])))
+            self.time.append(self.timeFormat(float(data[0])))
+            self.elapse.append(self.t0-self.timeFormat(float(data[0])))
 
-            self.millis1 = np.append(self.millis1,float(data[1]))
-            self.pir1 = np.append(self.pir1,[float(i) for i in data[2:66]])
-            self.amb1 = np.append(self.amb1,float(data[66]))
-            self.ultra1 = np.append(self.ultra1,float(data[67]))
+            self.millis1.append(float(data[1]))
+            self.pir1.append([float(i) for i in data[2:66]])
+            self.amb1.append(float(data[66]))
+            self.ultra1.append(float(data[67]))
             
-            self.millis2 = np.append(self.millis2,float(data[68]))
-            self.pir2 = np.append(self.pir2,[float(i) for i in data[69:133]])
-            self.amb2 = np.append(self.amb2,float(data[133]))
-            self.ultra2 = np.append(self.ultra2,float(data[134]))
+            self.millis2.append(float(data[68]))
+            self.pir2.append([float(i) for i in data[69:133]])
+            self.amb2.append(float(data[133]))
+            self.ultra2.append(float(data[134]))
 
-            self.millis3 = np.append(self.millis3,float(data[135]))
-            self.pir3 = np.append(self.pir3,[float(i) for i in data[136:200]])
-            self.amb3 = np.append(self.amb3,float(data[200]))
-            self.ultra3 = np.append(self.ultra3,float(data[201]))
+            self.millis3.append(float(data[135]))
+            self.pir3.append([float(i) for i in data[136:200]])
+            self.amb3.append(float(data[200]))
+            self.ultra3.append(float(data[201]))
 
     def adaptiveThreshold(self):
         print 'Hi there, it is connected!'

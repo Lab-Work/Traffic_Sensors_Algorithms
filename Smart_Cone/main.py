@@ -2,7 +2,7 @@ from SmartCone import SmartCone
 import warnings
 
 emulator = SmartCone(estimatorType='adaptiveThreshold')
-emulator.timeSeries('ultrasonic')
+emulator.timeSeries()
 
 '''
 while True:
