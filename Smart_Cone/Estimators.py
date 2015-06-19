@@ -10,13 +10,14 @@ This module contains Estimators class, which further includes all the experiment
 
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 
 class Estimators:
 
     def __init__(self,BUFFER,estimator=None):
 
+        self.timeDiff = timedelta(hours=21,minutes=39,seconds=46,milliseconds=472.497)
         self.estimator = estimator
         #Data parsed into useful form
         self.time = np.array([])   #Time stamp
@@ -39,7 +40,8 @@ class Estimators:
         
         #Initialize the properties defined above.
         self.t0 = self.timeFormat(float(BUFFER[0][0]))
-        print self.t0
+        print 'Starting measurement at:'
+        print self.t0 + self.timeDiff
         for data in BUFFER:
             self.time = np.append(self.time,self.timeFormat(float(data[0])))
             self.elapse = np.append(self.elapse,self.t0-self.timeFormat(float(data[0])))

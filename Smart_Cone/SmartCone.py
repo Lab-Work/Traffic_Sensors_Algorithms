@@ -56,11 +56,11 @@ class SmartCone:
             #Store data in buffer, which essentially acts like a queue.
             self.BUFFER = []
             if bufferSize == 'inf':
-                print 'Buffer size is infinitive.'
+                print 'Buffer size is set to infinitive.'
                 self.BUFFER = self.DATASETS
 
             elif isinstance(bufferSize,int) and bufferSize > 0:
-                print 'Buffer size is a positive integer.'
+                print 'Buffer size is %d.' % bufferSize
                 self.BUFFER = self.DATASETS[0:buffer]
                 self.currLocation = bufferSize
 
@@ -76,12 +76,39 @@ class SmartCone:
             sys.exit('ERROR: Mode not defined.')
             
         #Instantiate an estimator class.
-        self.Estimator = Estimators(BUFFER=self.BUFFER,estimator=estimatorType)
+        #self.Estimator = Estimators(BUFFER=self.BUFFER,estimator=estimatorType)
 
 
     #VISUALIZATION
-    def timeSeries(self):
-        pass
+    def timeSeries(self,parameter='mean'):
+
+        if parameter == 'mean':
+            #plt.ion()
+            print 'Plotting mean...'
+            pir2Mean = [np.average([float(i) for i in line[69:133]]) for line in self.DATASETS]
+            timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
+            plt.plot(timeStamp, pir2Mean)
+            plt.show(block=False)
+            print 'done.'
+
+        elif parameter == 'variance':
+            print 'Plotting variance...'
+            pir2Var = [np.var([float(i) for i in line[69:133]]) for line in self.DATASETS]
+            timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
+            plt.plot(timeStamp, pir2Var)
+            plt.show(block=False)
+            print 'done.'
+
+        elif parameter == 'ultrasonic':
+            print 'Plotting ultrasonic sensor data...'
+            ultrasonic = [line[134] for line in self.DATASETS]
+            timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
+            plt.plot(timeStamp, ultrasonic)
+            plt.show(block=False)
+            print 'done.'
+        else:
+            sys.exit('ERROR: Parameter not defined.')
+        plt.show()
 
     def heatMap(self):
         pass
@@ -107,6 +134,10 @@ class SmartCone:
 
 
     #HLPER FUNCTIONS
+
+    #Change time stamp format to Python datetime format
+    def timeFormat(self,datenum):
+        return datetime.datetime.fromtimestamp(int(datenum))
 
     #Update buffer
     def update(self,step=1):
