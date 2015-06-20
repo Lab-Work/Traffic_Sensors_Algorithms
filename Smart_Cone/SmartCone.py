@@ -34,7 +34,8 @@ class SmartCone:
     #LIABRARY
     def __init__(self,mode='read',bufferSize='inf',estimatorType=None):
 
-        self.timeDiff = datetime.timedelta(hours=21,minutes=39,seconds=46,milliseconds=472.497)
+        #Use timeDiff to adjust time discrepancy
+        self.timeDiff = datetime.timedelta(hours=21,minutes=39,seconds=15)
         if mode == 'read':
 
             #Get the relative paths of data in data/.
@@ -77,7 +78,7 @@ class SmartCone:
             sys.exit('ERROR: Mode not defined.')
             
         #Instantiate an estimator class. Comment the code while testing to improve speed.
-        #self.Estimator = Estimators(BUFFER=self.BUFFER,estimator=estimatorType)
+        self.Estimator = Estimators(BUFFER=self.BUFFER,estimator=estimatorType)
 
 
     #VISUALIZATION
@@ -88,39 +89,27 @@ class SmartCone:
             print 'Plotting mean...'
             pir2Mean = [np.average([float(i) for i in line[69:133]]) for line in self.DATASETS]
             pir2Mean = np.array(pir2Mean)
-            locMax = [argrelextrema(pir2Mean, np.greater)[0]]
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
             timeStamp = np.array(timeStamp)
-            #print pir2Mean[locMax]
-            
-            plt.figure()
-            H = np.histogram(pir2Mean[locMax],bins=300)
-            print len(H[1])
-            h = H[0]
-            plt.plot(H[1][:-1],h)
-            hMax = np.argmax(h)
-            norm0 = range(hMax)
-            norm1 = range(hMax+1,2*hMax+1)[::-1]
-            h[norm1] = h[norm1] - h[norm0]
-            h[norm0] = 0
-            h[hMax] = 0
-            hMax1 = np.argmax(h)
-            plt.plot(H[1][:-1],h)
-            print (hMax1-hMax)*(H[1][1]-H[1][0])
-
-            #plt.figure()
-            #plt.hist(pir2Mean[locMax],bins=250,histtype='stepfilled',color='b',label='Peak')
-            #plt.hist(pir2Mean,bins=250,histtype='stepfilled',color='r',alpha=0.5,label='Normal')
-            #plt.scatter(timeStamp[locMax], pir2Mean[locMax])
-            #plt.plot(timeStamp, pir2Mean)
+            plt.scatter(timeStamp, pir2Mean,marker='.',color='b')
+            instances = [np.average([float(i) for i in line[69:133]]) 
+                         for line in self.DATASETS if line[-1] == 1]
+            instancesTime = [self.timeFormat(float(line[0]))+self.timeDiff 
+                             for line in self.DATASETS if line[-1] == 1]
+            plt.scatter(instancesTime,instances,marker='o',color='r')
+            plt.xlim([timeStamp[0],timeStamp[-1]])
+            plt.xlabel('Time stamp')
+            plt.ylabel('Mean of 64 pixels')
             plt.show(block=False)
             print 'Done.'
-
+            
         elif parameter == 'variance':
             print 'Plotting variance...'
             pir2Var = [np.var([float(i) for i in line[69:133]]) for line in self.DATASETS]
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
             plt.plot(timeStamp, pir2Var)
+            plt.xlabel('Time stamp')
+            plt.ylabel('Variance of 64 pixels')
             plt.show(block=False)
             print 'Done.'
 
@@ -132,6 +121,8 @@ class SmartCone:
                 pir2Diff.append(pir2Mean[i] - pir2Mean[i-1])
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
             plt.plot(timeStamp,pir2Diff)
+            plt.xlabel('Time stamp')
+            plt.ylabel('Change of the mean of 64 pixels in time')
             plt.show(block=False)
             print 'Done.'
 
@@ -140,10 +131,57 @@ class SmartCone:
             ultrasonic = [line[134] for line in self.DATASETS]
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
             plt.plot(timeStamp, ultrasonic)
+            plt.xlabel('Time stamp')
+            plt.ylabel('Ultrasonic sensor reading')
             plt.show(block=False)
             print 'Done.'
         else:
             sys.exit('ERROR: Parameter not defined.')
+        plt.show()
+
+    def meanTempHist(self):
+        print 'Plotting mean temperature histogram...'
+        pir2Mean = [np.average([float(i) for i in line[69:133]]) for line in self.DATASETS]
+        pir2Mean = np.array(pir2Mean)
+        #locMax = [argrelextrema(pir2Mean, np.greater)[0]]
+        timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
+        timeStamp = np.array(timeStamp)
+        
+        '''
+        plt.figure()
+        H = np.histogram(pir2Mean[locMax],bins=300)
+        print len(H[1])
+        h = H[0]
+        plt.plot(H[1][:-1],h)
+        hMax = np.argmax(h)
+        norm0 = range(hMax)
+        norm1 = range(hMax+1,2*hMax+1)[::-1]
+        h[norm1] = h[norm1] - h[norm0]
+        h[norm0] = 0
+        h[hMax] = 0
+        hMax1 = np.argmax(h)
+        plt.plot(H[1][:-1],h)
+        print (hMax1-hMax)*(H[1][1]-H[1][0])
+        '''
+
+        plt.figure()
+        #plt.hist(pir2Mean,bins=250,histtype='stepfilled',color='r',label='All')
+        #plt.hist(pir2Mean[locMax],bins=250,histtype='stepfilled',color='b',label='Peak')
+        instances = np.array([np.average([float(i) for i in line[69:133]]) 
+                     for line in self.DATASETS if line[-1] == 1])
+        instancesTime = np.array([self.timeFormat(float(line[0]))+self.timeDiff 
+                         for line in self.DATASETS if line[-1] == 1])
+        locMax = [argrelextrema(instances, np.greater)[0]]
+
+        
+        plt.hist(list(set(pir2Mean)-set(instances)),bins=250,histtype='step',color='g',label='Noise')
+        plt.hist(instances,bins=250,histtype='step',color='b',label='Labelled')
+        plt.hist(instances[locMax],bins=250,histtype='step',color='r',alpha=0.5,label='Labelled')
+        plt.xlabel('Temperature (C)')
+        plt.ylabel('Point count')
+        plt.legend()
+        plt.show(block=False)
+        print 'Done.'
         plt.show()
 
     def heatMap(self):
@@ -186,3 +224,21 @@ class SmartCone:
 
         else:  
             sys.exit('WARNING: Mode to be defined.') #Listen to serial
+
+    #Label DATASETS
+    def label(self):
+    
+        print 'Labelling data...'
+        timeStamp = []
+        with open('results/datasetLabel06052015.csv','r') as labelFile:
+            labelReader = csv.reader(labelFile)
+            labelReader.next()
+            timeStamp = [datetime.datetime.strptime(line[0],'%Y-%m-%d %H:%M:%S.%f') for line in labelReader]
+        
+        for line in self.DATASETS:
+            for time in timeStamp:
+                timeDiff = self.timeFormat(float(line[0]))+self.timeDiff-time
+                if datetime.timedelta(milliseconds=-2500) < timeDiff < datetime.timedelta(milliseconds=1000):
+                    #print timeDiff
+                    line.append(1)
+                    break

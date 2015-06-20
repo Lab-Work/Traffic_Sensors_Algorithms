@@ -2,6 +2,8 @@ from SmartCone import SmartCone
 import warnings
 
 emulator = SmartCone(estimatorType='adaptiveThreshold')
+emulator.label()
+#emulator.meanTempHist()
 emulator.timeSeries()
 
 '''

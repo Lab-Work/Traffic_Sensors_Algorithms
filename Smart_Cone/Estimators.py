@@ -17,7 +17,7 @@ class Estimators:
 
     def __init__(self,BUFFER,estimator=None):
 
-        self.timeDiff = timedelta(hours=21,minutes=39,seconds=46,milliseconds=472.497)
+        self.timeDiff = timedelta(hours=21,minutes=39,seconds=15)
         self.estimator = estimator
         #Data parsed into useful form
         self.time = []   #Time stamp
