@@ -22,6 +22,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
 import datetime
+import time
 from sklearn import linear_model
 from sklearn import cross_validation
 from astroML.plotting import setup_text_plots
@@ -44,7 +45,7 @@ class SmartCone:
                 for file in sorted(files):
                     if file.endswith(".csv"):
                         self.FILES.append(os.path.join(root, file))
-                        #print self.FILES
+            print self.FILES
             
             #Pour data from files to a list.
             self.DATASETS = []
@@ -89,14 +90,27 @@ class SmartCone:
             print 'Plotting mean...'
             pir2Mean = [np.average([float(i) for i in line[69:133]]) for line in self.DATASETS]
             pir2Mean = np.array(pir2Mean)
+            mean = np.average(pir2Mean)
+            std = np.std(pir2Mean)
+            print mean
+            print std
+            #pir2Mean = np.array([(i-mean)/std for i in pir2Mean])
+            #outliers = [i for i in range(len(pir2Mean)) if pir2Mean[i] > std]
+            #print outliers
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
             timeStamp = np.array(timeStamp)
             plt.scatter(timeStamp, pir2Mean,marker='.',color='b')
-            instances = [np.average([float(i) for i in line[69:133]]) 
-                         for line in self.DATASETS if line[-1] == 1]
-            instancesTime = [self.timeFormat(float(line[0]))+self.timeDiff 
+            #plt.scatter(timeStamp[outliers], pir2Mean[outliers],marker='o',color='r')
+
+            try:
+                instances = [np.average([float(i) for i in line[69:133]]) 
                              for line in self.DATASETS if line[-1] == 1]
-            plt.scatter(instancesTime,instances,marker='o',color='r')
+                instancesTime = [self.timeFormat(float(line[0]))+self.timeDiff 
+                                 for line in self.DATASETS if line[-1] == 1]
+                plt.scatter(instancesTime,instances,marker='o',color='r')
+            except:
+                print 'Labels not found.'
+
             plt.xlim([timeStamp[0],timeStamp[-1]])
             plt.xlabel('Time stamp')
             plt.ylabel('Mean of 64 pixels')
@@ -185,7 +199,37 @@ class SmartCone:
         plt.show()
 
     def heatMap(self):
-        pass
+        pir2 = np.array([[float(i) for i in line[69:133]] for line in self.DATASETS])
+        pir2 = np.array([np.flipud(line.reshape(4,16,order='F')) for line in pir2])
+        timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
+        timeStamp = np.array(timeStamp)
+
+        pir2Max = np.amax(pir2)
+        pir2Min = np.amin(pir2)
+
+        fig,ax = plt.subplots(figsize=(16,8), dpi=100)
+        #ax.set_aspect('equal')
+        background = fig.canvas.copy_from_bbox(ax.bbox)
+        im = ax.imshow(pir2[0],cmap=plt.get_cmap('jet'),aspect='auto',
+                       interpolation='nearest',vmin=pir2Min,vmax=pir2Max-50)
+        fig.colorbar(im,orientation='horizontal')
+        ax.set_title('Heat Map of PIR Signal at $t=$ '+ 
+                     timeStamp[0].strftime('%Y-%m-%d %H:%M:%S'))
+        fig.show()
+        fig.canvas.draw()
+
+        for f in range(1,len(pir2)):
+            time.sleep(0.01)
+            im.set_data(pir2[f])
+            ax.set_title('Heat Map of PIR Signal at $t=$ '+ 
+                     timeStamp[f].strftime('%Y-%m-%d %H:%M:%S'))
+            fig.canvas.restore_region(background)
+            ax.draw_artist(im)
+            #ax.get_figure().canvas.draw()
+            #fig.canvas.blit(ax.bbox)
+            fig.savefig('heatMaps/'+'{:06}'.format(f))
+
+        plt.close(fig)
 
     #STATISTICS
     def stdev(self):
