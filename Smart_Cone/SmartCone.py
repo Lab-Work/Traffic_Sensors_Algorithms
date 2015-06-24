@@ -198,7 +198,10 @@ class SmartCone:
         print 'Done.'
         plt.show()
 
-    def heatMap(self):
+    def heatMap(self,fps=8,saveFig=True):
+        if not saveFig:
+            print 'Note that the current version does not support title time stamp update!'
+
         pir2 = np.array([[float(i) for i in line[69:133]] for line in self.DATASETS])
         pir2 = np.array([np.flipud(line.reshape(4,16,order='F')) for line in pir2])
         timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
@@ -206,28 +209,54 @@ class SmartCone:
 
         pir2Max = np.amax(pir2)
         pir2Min = np.amin(pir2)
+        pir2MaxAvg = np.amax(np.average(pir2))
+        pir2MinAvg = np.amin(np.average(pir2))
+        pir2MaxVar = np.amax(np.var(pir2))
+        pir2MinVar = np.amin(np.var(pir2))
 
-        fig,ax = plt.subplots(figsize=(16,8), dpi=100)
-        #ax.set_aspect('equal')
-        background = fig.canvas.copy_from_bbox(ax.bbox)
-        im = ax.imshow(pir2[0],cmap=plt.get_cmap('jet'),aspect='auto',
+
+        fig,(ax1,ax2) = plt.subplots(2,figsize=(16,32), dpi=100)
+        #ax2.set_xlim(pir2MinAvg,pir2MaxAvg)
+        #ax2.set_ylim(pir2MinVar,pir2MaxVar)
+        ax2.set_xlim(29,39)
+        ax2.set_ylim(0,20)
+
+
+        background1 = fig.canvas.copy_from_bbox(ax1.bbox)
+        background2 = fig.canvas.copy_from_bbox(ax2.bbox)
+        im = ax1.imshow(pir2[0],cmap=plt.get_cmap('jet'),aspect='auto',
                        interpolation='nearest',vmin=pir2Min,vmax=pir2Max-50)
         fig.colorbar(im,orientation='horizontal')
-        ax.set_title('Heat Map of PIR Signal at $t=$ '+ 
+        ax1.set_title('Heat Map of PIR Signal at $t=$ '+ 
                      timeStamp[0].strftime('%Y-%m-%d %H:%M:%S'))
+        pt, = ax2.plot(np.average(pir2[0]),np.var(pir2[0]),marker='x')
+        ax2.set_title('Frame Mean/Var Correlation at $t=$ '+ 
+                      timeStamp[0].strftime('%Y-%m-%d %H:%M:%S'))
+        ax2.set_xlabel('Mean')
+        ax2.set_ylabel('Variance')
         fig.show()
         fig.canvas.draw()
 
         for f in range(1,len(pir2)):
-            time.sleep(0.01)
+            time.sleep(1./fps)
             im.set_data(pir2[f])
-            ax.set_title('Heat Map of PIR Signal at $t=$ '+ 
+            ax1.set_title('Heat Map of PIR Signal at $t=$ '+ 
                      timeStamp[f].strftime('%Y-%m-%d %H:%M:%S'))
-            fig.canvas.restore_region(background)
-            ax.draw_artist(im)
+            pt.set_data(np.average(pir2[f]),np.var(pir2[f]))
+            #pt, = ax2.plot(np.average(pir2[f]),np.var(pir2[f]))
+            ax2.set_title('Frame Mean/Var Correlation at $t=$ '+ 
+                          timeStamp[f].strftime('%Y-%m-%d %H:%M:%S'))
+            fig.canvas.restore_region(background1)
+            fig.canvas.restore_region(background2)
+            ax1.draw_artist(im)
+            ax2.draw_artist(pt)
             #ax.get_figure().canvas.draw()
-            #fig.canvas.blit(ax.bbox)
-            fig.savefig('heatMaps/'+'{:06}'.format(f))
+            if saveFig: #Output frames to folder. Users may later combine them into videos.
+                fig.savefig('heatMaps/'+'{:06}'.format(f))
+            else:
+                #fig.canvas.draw()
+                fig.canvas.blit(ax1.bbox)
+                fig.canvas.blit(ax2.bbox)
 
         plt.close(fig)
 

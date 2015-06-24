@@ -5,7 +5,7 @@ emulator = SmartCone(estimatorType='adaptiveThreshold')
 #emulator.label()
 #emulator.meanTempHist()
 #emulator.timeSeries()
-emulator.heatMap()
+emulator.heatMap(saveFig=True)
 
 '''
 while True:
