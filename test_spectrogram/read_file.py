@@ -13,3 +13,4 @@ from PIR3_spectro import PIR3_spectro
 PIR3 = PIR3_spectro('unfilteredAllData_num.csv')
 
 PIR3.plot_data('all')
+PIR3.plot_spectro([1], 64, 16, 1200, 1450)

@@ -50,8 +50,27 @@ class PIR3_spectro:
 
 
     # a function for performing the spectrogram
-    def plot_spectro(self, pir_id, window_size, step_size):
-        pass
+    def plot_spectro(self, pir_id, window_size, step_size, t_min, t_max):
+
+        t_toplot = self.time[t_min*12:t_max*12]
+
+        for i in pir_id:
+            if i == 1:
+
+                # find the time interval to plot
+                x_toplot = self.pir1[t_min*12: t_max*12]
+
+                pxx, freqs, bins, im = plt.specgram(x_toplot, NFFT=window_size, Fs=12, noverlap=step_size)
+
+                fig, (ax1, ax2) = plt.subplots(nrows=2)
+                ax1.plot(t_toplot, x_toplot)
+                ax1.axis('tight')
+
+                ax2.pcolormesh(bins, freqs, 10*np.log10(pxx))
+                ax2.axis('tight')
+
+                plt.savefig('spectro_pir1_{0}_{1}.png'.format(t_min, t_max))
+
 
     # plot the time series data
     # pir_id: 1,2,3 or all
@@ -72,5 +91,5 @@ class PIR3_spectro:
         plt.title('Time Series of PIR Signal')
         plt.ylabel('Temperature ($^{\circ}C$)')
         plt.xlabel('Time (sec)')
-        plt.show()
-
+        # plt.show()
+        plt.savefig('time_data.png')
