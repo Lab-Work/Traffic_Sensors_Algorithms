@@ -4,8 +4,8 @@ import warnings
 emulator = SmartCone(estimatorType='adaptiveThreshold')
 #emulator.label()
 #emulator.meanTempHist()
-#emulator.timeSeries()
-emulator.heatMap(fps=80,saveFig=True)
+emulator.timeSeries()
+#emulator.heatMap(fps=80,saveFig=True)
 
 '''
 while True:
