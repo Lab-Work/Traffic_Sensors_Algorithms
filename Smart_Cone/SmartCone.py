@@ -215,7 +215,7 @@ class SmartCone:
         pir2MinVar = np.amin(np.var(pir2))
 
 
-        fig,(ax1,ax2) = plt.subplots(2,figsize=(16,32), dpi=100)
+        fig,(ax1,ax2) = plt.subplots(2, dpi=100)
         #ax2.set_xlim(pir2MinAvg,pir2MaxAvg)
         #ax2.set_ylim(pir2MinVar,pir2MaxVar)
         ax2.set_xlim(29,39)
@@ -226,7 +226,8 @@ class SmartCone:
         background2 = fig.canvas.copy_from_bbox(ax2.bbox)
         im = ax1.imshow(pir2[0],cmap=plt.get_cmap('jet'),aspect='auto',
                        interpolation='nearest',vmin=pir2Min,vmax=pir2Max-50)
-        fig.colorbar(im,orientation='horizontal')
+        position=fig.add_axes([0.93,0.536,0.02,0.362])
+        fig.colorbar(im,cax=position)
         ax1.set_title('Heat Map of PIR Signal at $t=$ '+ 
                      timeStamp[0].strftime('%Y-%m-%d %H:%M:%S'))
         pt, = ax2.plot(np.average(pir2[0]),np.var(pir2[0]),marker='x')
@@ -252,7 +253,7 @@ class SmartCone:
             ax2.draw_artist(pt)
             #ax.get_figure().canvas.draw()
             if saveFig: #Output frames to folder. Users may later combine them into videos.
-                fig.savefig('heatMaps/'+'{:06}'.format(f))
+                fig.savefig('heatMaps_/'+'{:06}'.format(f))
             else:
                 #fig.canvas.draw()
                 fig.canvas.blit(ax1.bbox)
