@@ -62,14 +62,18 @@ class PIR3_spectro:
 
                 pxx, freqs, bins, im = plt.specgram(x_toplot, NFFT=window_size, Fs=12, noverlap=step_size)
 
+                print 'freqs:{0}'.format(freqs)
+
                 fig, (ax1, ax2) = plt.subplots(nrows=2)
                 ax1.plot(t_toplot, x_toplot)
                 ax1.axis('tight')
+                ax1.set_title('FFT N={0}'.format(window_size))
 
                 ax2.pcolormesh(bins, freqs, 10*np.log10(pxx))
                 ax2.axis('tight')
 
-                plt.savefig('spectro_pir1_{0}_{1}.png'.format(t_min, t_max))
+                plt.show()
+                # plt.savefig('spectro_pir1_{0}_{1}.png'.format(t_min, t_max))
 
 
     # plot the time series data

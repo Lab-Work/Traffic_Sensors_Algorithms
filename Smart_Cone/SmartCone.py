@@ -241,13 +241,11 @@ class SmartCone:
         pir2MaxVar = np.amax(np.var(pir2))
         pir2MinVar = np.amin(np.var(pir2))
 
-
         fig,(ax1,ax2) = plt.subplots(2, dpi=100)
         #ax2.set_xlim(pir2MinAvg,pir2MaxAvg)
         #ax2.set_ylim(pir2MinVar,pir2MaxVar)
         ax2.set_xlim(29,39)
         ax2.set_ylim(0,20)
-
 
         background1 = fig.canvas.copy_from_bbox(ax1.bbox)
         background2 = fig.canvas.copy_from_bbox(ax2.bbox)
@@ -262,31 +260,40 @@ class SmartCone:
                       timeStamp[0].strftime('%Y-%m-%d %H:%M:%S'))
         ax2.set_xlabel('Mean')
         ax2.set_ylabel('Variance')
-        fig.show()
-        fig.canvas.draw()
+
+        if saveFig:
+            fig.canvas.draw()
+            print 'Save frames to pngs...'
+        else:
+            fig.show()
+            fig.canvas.draw()
 
         for f in range(1,len(pir2)):
-            time.sleep(1./fps)
             im.set_data(pir2[f])
             ax1.set_title('Heat Map of PIR Signal at $t=$ '+ 
                      timeStamp[f].strftime('%Y-%m-%d %H:%M:%S'))
             pt.set_data(np.average(pir2[f]),np.var(pir2[f]))
-            #pt, = ax2.plot(np.average(pir2[f]),np.var(pir2[f]))
             ax2.set_title('Frame Mean/Var Correlation at $t=$ '+ 
                           timeStamp[f].strftime('%Y-%m-%d %H:%M:%S'))
             fig.canvas.restore_region(background1)
             fig.canvas.restore_region(background2)
             ax1.draw_artist(im)
             ax2.draw_artist(pt)
-            #ax.get_figure().canvas.draw()
             if saveFig: #Output frames to folder. Users may later combine them into videos.
                 fig.savefig('heatMaps_/'+'{:06}'.format(f))
+                #One may latter use ffmpeg to 
+                #@Combine those pngs to a video: ffmpeg -framerate 8.218 -i heatMaps_/%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p output.mp4
+                #@Double the speed of the video: ffmpeg -i input.mkv -filter:v "setpts=0.5*PTS" output.mkv
+                #@Convert formats: ffmpeg -i movie.mov -vcodec copy -acodec copy out.mp4
+                #@Overlay two videos side by side: (have not find sufficient methods yet, but it surely exists)
+                #@A tutorial to ffmpeg: http://dranger.com/ffmpeg/tutorial01.html
             else:
-                #fig.canvas.draw()
+                time.sleep(1./fps)
                 fig.canvas.blit(ax1.bbox)
                 fig.canvas.blit(ax2.bbox)
 
         plt.close(fig)
+        print 'Done.'
 
     #STATISTICS
     def stdev(self):
