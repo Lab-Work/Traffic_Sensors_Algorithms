@@ -99,7 +99,7 @@ class SmartCone:
             #print outliers
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
             timeStamp = np.array(timeStamp)
-            plt.scatter(timeStamp, pir2Mean,marker='.',color='b')
+            plt.scatter(timeStamp,pir2Mean,marker='.',color='b')
             #plt.scatter(timeStamp[outliers], pir2Mean[outliers],marker='o',color='r')
 
             try:
@@ -149,6 +149,24 @@ class SmartCone:
             plt.ylabel('Ultrasonic sensor reading')
             plt.show(block=False)
             print 'Done.'
+
+        elif parameter == 'time': #Check the order and uniformity of the time data
+            print 'Plotting time over time stamp...'
+            time = [float(line[0]) for line in self.DATASETS]
+            unitTime = [time[t]-time[t-1] for t in range(1,len(time))]
+            timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
+            print len(time)
+            print len(unitTime)
+            print len(timeStamp)
+            fig1 = plt.figure(1)
+            plt.plot(timeStamp,time)
+            plt.xlabel('Time Stamp')
+            plt.ylabel('Ordinal Time')
+            fig2 = plt.figure(2)
+            plt.plot(timeStamp[0:len(time)-1],unitTime)
+            plt.xlabel('Time Stamp')
+            plt.ylabel('Ordinal Time per Increment')
+
         else:
             sys.exit('ERROR: Parameter not defined.')
         plt.show()
@@ -178,22 +196,31 @@ class SmartCone:
         print (hMax1-hMax)*(H[1][1]-H[1][0])
         '''
 
-        plt.figure()
-        #plt.hist(pir2Mean,bins=250,histtype='stepfilled',color='r',label='All')
+        fig1 = plt.figure(1)
+        plt.hist(pir2Mean,bins=250,histtype='stepfilled',color='r',label='All')
         #plt.hist(pir2Mean[locMax],bins=250,histtype='stepfilled',color='b',label='Peak')
-        instances = np.array([np.average([float(i) for i in line[69:133]]) 
-                     for line in self.DATASETS if line[-1] == 1])
-        instancesTime = np.array([self.timeFormat(float(line[0]))+self.timeDiff 
-                         for line in self.DATASETS if line[-1] == 1])
-        locMax = [argrelextrema(instances, np.greater)[0]]
-
-        
-        plt.hist(list(set(pir2Mean)-set(instances)),bins=250,histtype='step',color='g',label='Noise')
-        plt.hist(instances,bins=250,histtype='step',color='b',label='Labelled')
-        plt.hist(instances[locMax],bins=250,histtype='step',color='r',alpha=0.5,label='Labelled')
         plt.xlabel('Temperature (C)')
-        plt.ylabel('Point count')
+        plt.ylabel('Point Count')
         plt.legend()
+        
+        try:
+            fig2 = plt.figure(2)
+            instances = np.array([np.average([float(i) for i in line[69:133]]) 
+                                  for line in self.DATASETS if line[-1] == 1])
+            instancesTime = np.array([self.timeFormat(float(line[0]))+self.timeDiff 
+                                      for line in self.DATASETS if line[-1] == 1])
+            locMax = [argrelextrema(instances, np.greater)[0]]
+            plt.hist(list(set(pir2Mean)-set(instances)),bins=250,histtype='step',color='g',label='Noise')
+            plt.hist(instances,bins=250,histtype='step',color='b',label='Labelled')
+            plt.hist(instances[locMax],bins=250,histtype='step',color='r',alpha=0.5,label='Labelled Peak')
+            plt.xlabel('Temperature (C)')
+            plt.ylabel('Point Count')
+            plt.legend()
+        except:
+            plt.close(fig2)
+            print 'Labels not found.'
+
+
         plt.show(block=False)
         print 'Done.'
         plt.show()
@@ -285,7 +312,7 @@ class SmartCone:
 
     #Change time stamp format to Python datetime format
     def timeFormat(self,datenum):
-        return datetime.datetime.fromtimestamp(int(datenum))
+        return datetime.datetime.fromtimestamp(float(datenum))
 
     #Update buffer
     def update(self,step=1):
@@ -303,11 +330,20 @@ class SmartCone:
     def label(self):
     
         print 'Labelling data...'
+        #Get the relative paths of data in data/.
+        LABELS = []
+        for root, dirs, files in os.walk('results/'):
+            for file in sorted(files):
+                if file.endswith(".csv"):
+                    self.LABELS.append(os.path.join(root, file))
+        print LABELS
+
         timeStamp = []
-        with open('results/datasetLabel06052015.csv','r') as labelFile:
-            labelReader = csv.reader(labelFile)
-            labelReader.next()
-            timeStamp = [datetime.datetime.strptime(line[0],'%Y-%m-%d %H:%M:%S.%f') for line in labelReader]
+        for label in LABELS:
+            with open(label,'r') as labelFile:
+                labelReader = csv.reader(labelFile)
+                labelReader.next()
+                timeStamp = [datetime.datetime.strptime(line[0],'%Y-%m-%d %H:%M:%S.%f') for line in labelReader]
         
         for line in self.DATASETS:
             for time in timeStamp:
