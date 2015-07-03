@@ -20,11 +20,12 @@ import warnings
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import argrelextrema
+from scipy.signal import argrelextrema, decimate
 import datetime
 import time
 from sklearn import linear_model
 from sklearn import cross_validation
+from mpl_toolkits.mplot3d import Axes3D
 from astroML.plotting import setup_text_plots
 setup_text_plots(fontsize=14, usetex=True) # This will create LaTex style plotting.
 from Estimators import Estimators
@@ -86,21 +87,45 @@ class SmartCone:
     def timeSeries(self,parameter='mean'):
 
         if parameter == 'mean':
-            #plt.ion()
             print 'Plotting mean...'
             pir2Mean = [np.average([float(i) for i in line[69:133]]) for line in self.DATASETS]
             pir2Mean = np.array(pir2Mean)
             mean = np.average(pir2Mean)
             std = np.std(pir2Mean)
+            pir2Mean = (pir2Mean-mean)/std
             print mean
             print std
-            #pir2Mean = np.array([(i-mean)/std for i in pir2Mean])
-            #outliers = [i for i in range(len(pir2Mean)) if pir2Mean[i] > std]
-            #print outliers
+
             timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
             timeStamp = np.array(timeStamp)
+            print len(timeStamp)
+
             plt.scatter(timeStamp,pir2Mean,marker='.',color='b')
-            #plt.scatter(timeStamp[outliers], pir2Mean[outliers],marker='o',color='r')
+
+            '''
+            pir2Mean = np.array([(i-mean)/std for i in pir2Mean])
+            outliers = [i for i in range(len(pir2Mean)) if pir2Mean[i] > std]
+            print outliers
+            plt.scatter(timeStamp[outliers], pir2Mean[outliers],marker='o',color='r')
+            '''
+
+            '''
+            time = []
+            mag = []
+            acc =[]
+            gyr = []
+            with open('database/IMUTest.csv', 'r') as file:
+                reader = csv.reader(file)
+                for line in reader:
+                    mag.append(line[1].replace("[","")+line[2]+line[3].replace("]",""))
+
+            print mag[0], len(mag)
+            mag = [line.split() for line in mag]
+            print mag[0], len(mag)
+            xCoor = np.array([float(pt[0]) for pt in mag]) 
+            xCoor = (xCoor - np.average(xCoor))/np.std(xCoor)
+            plt.scatter(timeStamp,xCoor,marker='.',color='r')
+            '''
 
             try:
                 instances = [np.average([float(i) for i in line[69:133]]) 
