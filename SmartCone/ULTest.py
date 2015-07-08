@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 '''
+#The raw file needs to be moderately processed to omit text before numerical analysis
 with open('database/ULTest.csv','r') as src:
     reader = csv.reader(src)
     with open('database/ULTest_2.csv','w') as dest:
@@ -17,23 +18,38 @@ with open('database/ULTest_2.csv','r') as dest:
         if len(line) != 6:
             print line
 '''
-uT = []
-lT = []
+
+ultraTime = []
+laserTime = []
 ultra = []
 laser = []
 count = []
 with open('database/ULTest_2.csv','r') as dest:
     reader = csv.reader(dest)
     for line in reader:
-        uT.append(line[1])
-        ultra.append(line[2])
-        lT.append(line[3])
-        laser.append(line[4])
-        count.append(line[5])
+        ultraTime.append(float(line[1]))
+        ultra.append(float(line[2]))
+        laserTime.append(float(line[3]))
+        laser.append(float(line[4]))
+        count.append(float(line[5]))
 
-print uT[0:10]
-print len(uT)
-print len(lT)
-print len(ultra)
-print len(laser)
-print len(count)
+ultra = np.array(ultra)
+ultra = (ultra - np.average(ultra)) / np.std(ultra)
+
+laser = np.array(laser)
+laser = (laser - np.average(laser)) / np.std(laser)
+
+SPK = 0
+for i in range(len(ultra)):
+    if ultra[i] > -2:
+        laser[i] = 0.9
+
+for i in range(len(ultra)-1):
+    if ultra[i+1] - ultra[i] < -1.5:
+        SPK += 1
+print SPK
+
+plt.figure()
+plt.plot(ultraTime, ultra)
+plt.plot(laserTime, laser)
+plt.show()
