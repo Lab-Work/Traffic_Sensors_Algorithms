@@ -22,6 +22,9 @@ with open('database/ULTest_2.csv','r') as dest:
             print line
 '''
 
+def timeFormat(datenum):
+    return datetime.fromtimestamp(float(datenum))
+
 ultraTime = []
 laserTime = []
 ultra = []
@@ -30,9 +33,9 @@ count = []
 with open('database/ULTest_2.csv','r') as dest:
     reader = csv.reader(dest)
     for line in reader:
-        ultraTime.append(float(line[1]))
+        ultraTime.append(float(line[1])/60000)
         ultra.append(float(line[2]))
-        laserTime.append(float(line[3]))
+        laserTime.append(float(line[3])/60000)
         laser.append(float(line[4]))
         count.append(float(line[5]))
 
@@ -48,15 +51,14 @@ for i in range(len(laser)):
 
 distance = np.array([i**2 + j**2 for i, j in zip(ultra, laser)])
 
-
 plt.figure()
 plt.plot(ultraTime, -ultra, label='Ultrasonic')
 plt.plot(laserTime, laser, label='Laser')
+#plt.plot(ultraTime, distance, label='$U^2 + L^2$')
 plt.xlabel('Machine Time')
 plt.ylabel('Relative Signal Maganitude')
 plt.title('Comparison of Laser and Ultrasonic Sensor Signals 06/25/15')
 plt.legend()
-#plt.plot(ultraTime, distance)
 #plt.show()
 
 
@@ -95,23 +97,24 @@ logTime = []
 logSPK = []
 with open('data/log.txt', 'r') as log:
     reader = csv.reader(log)
-    reader.next()
+    for i in range(3): # Align starting time
+        reader.next()
     for line in reader:
         logTime.append(datetime.strptime(line[0], '%Y-%m-%d %H:%M:%S.%f'))
-        logSPK.append(line[2])
+        logSPK.append(float(line[2]))
 
+logSPK = np.array([i+25 for i in logSPK])
 print len(logSPK)
 print max(BASKET)
 
-plt.figure()
-plt.plot(logTime, logSPK)
-plt.xlabel('Time Stamp')
-plt.ylabel('Cumulative Traffic')
-plt.title('Cumulative Traffic Diagram (Ground Truth)')
+logTimestamp = [(i-logTime[0]) for i in logTime]
+logTimestamp = [i.total_seconds()/60 + i.microseconds/60000000 for i in logTimestamp]
 
 plt.figure()
-plt.plot(ultraTime[:-1], BASKET)
-plt.xlabel('Machine Time')
+plt.plot(logTimestamp, logSPK, label='Ground truth')
+plt.plot(ultraTime[:-1], BASKET, label='Computed count')
+plt.legend()
+plt.xlabel('Machine Time (min)')
 plt.ylabel('Cumulative Traffic')
 plt.title('Computed Cumulative Traffic Diagram')
 plt.show()
@@ -124,3 +127,4 @@ for SPK in  BLASKET:
         counter += 1
         print counter
 '''
+
