@@ -43,14 +43,22 @@ ultra = np.array(ultra) - np.average(ultra)
 laser = np.array(laser)
 
 laserMode = max(laser)
-print laserMode
+#print laserMode
 
 for i in range(len(laser)):
-    if laser[i] > 10:
+    #if laser[i] > 10:
         laser[i] = 0
 
 distance = np.array([i**2 + j**2 for i, j in zip(ultra, laser)])
 
+#plt.figure()
+hist, edge = np.histogram(distance, bins=np.arange(0,200,5), normed=False)
+mask = [0.25, 1, 0.25]
+freq = np.convolve(hist, mask, "valid")
+print hist
+print freq
+
+'''
 plt.figure()
 plt.plot(ultraTime, -ultra, label='Ultrasonic')
 plt.plot(laserTime, laser, label='Laser')
@@ -118,7 +126,7 @@ plt.xlabel('Machine Time (min)')
 plt.ylabel('Cumulative Traffic')
 plt.title('Computed Cumulative Traffic Diagram')
 plt.show()
-
+'''
 
 '''
 counter = 0

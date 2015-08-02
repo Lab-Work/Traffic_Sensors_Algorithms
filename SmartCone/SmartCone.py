@@ -31,7 +31,7 @@ setup_text_plots(fontsize=14, usetex=True) # This will create LaTex style plotti
 from Estimators import Estimators
 
 #Primary class
-class SmartCone: 
+class SmartCone:
 
     #LIABRARY
     def __init__(self,mode='read',bufferSize='inf',estimatorType=None):
@@ -47,7 +47,7 @@ class SmartCone:
                     if file.endswith(".csv"):
                         self.FILES.append(os.path.join(root, file))
             print self.FILES
-            
+
             #Pour data from files to a list.
             self.DATASETS = []
             for file in self.FILES:
@@ -70,7 +70,7 @@ class SmartCone:
 
             else:
                 sys.exit('ERROR: Buffer needs to be a positive integer.')
-        
+
         #TODO: Read data from serial port.
         elif mode == 'listen':
             sys.exit('WARNING: Mode to be defined.')
@@ -78,7 +78,7 @@ class SmartCone:
 
         else:
             sys.exit('ERROR: Mode not defined.')
-            
+
         #Instantiate an estimator class. Comment the code while testing to improve speed.
         self.Estimator = Estimators(BUFFER=self.BUFFER,estimator=estimatorType)
 
@@ -122,15 +122,15 @@ class SmartCone:
             print mag[0], len(mag)
             mag = [line.split() for line in mag]
             print mag[0], len(mag)
-            xCoor = np.array([float(pt[0]) for pt in mag]) 
+            xCoor = np.array([float(pt[0]) for pt in mag])
             xCoor = (xCoor - np.average(xCoor))/np.std(xCoor)
             plt.scatter(timeStamp,xCoor,marker='.',color='r')
             '''
 
             try:
-                instances = [np.average([float(i) for i in line[69:133]]) 
+                instances = [np.average([float(i) for i in line[69:133]])
                              for line in self.DATASETS if line[-1] == 1]
-                instancesTime = [self.timeFormat(float(line[0]))+self.timeDiff 
+                instancesTime = [self.timeFormat(float(line[0]))+self.timeDiff
                                  for line in self.DATASETS if line[-1] == 1]
                 plt.scatter(instancesTime,instances,marker='o',color='r')
             except:
@@ -141,7 +141,7 @@ class SmartCone:
             plt.ylabel('Mean of 64 pixels')
             plt.show(block=False)
             print 'Done.'
-            
+
         elif parameter == 'variance':
             print 'Plotting variance...'
             pir2Var = [np.var([float(i) for i in line[69:133]]) for line in self.DATASETS]
@@ -203,7 +203,7 @@ class SmartCone:
         #locMax = [argrelextrema(pir2Mean, np.greater)[0]]
         timeStamp = [self.timeFormat(float(line[0]))+self.timeDiff for line in self.DATASETS]
         timeStamp = np.array(timeStamp)
-        
+
         '''
         plt.figure()
         H = np.histogram(pir2Mean[locMax],bins=300)
@@ -227,7 +227,7 @@ class SmartCone:
         plt.xlabel('Temperature (C)')
         plt.ylabel('Point Count')
         plt.legend()
-        
+
         try:
             fig2 = plt.figure(2)
             instances = np.array([np.average([float(i) for i in line[69:133]]) 
