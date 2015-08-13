@@ -151,7 +151,8 @@ class PIR_MLX90620:
         for col in range(0, 16):
             for row in range(0, 4):
                 i = col*4 + row
-                v_ir_off_comp = irData[row, col] - (self.a_ij[i] + (self.b_ij[i]/np.power(2, self.b_i_scale)) * (self.Tambient - 25)) #1: Calculate Offset Compensation
+                #1: Calculate Offset Compensation
+                v_ir_off_comp = irData[row, col] - (self.a_ij[i] + (self.b_ij[i]/np.power(2, self.b_i_scale)) * (self.Tambient - 25)) 
 
                 v_ir_tgc_comp = v_ir_off_comp - ((self.tgc/32) * v_cp_off_comp) #2: Calculate Thermal Gradien Compensation (TGC)
 
@@ -267,7 +268,9 @@ class PIR_MLX90620:
     # The following function plot a static single 4x16 pixel frame given the time interval
     # input: each frame in the [t_start, t_end] interval will be plotted in separate figures
     #        T_min and T_max are the limit for the color bar
+    # TODO: There is a minor bug on im[2]
     def plot_heat_map(self, t_start, t_end, T_min, T_max):
+        
         # extract data to plot from the properties
         index = np.nonzero(t_start <= self.time_stamps <= t_end)[0]
         data_to_plot = self.all_temperatures[:, index]
