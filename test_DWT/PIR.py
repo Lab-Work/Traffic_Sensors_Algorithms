@@ -1,6 +1,6 @@
 # This is the Class for PIR90620 sensor.
 # This class can:
-# 1. import the EEPROM register values and copmute the temperature from IRraw data
+# 1. import the EEPROM register values and compute the temperature from IRraw data
 # 2. Save all data in clean data structure, either from serial port reading or data files
 # 3. visualize the data, heat_map or time series of a single pixel
 
@@ -64,6 +64,7 @@ class PIR_MLX90620:
         self.pixel_id = 0   # by default 0
 
     # PIR LIBRARY
+    # TODO: changed the property of the PIR class to np array. Need to update.
     # import EEPROM, must be called if want to compute temperature from IRraw data.
     def import_eeprom(self, alpha_ij, eepromData):
         self.alpha_ij = np.copy(alpha_ij)
@@ -182,6 +183,37 @@ class PIR_MLX90620:
             print 'std of each pix:{0}'.format(np.reshape(std, (16, 4) ).T)
 
 
+    # statistic analysis
+    # aggregate the values across pixels in the second row
+    def plot_agg_temp(self, pixel_id, t_start, t_end):
+        # extract data to plot from the properties
+        if t_start is None or t_end is None:
+            # if not specified, then plot all data
+            index = np.nonzero(self.time_stamps)[0]
+        else:
+            index = np.nonzero(t_start <= self.time_stamps <= t_end)[0]
+
+        data_to_plot = []
+        # only extract the pixels data to be plotted
+        for i in range(0, len(pixel_id)):
+            pixel_index = pixel_id[i][1]*4 + pixel_id[i][0]
+            data_to_plot.append(self.all_temperatures[pixel_index, index])
+
+        data_to_plot_sum = np.zeros(len(data_to_plot[0]))
+        # sum the values across pixels
+        for i in range(0, len(data_to_plot[0])):
+            for pix in range(0,len(pixel_id)):
+                data_to_plot_sum[i] += data_to_plot[pix][i]
+
+        fig = plt.figure(figsize=(16,8), dpi=100)
+        plt.plot(self.time_stamps, data_to_plot_sum)
+
+        plt.title('Aggregated time series of PIR {0}, pixel {1}'.format(self.pir_id, pixel_id))
+        plt.ylabel('Temperature ($^{\circ}C$)')
+        plt.xlabel('Time stamps in EPOCH')
+        plt.show()
+
+
     # visualization
     # init_fig and update_fig are used for real-time plotting from serial stream data.
     # initialize the plotting for time series of chosen pixels
@@ -250,7 +282,7 @@ class PIR_MLX90620:
         data_to_plot = []
         # only extract the pixels data to be plotted
         for i in range(0, len(pixel_id)):
-            pixel_index = pixel_id[i][0]*4 + pixel_id[i][1]
+            pixel_index = pixel_id[i][1]*4 + pixel_id[i][0]
             data_to_plot.append(self.all_temperatures[pixel_index, index])
 
         fig = plt.figure(figsize=(16,8), dpi=100)
@@ -487,12 +519,28 @@ class PIR_3_MLX90620:
             # if none, then play the entire date set
             index = np.nonzero(self.pir1.time_stamps)[0]
         else:
-            index = np.nonzero(t_start <= self.pir1.time_stamps <= t_end)[0]
+            index = np.nonzero([i&j for i in t_start <= self.pir1.time_stamps for j in self.pir1.time_stamps <= t_end])[0]
         # each columnn is one frame
+
+        temp_pir1_data = self.pir1.all_temperatures[:, index]
+        temp_pir2_data = self.pir2.all_temperatures[:, index]
+        temp_pir3_data = self.pir3.all_temperatures[:, index]
+
+        # for pix_id in range(0,64):
+        #     temp_pir1_data[pix_id,:] -= np.mean(temp_pir1_data[i,:])
+        #     temp_pir2_data[pix_id,:] -= np.mean(temp_pir2_data[i,:])
+        #     temp_pir3_data[pix_id,:] -= np.mean(temp_pir3_data[i,:])
+
+
         data_to_play = []
-        data_to_play.append(self.pir1.all_temperatures[:, index])
-        data_to_play.append(self.pir2.all_temperatures[:, index])
-        data_to_play.append(self.pir3.all_temperatures[:, index])
+        data_to_play.append(self.pir1.all_temperatures[:, index] - np.mean(self.pir1.all_temperatures[:, index],1))
+        data_to_play.append(self.pir2.all_temperatures[:, index] - np.mean(self.pir2.all_temperatures[:, index],1))
+        data_to_play.append(self.pir3.all_temperatures[:, index] - np.mean(self.pir3.all_temperatures[:, index],1))
+        # data_to_play.append(temp_pir1_data)
+        # data_to_play.append(temp_pir2_data)
+        # data_to_play.append(temp_pir3_data)
+
+
 
         timer_start = time.time()
         for frame_index in range(0, data_to_play[0].shape[1]):
