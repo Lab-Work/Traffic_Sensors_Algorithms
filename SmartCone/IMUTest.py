@@ -7,7 +7,7 @@ time = []
 mag = []
 acc =[]
 gyr = []
-with open('IMU_Jun_25.csv.bak', 'r') as file:
+with open('database/IMU06252015.csv.bak', 'r') as file:
     reader = csv.reader(file)
     for line in reader:
         time.append(float(line[0]))
@@ -25,7 +25,7 @@ print mag[0], len(mag)
 
 fig = plt.figure(1)
 ax = fig.add_subplot(111,projection='3d')
-xCoor = [float(pt[0]) for pt in mag] 
+xCoor = [float(pt[0]) for pt in mag]
 yCoor = [float(pt[1]) for pt in mag]
 zCoor = [float(pt[2]) for pt in mag]
 ax.scatter(xCoor,yCoor,zCoor)
@@ -36,16 +36,13 @@ ax.set_zlabel('Z Label')
 plt.figure(2)
 plt.plot(time,xCoor)
 
-
-
-'''
 print acc[0], len(acc)
 acc = [line.split() for line in acc]
 print acc[0], len(acc)
 
 fig = plt.figure(3)
 ax = fig.add_subplot(111,projection='3d')
-xCoor = [float(pt[0]) for pt in acc] 
+xCoor = [float(pt[0]) for pt in acc]
 yCoor = [float(pt[1]) for pt in acc]
 zCoor = [float(pt[2]) for pt in acc]
 ax.scatter(xCoor,yCoor,zCoor)
@@ -60,4 +57,4 @@ plt.show()
 
 #print acc[0], len(acc)
 #print gyr[0], len(gyr)
-'''
+

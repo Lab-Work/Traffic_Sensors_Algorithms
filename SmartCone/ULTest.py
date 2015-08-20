@@ -46,7 +46,7 @@ laserMode = max(laser)
 #print laserMode
 
 for i in range(len(laser)):
-    #if laser[i] > 10:
+    if laser[i] > 10:
         laser[i] = 0
 
 distance = np.array([i**2 + j**2 for i, j in zip(ultra, laser)])
@@ -54,16 +54,12 @@ distance = np.array([i**2 + j**2 for i, j in zip(ultra, laser)])
 #plt.figure()
 hist, edge = np.histogram(distance, bins=np.arange(0,200,5), normed=False)
 mask = [0.25, 1, 0.25]
-freq = np.convolve(hist, mask, "valid")
-print hist
-print freq
 
-'''
 plt.figure()
 plt.plot(ultraTime, -ultra, label='Ultrasonic')
 plt.plot(laserTime, laser, label='Laser')
 #plt.plot(ultraTime, distance, label='$U^2 + L^2$')
-plt.xlabel('Machine Time')
+plt.xlabel('Machine Time (min)')
 plt.ylabel('Relative Signal Maganitude')
 plt.title('Comparison of Laser and Ultrasonic Sensor Signals 06/25/15')
 plt.legend()
@@ -112,8 +108,8 @@ with open('data/log.txt', 'r') as log:
         logSPK.append(float(line[2]))
 
 logSPK = np.array([i+25 for i in logSPK])
-print len(logSPK)
-print max(BASKET)
+#print len(logSPK)
+#print max(BASKET)
 
 logTimestamp = [(i-logTime[0]) for i in logTime]
 logTimestamp = [i.total_seconds()/60 + i.microseconds/60000000 for i in logTimestamp]
@@ -126,7 +122,7 @@ plt.xlabel('Machine Time (min)')
 plt.ylabel('Cumulative Traffic')
 plt.title('Computed Cumulative Traffic Diagram')
 plt.show()
-'''
+
 
 '''
 counter = 0

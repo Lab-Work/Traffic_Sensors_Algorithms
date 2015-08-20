@@ -25,7 +25,7 @@ class Estimators:
 
         self.millis1 = []#The millisecs from the start of Arduino to time of measure
         self.pir1 = []   #The leftmost PIR reading
-        self.amb1 = []   #The leftmost PIR ambient temperature reading 
+        self.amb1 = []   #The leftmost PIR ambient temperature reading
         self.ultra1 = [] #The corresponding ultrasonic sensor reading
 
         self.millis2 = []#The millisecs from the start of Arduino to time of measure
@@ -37,7 +37,7 @@ class Estimators:
         self.pir3 = []   #The rightmost PIR reading
         self.amb3 = []   #The rightmost PIR ambient temperature reading
         self.ultra3 = [] #The corresponding ultrasonic sensor reading
-        
+
         #Initialize the properties defined above.
         self.t0 = self.timeFormat(float(BUFFER[0][0]))
         print 'Starting measurement at:'
@@ -50,7 +50,7 @@ class Estimators:
             self.pir1.append([float(i) for i in data[2:66]])
             self.amb1.append(float(data[66]))
             self.ultra1.append(float(data[67]))
-            
+
             self.millis2.append(float(data[68]))
             self.pir2.append([float(i) for i in data[69:133]])
             self.amb2.append(float(data[133]))

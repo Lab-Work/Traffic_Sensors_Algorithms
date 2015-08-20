@@ -7,8 +7,9 @@ emulator = SmartCone(estimatorType='adaptiveThreshold')
 #emulator.timeSeries('ultrasonic')
 #emulator.timeSeries()
 #emulator.heatMap(fps=80,saveFig=False)
-emulator.timeSeries()
+#emulator.timeSeries()
 #emulator.heatMap(fps=80,saveFig=True)
+emulator.heatBand()
 
 '''
 while True:

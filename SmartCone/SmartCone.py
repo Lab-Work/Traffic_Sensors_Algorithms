@@ -250,6 +250,20 @@ class SmartCone:
         print 'Done.'
         plt.show()
 
+    def heatBand(self):
+        x = np.random.randn(8873)
+        y = np.zeros(8873)
+
+        heatmap, xedges, yedges = np.histogram2d(x, y, bins=[50,1])
+        extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+
+        print xedges
+        plt.clf()
+        plt.imshow(heatmap, extent=extent, interpolation='nearest')
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.show()
+
     def heatMap(self,fps=8,saveFig=True):
         if not saveFig:
             print 'Note that the current version does not support title time stamp update!'
@@ -278,10 +292,10 @@ class SmartCone:
                        interpolation='nearest',vmin=pir2Min,vmax=pir2Max-50)
         position=fig.add_axes([0.93,0.536,0.02,0.362])
         fig.colorbar(im,cax=position)
-        ax1.set_title('Heat Map of PIR Signal at $t=$ '+ 
+        ax1.set_title('Heat Map of PIR Signal at $t=$ '+
                      timeStamp[0].strftime('%Y-%m-%d %H:%M:%S'))
         pt, = ax2.plot(np.average(pir2[0]),np.var(pir2[0]),marker='x')
-        ax2.set_title('Frame Mean/Var Correlation at $t=$ '+ 
+        ax2.set_title('Frame Mean/Var Correlation at $t=$ '+
                       timeStamp[0].strftime('%Y-%m-%d %H:%M:%S'))
         ax2.set_xlabel('Mean')
         ax2.set_ylabel('Variance')
@@ -295,10 +309,10 @@ class SmartCone:
 
         for f in range(1,len(pir2)):
             im.set_data(pir2[f])
-            ax1.set_title('Heat Map of PIR Signal at $t=$ '+ 
+            ax1.set_title('Heat Map of PIR Signal at $t=$ '+
                      timeStamp[f].strftime('%Y-%m-%d %H:%M:%S'))
             pt.set_data(np.average(pir2[f]),np.var(pir2[f]))
-            ax2.set_title('Frame Mean/Var Correlation at $t=$ '+ 
+            ax2.set_title('Frame Mean/Var Correlation at $t=$ '+
                           timeStamp[f].strftime('%Y-%m-%d %H:%M:%S'))
             fig.canvas.restore_region(background1)
             fig.canvas.restore_region(background2)
@@ -306,12 +320,12 @@ class SmartCone:
             ax2.draw_artist(pt)
             if saveFig: #Output frames to folder. Users may later combine them into videos.
                 fig.savefig('heatMaps_/'+'{:06}'.format(f))
-                #One may latter use ffmpeg to 
-                #@Combine those pngs to a video: ffmpeg -framerate 8.218 -i heatMaps_/%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p output.mp4
-                #@Double the speed of the video: ffmpeg -i input.mkv -filter:v "setpts=0.5*PTS" output.mkv
-                #@Convert formats: ffmpeg -i movie.mov -vcodec copy -acodec copy out.mp4
-                #@Overlay two videos side by side: (have not find sufficient methods yet, but it surely exists)
-                #@A tutorial to ffmpeg: http://dranger.com/ffmpeg/tutorial01.html
+                #One may latter use ffmpeg to
+                #Combine those pngs to a video: ffmpeg -framerate 8.218 -i heatMaps_/%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p output.mp4
+                #Double the speed of the video: ffmpeg -i input.mkv -filter:v "setpts=0.5*PTS" output.mkv
+                #Convert formats: ffmpeg -i movie.mov -vcodec copy -acodec copy out.mp4
+                #Overlay two videos side by side: (have not find sufficient methods yet, but it surely exists)
+                #A tutorial to ffmpeg: http://dranger.com/ffmpeg/tutorial01.html
             else:
                 time.sleep(1./fps)
                 fig.canvas.blit(ax1.bbox)
@@ -330,7 +344,7 @@ class SmartCone:
     #ESTIMATION
     def estimate(self):
         self.Estimator.run()
-        
+
 
     #VALIDATION
     def scores(self):
@@ -349,18 +363,18 @@ class SmartCone:
     #Update buffer
     def update(self,step=1):
 
-        if mode == 'read': 
+        if mode == 'read':
             for i in range(step):
                 self.BUFFER.pop(0)
                 self.BUFFER.append(self.DATASETS[self.curr])
             Estimator.update(self.BUFFER)
 
-        else:  
+        else:
             sys.exit('WARNING: Mode to be defined.') #Listen to serial
 
     #Label DATASETS
     def label(self):
-    
+
         print 'Labelling data...'
         #Get the relative paths of data in data/.
         LABELS = []
@@ -376,7 +390,7 @@ class SmartCone:
                 labelReader = csv.reader(labelFile)
                 labelReader.next()
                 timeStamp = [datetime.datetime.strptime(line[0],'%Y-%m-%d %H:%M:%S.%f') for line in labelReader]
-        
+
         for line in self.DATASETS:
             for time in timeStamp:
                 timeDiff = self.timeFormat(float(line[0]))+self.timeDiff-time
