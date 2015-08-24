@@ -64,7 +64,7 @@ for line in UL_csv:
     UL_data.append(
         UL_instance(
             float(line[3])/60000,   # Instance time
-            float(line[2]),         # Ultrasonic measurement
+            12-float(line[2]),         # Ultrasonic measurement
             float(line[4]),         # Laser measurement
         )
     )
@@ -138,6 +138,42 @@ from bisect import bisect_left
 UL_idx = [bisect_left(UL_timestamp, t) for t in PIR_timestamp]
 IMU_idx = range(len(PIR_data))
 
+check_colormap = True
+if (check_colormap):
+    norm_avg = []
+    for i in range(64):
+        norm_avg.append(np.mean([t.pir1[i] for t in PIR_data]))
+        norm_avg.append(np.mean([t.pir2[i] for t in PIR_data]))
+        norm_avg.append(np.mean([t.pir3[i] for t in PIR_data]))
+    norm_avg.append(np.mean([t.ulson for t in UL_data]))
+
+    norm_std = []
+    for i in range(64):
+        norm_std.append(np.std([t.pir1[i] for t in PIR_data]))
+        norm_std.append(np.std([t.pir2[i] for t in PIR_data]))
+        norm_std.append(np.std([t.pir3[i] for t in PIR_data]))
+    norm_std.append(np.std([t.ulson for t in UL_data]))
+
+    colormap = []
+    for x, y in zip(PIR_data[1000:5000], UL_idx[1000:5000]):
+        colormap.append((np.array([x.pir1 + x.pir2 + x.pir3 +
+                                  [UL_data[y].ulson]])
+                         - np.array(norm_avg)) /
+                        np.array(norm_std))
+    colormap = np.array(colormap)
+    colormap = colormap.squeeze()
+    colormap = np.transpose(colormap)
+    print colormap.shape
+    #print colormap[0:5]
+    plt.figure()
+    plt.imshow(colormap, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
+            interpolation="nearest", vmin=-2, vmax=9)
+    plt.colorbar(orientation="horizontal")
+    plt.title("Sample Colormap from Data Collected on 06/25/15 over 500 Seconds")
+    plt.ylabel("Normalized Signal from PIR and Ulson")
+    plt.xlabel("Elapsed time /0.125 sec")
+    plt.show()
+
 check_2d_scatter = False
 if (check_2d_scatter):
     plt.figure()
@@ -164,7 +200,7 @@ if (check_3d_scatter):
     ax.set_title("Left PIR 24th, 48th Pixels v.s. Ultrasonic")
     plt.savefig("3d_scatter.png")
 
-check_time_series = True
+check_time_series = False
 if (check_time_series):
     plt.figure()
     plt.plot(PIR_timestamp[0:35000],
