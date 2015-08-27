@@ -143,21 +143,36 @@ if (check_colormap):
     norm_avg = []
     for i in range(64):
         norm_avg.append(np.mean([t.pir1[i] for t in PIR_data]))
+    for i in range(64):
         norm_avg.append(np.mean([t.pir2[i] for t in PIR_data]))
+    for i in range(64):
         norm_avg.append(np.mean([t.pir3[i] for t in PIR_data]))
+    norm_avg.append(np.mean([t.ulson for t in UL_data]))
+    norm_avg.append(np.mean([t.ulson for t in UL_data]))
+    norm_avg.append(np.mean([t.ulson for t in UL_data]))
+    norm_avg.append(np.mean([t.ulson for t in UL_data]))
+    norm_avg.append(np.mean([t.ulson for t in UL_data]))
     norm_avg.append(np.mean([t.ulson for t in UL_data]))
 
     norm_std = []
     for i in range(64):
         norm_std.append(np.std([t.pir1[i] for t in PIR_data]))
+    for i in range(64):
         norm_std.append(np.std([t.pir2[i] for t in PIR_data]))
+    for i in range(64):
         norm_std.append(np.std([t.pir3[i] for t in PIR_data]))
+    norm_std.append(np.std([t.ulson for t in UL_data]))
+    norm_std.append(np.std([t.ulson for t in UL_data]))
+    norm_std.append(np.std([t.ulson for t in UL_data]))
+    norm_std.append(np.std([t.ulson for t in UL_data]))
+    norm_std.append(np.std([t.ulson for t in UL_data]))
     norm_std.append(np.std([t.ulson for t in UL_data]))
 
     colormap = []
-    for x, y in zip(PIR_data[1000:5000], UL_idx[1000:5000]):
-        colormap.append((np.array([x.pir1 + x.pir2 + x.pir3 +
-                                  [UL_data[y].ulson]])
+    for x, y in zip(PIR_data[0:35000], UL_idx[0:35000]):
+        colormap.append((np.array(x.pir1 + x.pir2 + x.pir3 +
+                                  [UL_data[y].ulson, UL_data[y].ulson, UL_data[y].ulson,
+                                   UL_data[y].ulson, UL_data[y].ulson, UL_data[y].ulson])
                          - np.array(norm_avg)) /
                         np.array(norm_std))
     colormap = np.array(colormap)
@@ -169,10 +184,9 @@ if (check_colormap):
     plt.imshow(colormap, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
             interpolation="nearest", vmin=-2, vmax=9)
     plt.colorbar(orientation="horizontal")
-    plt.title("Sample Colormap from Data Collected on 06/25/15 over 500 Seconds")
+    plt.title("Sample Colormap from Data Collected on 06/25/15")
     plt.ylabel("Normalized Signal from PIR and Ulson")
     plt.xlabel("Elapsed time /0.125 sec")
-    plt.show()
 
 check_2d_scatter = False
 if (check_2d_scatter):
@@ -200,7 +214,7 @@ if (check_3d_scatter):
     ax.set_title("Left PIR 24th, 48th Pixels v.s. Ultrasonic")
     plt.savefig("3d_scatter.png")
 
-check_time_series = False
+check_time_series = True
 if (check_time_series):
     plt.figure()
     plt.plot(PIR_timestamp[0:35000],
@@ -211,7 +225,7 @@ if (check_time_series):
              label = "Ultrasonic")
     plt.legend()
     plt.title("Time Synchronization Check")
-    plt.savefig("timeseries.png")
+    #plt.savefig("timeseries.png")
 
 check_time = False
 if (check_time):
@@ -223,3 +237,5 @@ if (check_time):
     plt.title("Measurement Time Coherency Inspection (Slope Stands for 1/Frequency)")
     plt.plot(IMU_timestamp, 'go')
     plt.savefig("Erroneous_Ulson_Laser_Frequency.png")
+
+plt.show()
