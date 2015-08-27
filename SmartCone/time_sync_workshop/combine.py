@@ -122,71 +122,93 @@ for line in LOG_csv:
     )
 LOG_raw.close()
 
-PIR_timestamp = [t.begin-IMU_data[0].begin for t in PIR_data]
+PIR_timestamp = [t.begin-PIR_data[0].begin for t in PIR_data]
 PIR_timestamp = [t.total_seconds()/60 + t.microseconds/60000000
                  for t in PIR_timestamp]
-UL_timestamp = [t.begin-UL_data[0].begin+0.25 for t in UL_data]
+UL_timestamp = [t.begin-UL_data[0].begin+0.15 for t in UL_data]
 IMU_timestamp = [t.begin-IMU_data[0].begin for t in IMU_data]
 IMU_timestamp = [t.total_seconds()/60 + t.microseconds/60000000
                  for t in IMU_timestamp]
 LOG_timestamp = [t.begin-LOG_data[0].begin for t in LOG_data]
-LOG_timestamp = [t.total_seconds()/60 + t.microseconds/60000000
+LOG_timestamp = [-2.23 + t.total_seconds()/60 + t.microseconds/60000000
                  for t in LOG_timestamp]
 
 PIR_idx = range(len(PIR_data))
 from bisect import bisect_left
 UL_idx = [bisect_left(UL_timestamp, t) for t in PIR_timestamp]
 IMU_idx = range(len(PIR_data))
+LOG_idx = [bisect_left(PIR_timestamp, t) for t in LOG_timestamp]
+LOG_data_new = [0]*len(PIR_timestamp)
+for i in LOG_idx:
+    try:
+        LOG_data_new[i] = 8
+    except:
+        pass
 
-check_colormap = True
-if (check_colormap):
-    norm_avg = []
-    for i in range(64):
-        norm_avg.append(np.mean([t.pir1[i] for t in PIR_data]))
-    for i in range(64):
-        norm_avg.append(np.mean([t.pir2[i] for t in PIR_data]))
-    for i in range(64):
-        norm_avg.append(np.mean([t.pir3[i] for t in PIR_data]))
-    norm_avg.append(np.mean([t.ulson for t in UL_data]))
-    norm_avg.append(np.mean([t.ulson for t in UL_data]))
-    norm_avg.append(np.mean([t.ulson for t in UL_data]))
-    norm_avg.append(np.mean([t.ulson for t in UL_data]))
-    norm_avg.append(np.mean([t.ulson for t in UL_data]))
-    norm_avg.append(np.mean([t.ulson for t in UL_data]))
+norm_avg = []
+for i in range(64):
+    norm_avg.append(np.mean([t.pir1[i] for t in PIR_data]))
+for i in range(64):
+    norm_avg.append(np.mean([t.pir2[i] for t in PIR_data]))
+for i in range(64):
+    norm_avg.append(np.mean([t.pir3[i] for t in PIR_data]))
+norm_avg.append(np.mean([t.ulson for t in UL_data]))
+norm_avg.append(np.mean([t.ulson for t in UL_data]))
+norm_avg.append(np.mean([t.ulson for t in UL_data]))
+norm_avg.append(np.mean([t.ulson for t in UL_data]))
+norm_avg.append(np.mean([t.ulson for t in UL_data]))
+norm_avg.append(np.mean([t.ulson for t in UL_data]))
+norm_avg.append(0)
+norm_avg.append(0)
+norm_avg.append(0)
+norm_avg.append(0)
+norm_avg.append(0)
+norm_avg.append(0)
 
-    norm_std = []
-    for i in range(64):
-        norm_std.append(np.std([t.pir1[i] for t in PIR_data]))
-    for i in range(64):
-        norm_std.append(np.std([t.pir2[i] for t in PIR_data]))
-    for i in range(64):
-        norm_std.append(np.std([t.pir3[i] for t in PIR_data]))
-    norm_std.append(np.std([t.ulson for t in UL_data]))
-    norm_std.append(np.std([t.ulson for t in UL_data]))
-    norm_std.append(np.std([t.ulson for t in UL_data]))
-    norm_std.append(np.std([t.ulson for t in UL_data]))
-    norm_std.append(np.std([t.ulson for t in UL_data]))
-    norm_std.append(np.std([t.ulson for t in UL_data]))
+norm_std = []
+for i in range(64):
+    norm_std.append(np.std([t.pir1[i] for t in PIR_data]))
+for i in range(64):
+    norm_std.append(np.std([t.pir2[i] for t in PIR_data]))
+for i in range(64):
+    norm_std.append(np.std([t.pir3[i] for t in PIR_data]))
+norm_std.append(np.std([t.ulson for t in UL_data]))
+norm_std.append(np.std([t.ulson for t in UL_data]))
+norm_std.append(np.std([t.ulson for t in UL_data]))
+norm_std.append(np.std([t.ulson for t in UL_data]))
+norm_std.append(np.std([t.ulson for t in UL_data]))
+norm_std.append(np.std([t.ulson for t in UL_data]))
+norm_std.append(1)
+norm_std.append(1)
+norm_std.append(1)
+norm_std.append(1)
+norm_std.append(1)
+norm_std.append(1)
 
+def check_colormap(start=0, end=35000, save_plot=False):
     colormap = []
-    for x, y in zip(PIR_data[0:35000], UL_idx[0:35000]):
+    for x, y, z in zip(PIR_data[start:end], UL_idx[start:end],
+                       LOG_data_new[start:end]):
         colormap.append((np.array(x.pir1 + x.pir2 + x.pir3 +
-                                  [UL_data[y].ulson, UL_data[y].ulson, UL_data[y].ulson,
-                                   UL_data[y].ulson, UL_data[y].ulson, UL_data[y].ulson])
+                                  [UL_data[y].ulson]*6 + [z]*6)
                          - np.array(norm_avg)) /
                         np.array(norm_std))
     colormap = np.array(colormap)
-    colormap = colormap.squeeze()
+    #colormap = colormap.squeeze()
     colormap = np.transpose(colormap)
-    print colormap.shape
-    #print colormap[0:5]
-    plt.figure()
+    plt.figure(figsize=(40,18), dpi=250)
     plt.imshow(colormap, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
-            interpolation="nearest", vmin=-2, vmax=9)
-    plt.colorbar(orientation="horizontal")
-    plt.title("Sample Colormap from Data Collected on 06/25/15")
-    plt.ylabel("Normalized Signal from PIR and Ulson")
-    plt.xlabel("Elapsed time /0.125 sec")
+               interpolation="nearest", vmin=-2, vmax=8)
+    #plt.colorbar(orientation="horizontal", fontsize=32)
+    plt.title("Sample Colormap from Data Collected on 06/25/15", fontsize=32)
+    plt.ylabel("Normalized Signal from PIR and Ulson", fontsize=32)
+    plt.xlabel("Elapsed time /0.125 sec", fontsize=32)
+    if (save_plot):
+        plt.savefig("color_maps/"+"{:06}".format(start))
+        plt.close()
+
+for t in range(35000-2000):
+    check_colormap(t,t+2000,True)
 
 check_2d_scatter = False
 if (check_2d_scatter):
@@ -214,7 +236,7 @@ if (check_3d_scatter):
     ax.set_title("Left PIR 24th, 48th Pixels v.s. Ultrasonic")
     plt.savefig("3d_scatter.png")
 
-check_time_series = True
+check_time_series = False
 if (check_time_series):
     plt.figure()
     plt.plot(PIR_timestamp[0:35000],
