@@ -196,19 +196,20 @@ def check_colormap(start=0, end=35000, save_plot=False):
     colormap = np.array(colormap)
     #colormap = colormap.squeeze()
     colormap = np.transpose(colormap)
-    plt.figure(figsize=(40,18), dpi=250)
+    plt.figure(figsize=(10,8), dpi=80)
     plt.imshow(colormap, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
                interpolation="nearest", vmin=-2, vmax=8)
     #plt.colorbar(orientation="horizontal", fontsize=32)
-    plt.title("Sample Colormap from Data Collected on 06/25/15", fontsize=32)
-    plt.ylabel("Normalized Signal from PIR and Ulson", fontsize=32)
-    plt.xlabel("Elapsed time /0.125 sec", fontsize=32)
+    plt.title("Sample Colormap from Data Collected on 06/25/15")
+    plt.ylabel("Normalized signal from PIR and Ulson")
+    plt.xlabel("Elapsed time /0.125 sec")
     if (save_plot):
         plt.savefig("color_maps/"+"{:06}".format(start))
         plt.close()
 
-for t in range(35000-2000):
-    check_colormap(t,t+2000,True)
+#check_colormap(0,480,True)
+for t in np.arange(0,35000,2):
+    check_colormap(t,t+480,True)
 
 check_2d_scatter = False
 if (check_2d_scatter):
