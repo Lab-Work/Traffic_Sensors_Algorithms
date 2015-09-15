@@ -9,7 +9,10 @@ ary conversion and specific parsing rules are applied in the process.
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.rc("font", family="Liberation Sans")
 import csv
+from bisect import bisect_left
 import time
 from datetime import datetime
 import os
@@ -17,6 +20,7 @@ import sys
 from collections import namedtuple
 sys.path.append('./tools')
 from hex_converter import *
+import cookb_signalsmooth as ss 
 
 """
 Convert hex PIR data to dec data in Celsius.
@@ -103,11 +107,11 @@ Gramma of the data
     3) IMU + rangefinder:
         timestamp,IMU,mag-x,mag-y,mag-z,accel-x,accel-y,accel-z,ultrasonic
     4) PIR:
-        timestamp,PIR,pir1_milsec,pir2_milsec,pir3_milsec,pixel#0_degC,pixel#1_degC,...,pixel191_degC
-
+        timestamp,PIR,pir1_milsec,pir2_milsec,pir3_milsec,pir1_ptat,pir2_ptat,pir3_ptat,
+        pixel#0_degC,pixel#1_degC,...,pixel191_degC
 Parse converted data into an ordered list of structs in time
 Return or save to file
-_________________________________________________________________________________________________________"""
+_____________________________________________________________________________________________"""
 
 # A short format routine that converts unix timestamp to python datetime
 def parse_time(datestr):
@@ -149,13 +153,12 @@ def parse(date="090315"):
                                     float(line[2]),                     # Millis time (L)
                                     float(line[3]),                     # Millis time (M)
                                     float(line[4]),                     # Millis time (R)
-                                    [float(x) for x in line[5:69]],     # 64 pixels temperature (L)
-                                    [float(x) for x in line[69:133]],   # 64 pixels temperature (M)
-                                    [float(x) for x in line[133:197]],  # 64 pixels temperature (R)
+                                    [float(x) for x in line[8:72]],     # 64 pixels temperature (L)
+                                    [float(x) for x in line[72:136]],   # 64 pixels temperature (M)
+                                    [float(x) for x in line[136:200]],  # 64 pixels temperature (R)
                                 )
                            )
                         elif "IMU" in line:
-
                             IMUU.append(
                                 IMUU_instance(
                                     parse_time(line[0]),         # Instance time
@@ -173,54 +176,175 @@ def parse(date="090315"):
                         print "\n\nInvalid read: "
                         print line
                         return
-    return PIR, IMUU
+    PIRR_data = np.array([x.pirr for x in PIR])
 
-    """
     # Import speed log to a struct (namedtuple)
     LOG_instance = namedtuple(
         "LOG_instance",
-        ""begin observation count""
+        """begin observation count"""
     )
+    LOG = []
 
-    LOG_data = []
-    for line in LOG_csv:
-        LOG_data.append(
-            LOG_instance(
-                datetime.strptime(line[0], '%Y-%m-%d %H:%M:%S.%f'), # Instance time
-                line[1],                                            # Observ
-                int(line[2]),                                       # Count
-            )
-        )
-    """
+    for file in sorted(os.listdir("./datasets/tsa%s/csv" %date)):
+        if "speed" in file:
+            print file
+
+            with open(("./datasets/tsa%s/csv/" %date) + file, 'r') as target:
+                target_reader = csv.reader(target)
+                
+                for line in target_reader:
+                    if "timestamp" in line:
+                        pass
+                    else:
+                        LOG.append(
+                            LOG_instance(
+                                datetime.strptime(line[0], '%Y-%m-%d %H:%M:%S.%f'), # Instance time
+                                line[1],                                            # Observ
+                                int(line[2]),                                       # Count
+                            )
+                        )
+    
+    return PIR, IMUU, LOG
+
+"""
+Specify synchronized PIR data, IMUU data, and LOG data and plot them in
+colormap. To save the plots, set savefig=True. To display the plots, set
+savefigs=False. By default, savefig is set to True.
+_____________________________________________________________________________"""
+
+def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label, save_fig=True):
+    MEAN = []
+    for i in range(len(PIR_data[0])):
+        MEAN.append(np.mean([t[i] for t in PIR_data]))
+    for i in range(6):
+        MEAN.append(np.mean(IMUU_reduced_data))
+    for i in range(6):
+        MEAN.append(0)
+    MEAN = np.array(MEAN)
+    STDEV = []
+    for i in range(len(PIR_data[0])):
+        STDEV.append(np.std([t[i] for t in PIR_data]))
+    for i in range(6):
+        STDEV.append(np.std(IMUU_reduced_data))
+    for i in range(6):
+        STDEV.append(1)
+    STDEV = np.array(STDEV)
+
+    
+    plt.figure(figsize=(15,10), dpi=150)
+    colormap_row = []
+    for x,y,z in zip(PIR_data, IMUU_reduced_data, LOG_inflated_data):
+        colormap_row.append((np.array(x+[y]*6+[z]*6)-MEAN)/STDEV)
+    colormap_row = np.array(colormap_row)
+    colormap_row = np.transpose(colormap_row)
+    plt.imshow(colormap_row, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
+               interpolation="nearest", vmin=-2, vmax=8)
+    plt.colorbar(orientation="horizontal")
+    plt.title("Colormap (Row Major) from the Data Collected on 09/03/15")
+    plt.ylabel("Normalized Signal from PIR and Uson")
+    plt.xlabel("Elapsed Time (0.125 sec)")
+    if (save_fig):
+        plt.savefig("./visualization/colormaps_row/"+"{:02}".format(label))
+        plt.close()
+    else:
+        plt.show(block=False)
+
+    
+    plt.figure(figsize=(15,10), dpi=150)
+    column_major = np.array([[[i*64+k*16+j for k in range(4)] for j in range(16)]
+        for i in range(3)]).reshape(192)
+    column_major = np.append(column_major, [192+i for i in range(12)])
+    colormap_col = []
+    colormap_row_t = np.transpose(colormap_row)
+    for line in colormap_row_t:
+        col = []
+        for i in column_major:
+            col.append(line[i])
+        colormap_col.append(col)
+    colormap_col = np.array(colormap_col)
+    colormap_col = np.transpose(colormap_col)
+    plt.imshow(colormap_col, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
+               interpolation="nearest", vmin=-2, vmax=8)
+    plt.colorbar(orientation="horizontal")
+    plt.title("Colormap (Col Major) from the Data Collected on 09/03/15")
+    plt.ylabel("Normalized Signal from PIR and Uson")
+    plt.xlabel("Elapsed Time (0.125 sec)")
+    if (save_fig):
+        plt.savefig("./visualization/colormaps_col/"+"{:02}".format(label))
+        plt.close()
+    else:
+        plt.show(block=False)
+
+    # Smoothing colormap_row
+    plt.figure(figsize=(15,10), dpi=150)
+    colormap_row = colormap_row[:-12]
+    colormap_row_blur = ss.blur_image(colormap_row, 3)
+    plt.imshow(colormap_row_blur, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
+               interpolation="nearest", vmin=-2, vmax=8)
+    plt.colorbar(orientation="horizontal")
+    plt.title("Colormap (Row Major) from the Data Collected on 09/03/15")
+    plt.ylabel("Normalized Signal from PIR and Uson")
+    plt.xlabel("Elapsed Time (0.125 sec)")
+    
+    # Smoothing colormap
+    plt.figure(figsize=(15,10), dpi=150)
+    colormap_col = colormap_col[:-12]
+    colormap_col_blur = ss.blur_image(colormap_col, 5)
+    plt.imshow(colormap_col_blur, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
+               interpolation="nearest", vmin=-2, vmax=8)
+    plt.colorbar(orientation="horizontal")
+    plt.title("Colormap (Col Major) from the Data Collected on 09/03/15")
+    plt.ylabel("Normalized Signal from PIR and Uson")
+    plt.xlabel("Elapsed Time (0.125 sec)")
 
 
 if __name__ == "__main__":
-    PIR, IMUU = parse()
+    PIR, IMUU, LOG = parse()
     print "Generating plots..."
-    fig1 = plt.figure(1)
-    plt.plot([t.begin for t in PIR], [i.pirm[16] for i in PIR])
-    plt.plot([t.begin for t in IMUU], [i.uson for i in IMUU])
     
-    font = {'fontname':'Liberation Sans'}
-    plt.title("Data Inspection", **font)
-    plt.xlabel("Time Stamp", **font)
-    plt.ylabel("PIR Data (C)", **font)
+    if False:
+        # General raw data inspection
+        fig1 = plt.figure()
+        plt.plot([t.begin for t in PIR], [i.pirm[16] for i in PIR])
+        plt.plot([t.begin for t in IMUU], [i.uson for i in IMUU])
+        plt.title("Data Inspection")
+        plt.xlabel("Time Stamp")
+        plt.ylabel("PIR Data (C)")
     
-    fig2 = plt.figure(2)
-    plt.plot([t.begin for t in PIR], range(len(PIR)))
-    plt.plot([t.begin for t in IMUU], range(len(IMUU)))
-    plt.title("Time Stamp Inspection", **font)
-    plt.xlabel("Data Instances", **font)
-    plt.ylabel("Time Stamp", **font)
+    if False:
+        # Time stamp inspection
+        fig2 = plt.figure()
+        plt.plot([t.begin for t in PIR], range(len(PIR)), label="PIR")
+        plt.plot([t.begin for t in IMUU], range(len(IMUU)), label="IMUU")
+        plt.legend()
+        plt.title("Time Stamp Inspection")
+        plt.ylabel("# of Data Collected")
+        plt.xlabel("Time Stamp")
 
-    fig3 = plt.figure(3)
-    plt.plot()
-
-    gca = plt.gca()
-    gca.set_xticklabels(gca.get_xticks(), font)
-    gca.set_yticklabels(gca.get_yticks(), font)
+    # Inspect data in colormap
+    PIR_timestamps = [t.begin for t in PIR]
+    IMUU_timestamps = [t.begin for t in IMUU]
+    LOG_timestamps = [t.begin for t in LOG]
+    IMUU_reduced_idx = [bisect_left(IMUU_timestamps, t) for t in PIR_timestamps]
+    LOG_inflated_idx = [bisect_left(PIR_timestamps, t) for t in LOG_timestamps]
+    PIR_data = [x.pirl+x.pirm+x.pirr for x in PIR]
+    IMUU_reduced_data = [IMUU[i].uson for i in IMUU_reduced_idx]
+    LOG_inflated_data = [0]*len(PIR_timestamps)
+    for i in LOG_inflated_idx:
+        LOG_inflated_data[i] = 8
+    
+    colormap(PIR_data[0:960*2], 
+             IMUU_reduced_data[0:960*2], 
+             LOG_inflated_data[0:960*2], 
+             0, save_fig=False)
     plt.show()
 
-
+    if False:
+        interval = 960
+        for t in np.arange(0,len(PIR),interval):
+            colormap(PIR_data[t:t+interval], 
+                     IMUU_reduced_data[t:t+interval], 
+                     LOG_inflated_data[t:t+interval], 
+                     t, save_fig=True)
 
 
