@@ -20,7 +20,9 @@ import sys
 from collections import namedtuple
 sys.path.append('./tools')
 from hex_converter import *
-import cookb_signalsmooth as ss 
+from crosscorrelation import find_pixels_shifts
+import cookb_signalsmooth as ss
+from colormap import colormap
 
 """
 Convert hex PIR data to dec data in Celsius.
@@ -204,124 +206,6 @@ def parse(date="090315"):
                             )
                         )
     
-    return PIR, IMUU, LOG
-
-"""
-Specify synchronized PIR data, IMUU data, and LOG data and plot them in
-colormap. To save the plots, set savefig=True. To display the plots, set
-savefigs=False. By default, savefig is set to True.
-_____________________________________________________________________________"""
-
-def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label, save_fig=True):
-    MEAN = []
-    for i in range(len(PIR_data[0])):
-        MEAN.append(np.mean([t[i] for t in PIR_data]))
-    for i in range(6):
-        MEAN.append(np.mean(IMUU_reduced_data))
-    for i in range(6):
-        MEAN.append(0)
-    MEAN = np.array(MEAN)
-    STDEV = []
-    for i in range(len(PIR_data[0])):
-        STDEV.append(np.std([t[i] for t in PIR_data]))
-    for i in range(6):
-        STDEV.append(np.std(IMUU_reduced_data))
-    for i in range(6):
-        STDEV.append(1)
-    STDEV = np.array(STDEV)
-
-    
-    plt.figure(figsize=(15,10), dpi=150)
-    colormap_row = []
-    for x,y,z in zip(PIR_data, IMUU_reduced_data, LOG_inflated_data):
-        colormap_row.append((np.array(x+[y]*6+[z]*6)-MEAN)/STDEV)
-    colormap_row = np.array(colormap_row)
-    colormap_row = np.transpose(colormap_row)
-    plt.imshow(colormap_row, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
-               interpolation="nearest", vmin=-2, vmax=8)
-    plt.colorbar(orientation="horizontal")
-    plt.title("Colormap (Row Major) from the Data Collected on 09/03/15")
-    plt.ylabel("Normalized Signal from PIR and Uson")
-    plt.xlabel("Elapsed Time (0.125 sec)")
-    if (save_fig):
-        plt.savefig("./visualization/colormaps_row/"+"{:02}".format(label))
-        plt.close()
-    else:
-        plt.show(block=False)
-
-    
-    plt.figure(figsize=(15,10), dpi=150)
-    column_major = np.array([[[i*64+k*16+j for k in range(4)] for j in range(16)]
-        for i in range(3)]).reshape(192)
-    column_major = np.append(column_major, [192+i for i in range(12)])
-    colormap_col = []
-    colormap_row_t = np.transpose(colormap_row)
-    for line in colormap_row_t:
-        col = []
-        for i in column_major:
-            col.append(line[i])
-        colormap_col.append(col)
-    colormap_col = np.array(colormap_col)
-    colormap_col = np.transpose(colormap_col)
-    plt.imshow(colormap_col, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
-               interpolation="nearest", vmin=-2, vmax=8)
-    plt.colorbar(orientation="horizontal")
-    plt.title("Colormap (Col Major) from the Data Collected on 09/03/15")
-    plt.ylabel("Normalized Signal from PIR and Uson")
-    plt.xlabel("Elapsed Time (0.125 sec)")
-    if (save_fig):
-        plt.savefig("./visualization/colormaps_col/"+"{:02}".format(label))
-        plt.close()
-    else:
-        plt.show(block=False)
-
-    # Smoothing colormap_row
-    plt.figure(figsize=(15,10), dpi=150)
-    colormap_row = colormap_row[:-12]
-    colormap_row_blur = ss.blur_image(colormap_row, 3)
-    plt.imshow(colormap_row_blur, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
-               interpolation="nearest", vmin=-2, vmax=8)
-    plt.colorbar(orientation="horizontal")
-    plt.title("Colormap (Row Major) from the Data Collected on 09/03/15")
-    plt.ylabel("Normalized Signal from PIR and Uson")
-    plt.xlabel("Elapsed Time (0.125 sec)")
-    
-    # Smoothing colormap
-    plt.figure(figsize=(15,10), dpi=150)
-    colormap_col = colormap_col[:-12]
-    colormap_col_blur = ss.blur_image(colormap_col, 5)
-    plt.imshow(colormap_col_blur, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
-               interpolation="nearest", vmin=-2, vmax=8)
-    plt.colorbar(orientation="horizontal")
-    plt.title("Colormap (Col Major) from the Data Collected on 09/03/15")
-    plt.ylabel("Normalized Signal from PIR and Uson")
-    plt.xlabel("Elapsed Time (0.125 sec)")
-
-
-if __name__ == "__main__":
-    PIR, IMUU, LOG = parse()
-    print "Generating plots..."
-    
-    if False:
-        # General raw data inspection
-        fig1 = plt.figure()
-        plt.plot([t.begin for t in PIR], [i.pirm[16] for i in PIR])
-        plt.plot([t.begin for t in IMUU], [i.uson for i in IMUU])
-        plt.title("Data Inspection")
-        plt.xlabel("Time Stamp")
-        plt.ylabel("PIR Data (C)")
-    
-    if False:
-        # Time stamp inspection
-        fig2 = plt.figure()
-        plt.plot([t.begin for t in PIR], range(len(PIR)), label="PIR")
-        plt.plot([t.begin for t in IMUU], range(len(IMUU)), label="IMUU")
-        plt.legend()
-        plt.title("Time Stamp Inspection")
-        plt.ylabel("# of Data Collected")
-        plt.xlabel("Time Stamp")
-
-    # Inspect data in colormap
     PIR_timestamps = [t.begin for t in PIR]
     IMUU_timestamps = [t.begin for t in IMUU]
     LOG_timestamps = [t.begin for t in LOG]
@@ -332,19 +216,16 @@ if __name__ == "__main__":
     LOG_inflated_data = [0]*len(PIR_timestamps)
     for i in LOG_inflated_idx:
         LOG_inflated_data[i] = 8
+   
+    return PIR_data, IMUU_reduced_data, LOG_inflated_data
+
+if __name__ == "__main__":
     
-    colormap(PIR_data[0:960*2], 
-             IMUU_reduced_data[0:960*2], 
-             LOG_inflated_data[0:960*2], 
-             0, save_fig=False)
+    PIR_data, IMUU_reduced_data, LOG_inflated_data = parse()
+    find_pixels_shifts(PIR_data, [965,985,0,15], time_cc=False)
+    colormap(PIR_data[960:1200], 
+             IMUU_reduced_data[960:1200], 
+             LOG_inflated_data[960:1200], 
+             960, save_fig=False)
     plt.show()
-
-    if False:
-        interval = 960
-        for t in np.arange(0,len(PIR),interval):
-            colormap(PIR_data[t:t+interval], 
-                     IMUU_reduced_data[t:t+interval], 
-                     LOG_inflated_data[t:t+interval], 
-                     t, save_fig=True)
-
 
