@@ -222,10 +222,6 @@ def parse(date="090315"):
 if __name__ == "__main__":
     
     PIR_data, IMUU_reduced_data, LOG_inflated_data = parse()
-    find_pixels_shifts(PIR_data, [965,985,0,15], time_cc=False)
-    colormap(PIR_data[960:1200], 
-             IMUU_reduced_data[960:1200], 
-             LOG_inflated_data[960:1200], 
-             960, save_fig=False)
+    find_pixels_shifts(PIR_data, [965,985,0,16], time_cc=True)
     plt.show()
 

@@ -39,9 +39,13 @@ def find_delay(X, Y):
     positive_delay = []
     for i in range(len(Y)):
         positive_delay.append(crosscorrelation(X,Y,i))
+    #plt.figure()
+    #plt.plot(positive_delay)
     negative_delay = []
     for i in range(len(X)):
         negative_delay.append(crosscorrelation(Y,X,i))
+    #plt.figure()
+    #plt.plot(negative_delay)
     if max(positive_delay) > max(negative_delay):
         return np.argmax(positive_delay)
     else:
@@ -51,10 +55,10 @@ def find_delay(X, Y):
 Find and visualize the delay between the pixels of the PIR arrays.
 ___________________________________________________________________"""
 def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=True,
-        smooth=True, time_cc=True):
+        smooth=True, time_cc=True, center_cc=False, step=1):
     print "Finding PIR time delays..."
-    WINDOW = np.array(PIR_data[window[0]:window[1]])
-    WINDOW = WINDOW[:,window[2]:window[3]]
+    WINDOW = np.array(PIR_data[window[0]:window[1]+1])
+    WINDOW = WINDOW[:,window[2]:window[3]+1]
     
     if col_major and window[3] == 191:
         column_major = np.array([[[i*64+k*16+j for k in range(4)] for j in range(16)]
@@ -88,11 +92,19 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
         plt.figure()
         n = len(WINDOW[:,1])
         print "Number of pixels analysed: %s" %str(n)
-        for i in range(n):
-            if i != n/2:
+        
+        if center_cc:
+            for i in range(n):
+                if i != n/2:
+                    plt.plot(WINDOW[i,:], label="Pixel %s" %str(i))
+                DELAY.append(find_delay(WINDOW[i,:], WINDOW[n/2,:]))
+            plt.plot(WINDOW[n/2,:], 'r', linewidth=2.5, label="Pixel %s" %str(n/2))
+        else:
+            for i in np.arange(0,n-1,step):
                 plt.plot(WINDOW[i,:], label="Pixel %s" %str(i))
-            DELAY.append(find_delay(WINDOW[i,:], WINDOW[n/2,:]))
-        plt.plot(WINDOW[n/2,:], 'r', linewidth=2.5, label="Pixel %s" %str(n/2))
+                DELAY.append(find_delay(WINDOW[i,:], WINDOW[i+step,:]))
+            plt.plot(WINDOW[i+step,:], label="Pixel %s" %str(i+step))
+
         if n <= 16:
             plt.legend()
         plt.title("Time Series of PIR Pixels Signals")
@@ -111,11 +123,19 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
         plt.figure()
         n = len(WINDOW[:,1])
         print "Number of instances analysed: %s" %str(n)
-        for i in range(n):
-            if i != n/2:
+        
+        if center_cc:
+            for i in range(n):
+                if i != n/2:
+                    plt.plot(WINDOW[i,:], label="Instances %s" %str(i))
+                DELAY.append(find_delay(WINDOW[i,:], WINDOW[n/2,:]))
+            plt.plot(WINDOW[n/2,:], 'r', linewidth=2.5, label="Instances %s" %str(n/2))
+        else:
+            for i in np.arange(0,n-1,step):
                 plt.plot(WINDOW[i,:], label="Instances %s" %str(i))
-            DELAY.append(find_delay(WINDOW[i,:], WINDOW[n/2,:]))
-        plt.plot(WINDOW[n/2,:], 'r', linewidth=2.5, label="Instances %s" %str(n/2))
+                DELAY.append(find_delay(WINDOW[i,:], WINDOW[i+step,:]))
+            plt.plot(WINDOW[i+step,:], label="Instances %s" %str(i+step))
+        
         if n <= 16:
             plt.legend()
         plt.title("Evolution of PIR Signals in Time")
