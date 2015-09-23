@@ -15,48 +15,60 @@ Crosscorrelation utility functions that return the cross correlation of already
 normalized time series X and Y given a time delay delta. In addition, X and Y 
 should be in form of list and equal in length, and delta should be an integer. 
 ______________________________________________________________________________"""
-def crosscorrelation(X, Y, delta):
+def crosscorrelation(X, Y, delta, col_shift):
     assert type(delta) is int, "Delay is not an integer: %s" %str(delta)
-    N = len(Y) - delta
-    if N == 0:
-        return 0
-    cc = 0
-    for i in range(N):
-        cc += X[i]*Y[i+delta]
+    if col_shift:
+        N = len(Y) - 4*delta
+        if N == 0:
+            return 0
+        cc = 0
+        for i in range(N):
+            cc += X[i]*Y[i+4*delta]
+    else:
+        N = len(Y) - delta
+        if N == 0:
+            return 0
+        cc = 0
+        for i in range(N):
+            cc += X[i]*Y[i+delta]
     return cc/N
 
 """
 A utility function that returns the most plausible delay between two signals
 using the method of cross-correlation.
 ______________________________________________________________________________"""
-def find_delay(X, Y):
+def find_delay(X, Y, col_shift):
     if len(X) > len(Y):
         for i in range(len(X)-len(Y)):
             Y.append(0)
     elif len(X) < len(Y):
         for i in range(len(Y)-len(X)):
             X.append(0)
-    positive_delay = []
-    for i in range(len(Y)):
-        positive_delay.append(crosscorrelation(X,Y,i))
-    #plt.figure()
-    #plt.plot(positive_delay)
-    negative_delay = []
-    for i in range(len(X)):
-        negative_delay.append(crosscorrelation(Y,X,i))
-    #plt.figure()
-    #plt.plot(negative_delay)
-    if max(positive_delay) > max(negative_delay):
-        return np.argmax(positive_delay)
+    if col_shift:
+        positive_delay = []
+        for i in range(len(Y)/4):
+            positive_delay.append(crosscorrelation(X,Y,i, col_shift))
+        negative_delay = []
+        for i in range(len(X)/4):
+            negative_delay.append(crosscorrelation(Y,X,i, col_shift))
     else:
-        return -np.argmax(negative_delay)
+        positive_delay = []
+        for i in range(len(Y)):
+            positive_delay.append(crosscorrelation(X,Y,i, col_shift))
+        negative_delay = []
+        for i in range(len(X)):
+            negative_delay.append(crosscorrelation(Y,X,i, col_shift))
+    if max(positive_delay) > max(negative_delay):
+        return [positive_delay, np.argmax(positive_delay)]
+    else:
+        return [negative_delay, -np.argmax(negative_delay)]
 
 """
 Find and visualize the delay between the pixels of the PIR arrays.
 ___________________________________________________________________"""
 def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=True,
-        smooth=True, time_cc=True, center_cc=False, step=1):
-    print "Finding PIR time delays..."
+        smooth=True, time_cc=True, center_cc=False, step=4):
+    print "Finding PIR delays..."
     WINDOW = np.array(PIR_data[window[0]:window[1]+1])
     WINDOW = WINDOW[:,window[2]:window[3]+1]
     
@@ -97,13 +109,16 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
             for i in range(n):
                 if i != n/2:
                     plt.plot(WINDOW[i,:], label="Pixel %s" %str(i))
-                DELAY.append(find_delay(WINDOW[i,:], WINDOW[n/2,:]))
+                DELAY.append(find_delay(WINDOW[i,:], WINDOW[n/2,:],
+                    col_shift=False))
             plt.plot(WINDOW[n/2,:], 'r', linewidth=2.5, label="Pixel %s" %str(n/2))
         else:
-            for i in np.arange(0,n-1,step):
+            frames = np.arange(0,n-1,step)
+            for i,j in zip(frames[0:-1], frames[1:]):
                 plt.plot(WINDOW[i,:], label="Pixel %s" %str(i))
-                DELAY.append(find_delay(WINDOW[i,:], WINDOW[i+step,:]))
-            plt.plot(WINDOW[i+step,:], label="Pixel %s" %str(i+step))
+                DELAY.append(find_delay(WINDOW[i,:],
+                    WINDOW[j,:],col_shift=False))
+            plt.plot(WINDOW[j,:], label="Pixel %s" %str(j))
 
         if n <= 16:
             plt.legend()
@@ -112,11 +127,18 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
         plt.ylabel("Normalizaed Quantity")
     
         plt.figure()
-        plt.plot(DELAY)
+        plt.plot([x[1] for x in DELAY])
         plt.plot([0]*len(DELAY), '--k')
         plt.title("Calculated Time Delays for Each Pixel")
         plt.xlabel("Nth Pixel")
         plt.ylabel("Time Delay (0.125 sec)")
+        if len(DELAY) <= 16:
+            i = 0
+            for x in DELAY:
+                plt.figure()
+                plt.plot(x[0])
+                plt.title("Cross-Correlation between Pixels (%d)" % i)
+                i += 1
     
     else:
         DELAY = []
@@ -127,27 +149,37 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
         if center_cc:
             for i in range(n):
                 if i != n/2:
-                    plt.plot(WINDOW[i,:], label="Instances %s" %str(i))
+                    plt.plot(WINDOW[i,:], label="Instances %s"
+                            %str(i),col_shift=True)
                 DELAY.append(find_delay(WINDOW[i,:], WINDOW[n/2,:]))
             plt.plot(WINDOW[n/2,:], 'r', linewidth=2.5, label="Instances %s" %str(n/2))
         else:
-            for i in np.arange(0,n-1,step):
+            frames = np.arange(0,n-1,step)
+            for i,j in zip(frames[0:-1], frames[1:]):
                 plt.plot(WINDOW[i,:], label="Instances %s" %str(i))
-                DELAY.append(find_delay(WINDOW[i,:], WINDOW[i+step,:]))
-            plt.plot(WINDOW[i+step,:], label="Instances %s" %str(i+step))
+                DELAY.append(find_delay(WINDOW[i,:], WINDOW[j,:],
+                    col_shift=True))
+            plt.plot(WINDOW[j,:], label="Instances %s" %str(j))
         
         if n <= 16:
             plt.legend()
-        plt.title("Evolution of PIR Signals in Time")
+        plt.title("Evolution of PIR Signals in Space")
         plt.xlabel("Pixels")
         plt.ylabel("Normalizaed Quantity")
-    
+        
         plt.figure()
-        plt.plot(DELAY)
+        plt.plot([x[1] for x in DELAY])
         plt.plot([0]*len(DELAY), '--k')
         plt.title("Calculated Space Movement among Instances")
         plt.xlabel("Nth Instances")
         plt.ylabel("Space Shift")
+        if len(DELAY) <= 16:
+            i = 0
+            for x in DELAY:
+                plt.figure()
+                plt.plot(x[0])
+                plt.title("Cross-Correlation between Instances (%d)" % i)
+                i += 1
 
     plt.figure()
     plt.imshow(WINDOW, interpolation="nearest")

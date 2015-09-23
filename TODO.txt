@@ -1,6 +1,8 @@
 test log_speed.py
->> universal parser
-automated visualization
+>> universal parser >>
+>> automated visualization >>
 automated statistics
+    colormap
+    accuracy
 
-autocorrelation
+>> autocorrelation >>

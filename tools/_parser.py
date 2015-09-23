@@ -8,21 +8,13 @@ ary conversion and specific parsing rules are applied in the process.
 ////////////////////////////////////////////////////////////////////////////"""
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.rc("font", family="Liberation Sans")
 import csv
 from bisect import bisect_left
 import time
 from datetime import datetime
 import os
-import sys
 from collections import namedtuple
-sys.path.append('./tools')
 from hex_converter import *
-from crosscorrelation import find_pixels_shifts
-import cookb_signalsmooth as ss
-from colormap import colormap
 
 """
 Convert hex PIR data to dec data in Celsius.
@@ -220,8 +212,4 @@ def parse(date="090315"):
     return PIR_data, IMUU_reduced_data, LOG_inflated_data
 
 if __name__ == "__main__":
-    
-    PIR_data, IMUU_reduced_data, LOG_inflated_data = parse()
-    find_pixels_shifts(PIR_data, [965,985,0,16], time_cc=True)
-    plt.show()
-
+    print "This is the parse module." 
