@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib
 matplotlib.rc("font", family="Liberation Sans")
+from matplotlib import cm
 import cookb_signalsmooth as ss 
 
 """
@@ -107,7 +108,9 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
         STDEV = np.array(STDEV)
         WINDOW = (WINDOW - MEAN)/STDEV
     if smooth:
+        #print WINDOW.shape
         WINDOW = ss.blur_image(WINDOW,3)
+        #print WINDOW.shape
     
     if time_cc:
         WINDOW = np.transpose(WINDOW)
@@ -146,9 +149,18 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
         fig = plt.figure()
         ax = fig.add_subplot(111, projection="3d")
         
-        ax.plot([x[1] for x in DELAY],
-                [x[3] for x in DELAY],
-                [x[2] for x in DELAY])
+        X = range(len(WINDOW[0,:])/4)
+        Y = [x[3] for x in DELAY]
+        Z = np.ones((len(Y),len(X)))
+        for i in range(len(Y)):
+            Z[i,:] = DELAY[i][0]
+        X, Y = np.meshgrid(X, Y)
+
+        surf = ax.plot_surface(X, Y, Z, rstride=1, cstride=100, cmap=cm.coolwarm,
+                linewidth=0.1, antialiased=False)
+        #ax.plot([x[1] for x in DELAY],
+        #        [x[3] for x in DELAY],
+        #        [x[2] for x in DELAY])
         ax.set_xlabel("Column Shift")
         ax.set_ylabel("Time (Frames)")
         ax.set_zlabel("Correlation Value")
