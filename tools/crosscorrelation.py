@@ -4,6 +4,7 @@ Date: September 16th, 2015
 A script that contains cross-correlation method.
 ////////////////////////////////////////////////////////////////////////////"""
 
+from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -63,24 +64,28 @@ def find_delay(X, Y, col_shift):
 
     if max(positive_delay) > max(negative_delay):
         if np.max(positive_delay) < 0.25:
-            return [positive_delay, -1,
+            return [positive_delay, np.argmax(positive_delay),
                     np.max(positive_delay)]
+            #return [positive_delay, -1,
+            #        np.max(positive_delay)]
         else:
             return [positive_delay, np.argmax(positive_delay),
                     np.max(positive_delay)]
     else:
         if np.max(negative_delay) < 0.25:
-            return [negative_delay, -1,
+            return [negative_delay, -np.argmax(negative_delay),
                     np.max(negative_delay)]
+            #return [negative_delay, -1,
+            #        np.max(negative_delay)]
         else:
-            return [negative_delay, -1,
+            return [negative_delay, -np.argmax(negative_delay),
                     np.max(negative_delay)]
 
 """
 Find and visualize the delay between the pixels of the PIR arrays.
 ___________________________________________________________________"""
 def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=True,
-        smooth=True, time_cc=True, center_cc=False, step=3):
+        smooth=True, time_cc=True, center_cc=False, step=3, diff=False):
     print "Finding PIR delays..."
     WINDOW = np.array(PIR_data[window[0]:window[1]+1])
     WINDOW = WINDOW[:,window[2]:window[3]+1]
@@ -129,13 +134,16 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
                 DELAY.append(find_delay(WINDOW[i,:],
                     WINDOW[j,:],col_shift=False))
     
-        plt.figure()
-        plt.plot([x[1] for x in DELAY])
-        plt.plot([0]*len(DELAY), '--k')
-        plt.title("Calculated Time Delays for Each Pixel")
-        plt.xlabel("Nth Pixel")
-        plt.ylabel("Time Delay (0.125 sec)")
-    
+        if diff:
+            return (DELAY[2][1] - DELAY[-3][1])*0.125
+        else:
+            plt.figure()
+            plt.plot([x[1] for x in DELAY])
+            plt.plot([0]*len(DELAY), '--k')
+            plt.title("Calculated Time Delays for Each Pixel")
+            plt.xlabel("Nth Pixel")
+            plt.ylabel("Time Delay (0.125 sec)")
+
     else:
         DELAY = []
         n = len(WINDOW[:,1])
@@ -157,7 +165,7 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
         X, Y = np.meshgrid(X, Y)
 
         surf = ax.plot_surface(X, Y, Z, rstride=1, cstride=100, cmap=cm.coolwarm,
-                linewidth=0.1, antialiased=False)
+                linewidth=0, antialiased=False)
         #ax.plot([x[1] for x in DELAY],
         #        [x[3] for x in DELAY],
         #        [x[2] for x in DELAY])
