@@ -121,13 +121,9 @@ def parse(date="090315"):
                         )
     
     PIR_timestamps = [t.begin for t in PIR]
-    print len(PIR_timestamps)
     IMUU_timestamps = [t.begin for t in IMUU]
-    print len(IMUU_timestamps)
     LOG_timestamps = [t.begin for t in LOG]
-    print len(LOG_timestamps)
     IMUU_reduced_idx = [bisect_left(IMUU_timestamps, t) for t in PIR_timestamps]
-    print len(IMUU_reduced_idx)
     LOG_inflated_idx = [bisect_left(PIR_timestamps, t) for t in LOG_timestamps]
     PIR_data = [x.pirl+x.pirm+x.pirr for x in PIR]
     IMUU_reduced_data = [IMUU[i].uson for i in IMUU_reduced_idx]

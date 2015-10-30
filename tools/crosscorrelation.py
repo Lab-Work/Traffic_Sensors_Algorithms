@@ -135,6 +135,18 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
                     WINDOW[j,:],col_shift=False))
     
         if diff:
+            plt.figure()
+            plt.plot([x[1] for x in DELAY])
+            plt.plot([0]*len(DELAY), '--k')
+            plt.title("Calculated Time Delays for Each Pixel")
+            plt.xlabel("Nth Pixel")
+            plt.ylabel("Time Delay (0.125 sec)")
+            
+            plt.figure()
+            plt.imshow(WINDOW, interpolation="nearest")
+            plt.title("Colormap of the Data")
+            plt.show()
+            
             return (DELAY[2][1] - DELAY[-3][1])*0.125
         else:
             plt.figure()
@@ -143,6 +155,7 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
             plt.title("Calculated Time Delays for Each Pixel")
             plt.xlabel("Nth Pixel")
             plt.ylabel("Time Delay (0.125 sec)")
+            plt.show()
 
     else:
         DELAY = []
