@@ -1,3 +1,22 @@
-# PIR_Code
-This folder constains our code for processing the data from PIR and other sensors. The purpose of thoes code are for vehicle detection and speed estimation from raw sensor data.
-Different quick implementations of potentially promissing algorithms are pushed here. 
+# Traffic Sensors Algorithm
+
+The repository constains quick **implementations of vehicle detectoin and speed estimation algorithms** and **tools for data processing and visualization**. 
+
+Concretely, the repository contains the following components:
+
+- `datasets/`
+    - `tsa_090315/` data collected on september 3, 2015
+    - `tsa_old/` an archive of old data
+- `tools/`
+    - `_parser.py`
+    - `colormap.py`
+    - `crosscorrelation.py`
+    - `hough_line_transform.py`
+    - `hex_converter.py`
+    - `cookb_signalsmooth.py`
+- `vehicle_detection.py`
+- `speed_estimation.py`
+- `logger.py`
+- `visualization`
+- `TODO.txt`
+- `deprecated` an archive of old implementations
