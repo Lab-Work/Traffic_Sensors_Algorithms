@@ -29,15 +29,15 @@ The project is mainly developed in Python 2. In order to run most of the scripts
 
 # Vehicle Detection
 
-Run `vehicle_detection.py`.
+Run the test with `vehicle_detection.py`. The functionality has yet to be fully developed.
 
 # Speed Estimation
 
-Run `speed_estimation.py`.
+Run the test with `speed_estimation.py`. The functionality has yet to be fully developed.
 
 # Data Collection
 
-Run `logger.py`.
+Run the program with `logger.py`. Enter anything and press enter to make a log. Type 'exit' to terminate the program. The log file will be automatically stored in the working directory.
 
 # Future Works
 
