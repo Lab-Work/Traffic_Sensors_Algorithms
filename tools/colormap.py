@@ -8,7 +8,7 @@ Visualize data in form of colormap.
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib
-matplotlib.rc("font", family="Liberation Sans")
+matplotlib.rc("font", family="Arial")
 import cookb_signalsmooth as ss 
 
 """
@@ -28,7 +28,7 @@ colormap. To save the plots, set savefig=True. To display the plots, set
 savefigs=False. By default, savefig is set to True.
 _____________________________________________________________________________"""
 def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
-        save_fig=True, smooth=False):
+        save_fig=False, smooth=False):
     print "Generating colormaps"
     MEAN = []
     for i in range(len(PIR_data[0])):
@@ -48,12 +48,13 @@ def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
     STDEV = np.array(STDEV)
 
     
-    plt.figure(figsize=(15,10), dpi=150)
+    #plt.figure(figsize=(15,10), dpi=150)
     colormap_row = []
     for x,y,z in zip(PIR_data, IMUU_reduced_data, LOG_inflated_data):
         colormap_row.append((np.array(x+[y]*6+[z]*6)-MEAN)/STDEV)
     colormap_row = np.array(colormap_row)
     colormap_row = np.transpose(colormap_row)
+    '''
     plt.imshow(colormap_row, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
                interpolation="nearest", vmin=-2, vmax=8)
     plt.colorbar(orientation="horizontal")
@@ -64,8 +65,8 @@ def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
         plt.savefig("./visualization/colormaps_row/"+"{:02}".format(label))
         plt.close()
     else:
-        plt.show(block=False)
-
+        plt.show()
+    '''
     
     plt.figure(figsize=(15,10), dpi=150)
     column_major = np.array([[[i*64+k*16+j for k in range(4)] for j in range(16)]
@@ -90,7 +91,7 @@ def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
         plt.savefig("./visualization/colormaps_col/"+"{:02}".format(label))
         plt.close()
     else:
-        plt.show(block=False)
+        plt.show()
 
     if smooth:
         # Smoothing colormap_row
@@ -114,5 +115,4 @@ def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
         plt.title("Colormap (Col Major) from the Data Collected on 09/03/15")
         plt.ylabel("Normalized Signal from PIR and Uson")
         plt.xlabel("Elapsed Time (0.125 sec)")
-        plt.show(block=False)
-
+        plt.show()

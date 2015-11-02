@@ -17,84 +17,6 @@ from collections import namedtuple
 from hex_converter import *
 
 """
-Convert hex PIR data to dec data in Celsius.
-Author: Will Barbour
-Modified by: Fangyu Wu
-______________________________________________"""
-
-def convert_pir():
-
-    converter = PIR3_converter()
-
-    translate_list = []
-    for f_name in os.listdir('./raw_data'):
-        if f_name[0:6] == 'sensor' and f_name[-4:] == '.txt':
-            translate_list.append(f_name)
-
-    print translate_list
-
-    skip_flag = False
-    for txt_file in translate_list:
-
-        trial_fname = txt_file
-        output_fname = 'processed_' + trial_fname[0:-4] + '.csv'
-        print "Output file: ", output_fname
-        skip_line_counter = 1
-        trans_file = open(trial_fname, 'r')
-        csv_file = open(output_fname, 'w')
-        csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONE)
-
-        for line in trans_file:
-            if skip_line_counter > 8:
-                parse = line.split(',')
-                csv_line = []
-                sensor = ''
-                ts = parse[0]
-                csv_line.append(ts)
-                try:
-                    sensor = parse[1]
-                except:
-                    print "Line does not correspond to IMU or PIR format"
-                    print parse
-
-                if sensor == '_IMU+Uson_':
-                    csv_line.append(sensor[1:4])
-                    csv_line.append(parse[2][2:])
-                    csv_line.append(parse[3][1:])
-                    csv_line.append(parse[4][1:-1])
-                    csv_line.append(parse[5][2:])
-                    csv_line.append(parse[6][1:])
-                    csv_line.append(parse[7][1:-1])
-                    csv_line.append(parse[8][1:-2])
-                    #print csv_line
-
-                else:
-                    if sensor == '_PIR_':
-                        csv_line.append(sensor[1:4])
-                        #print parse[2]
-                        if parse[2][:-1] == '-1' or len(parse[2])<800:
-                            csv_line.append(-1)
-                        else:
-                            #print parse[2][2:-2]
-                            csv_line += converter.convert(parse[2][2:-2])
-                            #csv_line.append(PIR3_converter.convert(parse[3]))
-                    else:
-                        print "Second index read error"
-                        skip_flag = True
-                        
-                if not skip_flag:
-                    csv_writer.writerow(csv_line)
-                else:
-                    skip_flag = False
-            else:
-                skip_line_counter += 1
-
-        csv_file.close()
-        print csv_file.name, " conversion is completed."
-        #time.sleep(5)
-
-
-"""
 Gramma of the data
     1) Raw data files are named as per "sensor*.txt"
     2) Processed data files are named as per "csv*.csv"
@@ -199,15 +121,19 @@ def parse(date="090315"):
                         )
     
     PIR_timestamps = [t.begin for t in PIR]
+    print len(PIR_timestamps)
     IMUU_timestamps = [t.begin for t in IMUU]
+    print len(IMUU_timestamps)
     LOG_timestamps = [t.begin for t in LOG]
+    print len(LOG_timestamps)
     IMUU_reduced_idx = [bisect_left(IMUU_timestamps, t) for t in PIR_timestamps]
+    print len(IMUU_reduced_idx)
     LOG_inflated_idx = [bisect_left(PIR_timestamps, t) for t in LOG_timestamps]
     PIR_data = [x.pirl+x.pirm+x.pirr for x in PIR]
     IMUU_reduced_data = [IMUU[i].uson for i in IMUU_reduced_idx]
     LOG_inflated_data = [0]*len(PIR_timestamps)
     for i in LOG_inflated_idx:
-        LOG_inflated_data[i] = 8
+        LOG_inflated_data[i] = 10
    
     return PIR_data, IMUU_reduced_data, LOG_inflated_data
 
