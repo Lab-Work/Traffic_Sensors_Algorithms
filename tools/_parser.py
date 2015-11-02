@@ -1,5 +1,5 @@
 """////////////////////////////////////////////////////////////////////////////
-Author: Fangyu Wu, Will Barbour
+Author: Fangyu Wu (fwu10@illinois.edu)
 Date: September 11th, 2015
 
 The generic parser that takes in arbitary number of raw data files and returns 
@@ -27,9 +27,19 @@ Gramma of the data
         pixel#0_degC,pixel#1_degC,...,pixel191_degC
 Parse converted data into an ordered list of structs in time
 Return or save to file
+
+@IN: date of dataset
+@OUT: fully parsed data stored in the following lists:
+    PIR_data: PIR data, each line of which is a nametuple.
+    IMUU_reduced_data: frequency-reduced IMU and Uson data, each line of which
+    is a name tuple
+    LOG_inflated_data: frequency-inflated speed log data, each line of which is
+    a name tuple.
 _____________________________________________________________________________________________"""
 
 # A short format routine that converts unix timestamp to python datetime
+# @IN: unix timestamp
+# @OUT: converted time stored as Python datetime
 def parse_time(datestr):
     return datetime.strptime(datestr, "%H_%M_%S_%f").replace(year=2015,
             month=9, day=3)

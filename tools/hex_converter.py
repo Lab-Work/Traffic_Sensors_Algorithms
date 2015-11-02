@@ -1,3 +1,12 @@
+"""////////////////////////////////////////////////////////////////////////////
+Author: Will Barbour
+Date: October 2, 2015
+
+Convert orginal hexidecimal PIR data to decimal format. This version may
+contain bugs. Please check with Will (wbarbour1@illinois.edu) should any
+problems occur.
+////////////////////////////////////////////////////////////////////////////"""
+
 __author__ = 'wbarbour1'
 
 import numpy as np
