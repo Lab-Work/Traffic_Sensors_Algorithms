@@ -8,7 +8,7 @@ Visualize data in form of colormap.
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib
-matplotlib.rc("font", family="Arial")
+matplotlib.rc("font", family="Liberation Sans")
 import cookb_signalsmooth as ss 
 
 """
