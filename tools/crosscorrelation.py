@@ -1,7 +1,9 @@
 """////////////////////////////////////////////////////////////////////////////
-Author: Fangyu Wu
+Author: Fangyu Wu (fwu10@illinois.edu)
 Date: September 16th, 2015
-A script that contains cross-correlation method.
+
+A script that contains cross-correlation method and the derived utility 
+functions.
 ////////////////////////////////////////////////////////////////////////////"""
 
 from __future__ import division
@@ -17,8 +19,12 @@ import cookb_signalsmooth as ss
 Crosscorrelation utility functions that return the cross correlation of already
 normalized time series X and Y given a time delay delta. In addition, X and Y 
 should be in form of list and equal in length, and delta should be an integer. 
+If cross-correlation by columns (in space) is desired, set col_shift=True.
+
+@IN: signal X, signal Y, shift delta
+@OUT: cross-correlation value 
 ______________________________________________________________________________"""
-def crosscorrelation(X, Y, delta, col_shift):
+def crosscorrelation(X, Y, delta, col_shift=False):
     assert type(delta) is int, "Delay is not an integer: %s" %str(delta)
     if col_shift:
         N = len(Y) - 4*delta
@@ -38,9 +44,14 @@ def crosscorrelation(X, Y, delta, col_shift):
 
 """
 A utility function that returns the most plausible delay between two signals
-using the method of cross-correlation.
+using the method of cross-correlation. If cross-correlation by columns (in 
+space) is desired, set col_shift=True.
+
+
+@IN: signal X, signal Y
+@OUT: best-fit shift to produce the maximum cross-correlation value
 ______________________________________________________________________________"""
-def find_delay(X, Y, col_shift):
+def find_delay(X, Y, col_shift=False):
     if len(X) > len(Y):
         for i in range(len(X)-len(Y)):
             Y.append(0)
@@ -83,6 +94,17 @@ def find_delay(X, Y, col_shift):
 
 """
 Find and visualize the delay between the pixels of the PIR arrays.
+Set time_cc=True for cross-correlation in time. Otherwise, it defaults
+to do cross-correlation in space. Set center_cc=False to do stepwise
+cross-correlation, or it will cross-correlation every signal with the
+center one. Set diff=True to return time shift. Other parameters work
+as named.
+
+@IN: 
+    PIR_data: PIR data
+    window: cross-correlation range [begin time, end time, begin pixel, end
+    pixel]
+@OUT: visualization of cross-correlation results or time shift
 ___________________________________________________________________"""
 def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=True,
         smooth=True, time_cc=True, center_cc=False, step=3, diff=False):
@@ -135,6 +157,8 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
                     WINDOW[j,:],col_shift=False))
     
         if diff:
+            # Uncomment for visualization
+            '''
             plt.figure()
             plt.plot([x[1] for x in DELAY])
             plt.plot([0]*len(DELAY), '--k')
@@ -146,7 +170,8 @@ def find_pixels_shifts(PIR_data, window=[965,985,0,15], col_major=True, norm=Tru
             plt.imshow(WINDOW, interpolation="nearest")
             plt.title("Colormap of the Data")
             plt.show()
-            
+            '''
+
             return (DELAY[2][1] - DELAY[-3][1])*0.125
         else:
             plt.figure()

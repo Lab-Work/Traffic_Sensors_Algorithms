@@ -1,5 +1,5 @@
 """////////////////////////////////////////////////////////////////////////////
-Author: Fangyu Wu
+Author: Fangyu Wu (fwu10@illinois.edu)
 Date: September 15th, 2015
 
 Visualize data in form of colormap.
@@ -14,6 +14,12 @@ import cookb_signalsmooth as ss
 """
 Scan through the whole data space and take a snapshot of data every interval
 amount of time.
+
+@IN: an existing dataset supplied in lists form:
+    PIR_data: PIR data 
+    IMUU_reduced_data: frequency-reduced IMU and Uson data
+    LOG_inflated_data: frequency-inflated label data
+@OUT: consecutive colormap plots
 _____________________________________________________________________________"""
 def colormap_scan(PIR_data, IMUU_reduced_data, LOG_inflated_data, interval = 960):
     for t in np.arange(0,len(PIR),interval):
@@ -25,7 +31,12 @@ def colormap_scan(PIR_data, IMUU_reduced_data, LOG_inflated_data, interval = 960
 """
 Specify synchronized PIR data, IMUU data, and LOG data and plot them in
 colormap. To save the plots, set savefig=True. To display the plots, set
-savefigs=False. By default, savefig is set to True.
+savefigs=False. By default, savefig is set to True. To apply smoothing, set
+smooth=True.
+
+@IN: an existing datasets supplied in lists form
+@OUT: the corresponding colormap either display in gui or save to current
+directory
 _____________________________________________________________________________"""
 def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
         save_fig=False, smooth=False):
@@ -54,6 +65,8 @@ def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
         colormap_row.append((np.array(x+[y]*6+[z]*6)-MEAN)/STDEV)
     colormap_row = np.array(colormap_row)
     colormap_row = np.transpose(colormap_row)
+
+    # Uncomment to generate colormap in row major
     '''
     plt.imshow(colormap_row, origin="lower", cmap=plt.get_cmap("jet"), aspect="auto",
                interpolation="nearest", vmin=-2, vmax=8)
@@ -93,6 +106,9 @@ def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
     else:
         plt.show()
 
+
+    # Apply Guassian filter for data smoothing. This step is necessary to
+    # obtain stable cross correlation results.
     if smooth:
         # Smoothing colormap_row
         plt.figure(figsize=(15,10), dpi=150)
