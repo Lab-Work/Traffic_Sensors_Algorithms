@@ -14,6 +14,7 @@ The structure of each class:
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
 import csv
 from datetime import datetime
 from os.path import exists
@@ -74,18 +75,28 @@ class TrafficData_4x48:
 
             # make sure the timestamp is monotonically increasing
             # millis counter resets when reaches 2^16-1 = 65535, keep track of how many times it reset
-            # TODO: make the millis timestamp monotonically increasing
+            num_reset = 0
+            # update for each pir timestamp
+            for pir in range(0, 3):
+
+                for i in range(1, len(self.pir_timestamps[pir])):
+
+                    if self.pir_timestamps[pir][i] < self.pir_timestamps[pir][i-1]:
+                        # update number of reset
+                        if self.pir_timestamps[pir][i] + num_reset*65535 < self.pir_timestamps[pir][i-1]:
+                            num_reset += 1
+                        # update the current time stamp
+                        self.pir_timestamps[pir][i] += num_reset*65535
 
             # subtract the first time stamp offset and convert to seconds
             for i in range(0,3):
                 self.pir_timestamps[i, :] = self.pir_timestamps[i, :] - self.pir_timestamps[i, 0]
-                # self.pir_timestamps[i, :] = self.pir_timestamps[i, :]/1000.0
+                self.pir_timestamps[i, :] = self.pir_timestamps[i, :]/1000.0
 
             self.pir_raw_data = np.array(self.pir_raw_data)
 
-            print '\n\n size of time {0}; size of data {1}\n\n\n'.format(self.pir_timestamps.shape,
+            print '\n 8 Hz, size of time {0}; size of data {1}\n'.format(self.pir_timestamps.shape,
                                                                    self.pir_raw_data.shape)
-            print 'timestamps: {0}'.format(self.pir_timestamps[0,:])
 
             f.close()
 
@@ -112,7 +123,6 @@ class TrafficData_4x48:
 
         return 0
 
-
     def subtract_background(self, background_duration):
         """
         This function subtracts the background of the PIR sensor data; the background is defined as the median of the
@@ -132,12 +142,13 @@ class TrafficData_4x48:
         std = []
         for i in range(0, 192):
 
-            if self.pir_raw_data[i]:    # if not empty
+            if len(self.pir_raw_data[i]) != 0:    # if not empty
                 mean.append( np.mean(self.pir_raw_data[i] ) )
                 std.append( np.std(self.pir_raw_data[i]) )
 
-                print '32Hz: Pixel {0} with mean {1} and std {2}'.format(i, mean[i], std[i])
+                print '8Hz: Pixel {0} with mean {1} and std {2}'.format(i, mean[i], std[i])
 
+        return mean, std
 
     def plot_histogram_for_pixel(self, pixel_list):
         """
@@ -146,7 +157,34 @@ class TrafficData_4x48:
         :param pixel_list: list, [pixel_1, pixel_2...]; pixel_n := (row, col) in ([0,3] [0,47])
         :return: one figure for each pixel
         """
-        pass
+
+        mu, sigma = self.calculate_std()
+
+        for pixel in pixel_list:
+
+            pixel_index = pixel[1]*4 + pixel[0]
+
+            # grab the data
+            time_series = self.pir_raw_data[pixel_index, :]
+
+            # the histogram of the data
+            num_bins = 50
+            fig = plt.figure(figsize=(16,8), dpi=100)
+            n, bins, patches = plt.hist(time_series, num_bins, normed=1, facecolor='green', alpha=0.75)
+
+            # add a 'best fit' line
+            norm_fit_line = mlab.normpdf(bins, mu[pixel_index], sigma[pixel_index])
+            l = plt.plot(bins, norm_fit_line, 'r--', linewidth=1)
+
+            plt.xlabel('Temperature ($^{\circ}C$)')
+            plt.ylabel('Probability')
+            plt.title(r'Histogram of pixel {0} at 8 Hz: $\mu$= {1}, $\sigma$={2}'.format(pixel,
+                                                                                            mu[pixel_index],
+                                                                                            sigma[pixel_index]))
+            # plt.axis([40, 160, 0, 0.03])
+            plt.grid(True)
+
+        plt.show()
 
     def plot_time_series_for_pixel(self, t_start=None, t_end=None, pixel_list=None, data_option=None):
         """
@@ -164,14 +202,14 @@ class TrafficData_4x48:
 
         for pixel in pixel_list:
 
-            pixel_index = pixel[0]*4 + pixel[1]
+            pixel_index = pixel[1]*4 + pixel[0]
 
             # find out which timestamps we should use
             if pixel[1] <= 15:
                 timestramps = self.pir_timestamps[0, :]
             elif 16 <= pixel[1] <= 31:
                 timestramps = self.pir_timestamps[1, :]
-            elif 32 <= pixel[2] <= 47:
+            elif 32 <= pixel[1] <= 47:
                 timestramps = self.pir_timestamps[2, :]
             else:
                 print 'Error: pixel {0} is not recognized'.format(pixel)
@@ -195,7 +233,6 @@ class TrafficData_4x48:
 
             # call the generic function to plot
             self.plot_time_series(None, time_series_to_plot, t_start, t_end)
-
 
     def plot_time_series_for_ultra(self, t_start, t_end):
         """
@@ -224,15 +261,11 @@ class TrafficData_4x48:
         if fig_handle is None:
             fig = plt.figure(figsize=(16,8), dpi=100)
 
-        plt.title('Time series of pixels'.format())
-        plt.ylabel('Temperature ($^{\circ}C$)')
-        plt.xlabel('Time stamps in seconds')
         for time_series in time_series_list:
             if t_start is None or t_end is None:
                 # if not specified, then plot all data
                 time_to_plot = time_series['time']
                 data_to_plot = time_series['data']
-                print 'plotting time length {0}, data length {1}\n\n'.format(len(time_to_plot), len(data_to_plot))
             else:
                 index = np.nonzero(t_start <= time_series['time'] <= t_end)[0]
                 time_to_plot = time_series['time'][index]
@@ -240,11 +273,12 @@ class TrafficData_4x48:
 
             plt.plot(time_to_plot, data_to_plot, label=time_series['info'])
 
-        plt.draw()
+        plt.title('Time series of pixels'.format())
+        plt.ylabel('Temperature ($^{\circ}C$)')
+        plt.xlabel('Time stamps in seconds')
         plt.legend()
-        plt.show()
-
-
+        plt.grid(True)
+        plt.draw()
 
     def plot_heat_map_single_frame(self, timestamp, T_min, T_max):
         """
@@ -270,6 +304,282 @@ class TrafficData_4x48:
         pass
 
 
+
+
+
+
+
+
+
+
+
+class TrafficData_2x16:
+    """
+    This class deals with the ultrasonic, 3 PIR in total 2x16 pixels, and IMU data
+    """
+
+    def __init__(self):
+
+        # raw data for ultrasonic, the center PIR, and IMU
+        # 1 x n samples since the time stamps for the center PIR, in seconds
+        self.pir_timestamps = []
+        # 32 x n samples. stacked column by column from the second sensor
+        self.pir_raw_data = []
+        for i in range(0,32):
+            self.pir_raw_data.append([])
+
+        # 1 x n samples
+        self.ultra_timestamps = None
+        # 1 x n samples
+        self.ultra_raw_data = None
+
+        # 1 x n samples:
+        self.imu_timestamps = None
+        # m x n samples; m is the dimension of data (accel, gyro, mag)
+        self.imu_data = None
+
+        # data with background subtracted ultrasonic, three PIRs, and IMU
+        self.pir_data_background_removed = None
+
+    def read_data_file(self, file_name_str):
+        """
+        This function reads and parses the file into raw data; it should be updated for new data format
+        :param file_name_str: string, the file name string
+        :return: saved data in class
+        """
+
+        for file_str in file_name_str:
+
+            if not exists(file_str):
+                print 'Error: file {0} does not exists'.format(file_str)
+                return 1
+
+            f = open(file_str, 'r')
+
+            for line in f:
+                self.line_parser(line)
+
+            # change to numpy for easier access
+            self.pir_timestamps = np.array(self.pir_timestamps)
+
+            # make sure the timestamp is monotonically increasing
+            # millis counter resets when reaches 2^16-1 = 65535, keep track of how many times it reset
+            num_reset = 0
+            for i in range(1, len(self.pir_timestamps)):
+
+                if self.pir_timestamps[i] < self.pir_timestamps[i-1]:
+                    # update number of reset
+                    if self.pir_timestamps[i] + num_reset*65535 < self.pir_timestamps[i-1]:
+                        num_reset += 1
+                    # update the current time stamp
+                    self.pir_timestamps[i] += num_reset*65535
+
+            # subtract the first time stamp offset and convert to seconds
+            self.pir_timestamps = self.pir_timestamps - self.pir_timestamps[0]
+            self.pir_timestamps[:] = self.pir_timestamps[:]/1000.0
+
+            self.pir_raw_data = np.array(self.pir_raw_data)
+
+            print '\n 32 Hz: size of time {0}; size of data {1}\n'.format(self.pir_timestamps.shape,
+                                                                   self.pir_raw_data.shape)
+
+            f.close()
+
+    def line_parser(self, line):
+        """
+        This function parses each line of data and save in corresponding class property. Need to be updated if new data
+        is in a different format.
+        :param line: The line in the data file; assumes PIR data line length is 2+32 = 34
+        :return: save data self.pir_raw_data, self.ultra_raw_data, self.imu_data
+        """
+        line = line.strip()
+        items = line.split(',')
+
+        if len(items) != 34:
+            print 'Error: Data format is incorrect. Update parser!'
+            return 1
+
+        self.pir_timestamps.append(int(items[0]))
+
+        for i in range(2, 34):
+                self.pir_raw_data[i-2].append(float(items[i]))
+
+        return 0
+
+    def subtract_background(self, background_duration):
+        """
+        This function subtracts the background of the PIR sensor data; the background is defined as the median of the
+        past background_duration samples
+        :param background_duration: int, the number of samples regarded as the background
+        :return: data saved in self.pir_data_background_removed
+        """
+        pass
+
+    def calculate_std(self):
+        """
+        Statistic Analysis:
+        This function calculates the mean and standard deviation of each pixel, to better understand the noise.
+        :return: print two 4 x 48 matrix: Mean, and STD
+        """
+        mean = []
+        std = []
+        for i in range(0, 32):
+
+            if len(self.pir_raw_data[i]) != 0:    # if not empty
+                mean.append( np.mean(self.pir_raw_data[i] ) )
+                std.append( np.std(self.pir_raw_data[i]) )
+
+                print '32Hz: Pixel {0} with mean {1} and std {2}'.format(i, mean[i], std[i])
+
+        return mean, std
+
+    def plot_histogram_for_pixel(self, pixel_list):
+        """
+        Statistic Analysis:
+        This function plots the histogram of the data for a selected pixel, to better understand the noise
+        :param pixel_list: list, [pixel_1, pixel_2...]; pixel_n := (row, col) in ([1,2] [16,31])
+        :return: one figure for each pixel
+        """
+
+        mu, sigma = self.calculate_std()
+
+        for pixel in pixel_list:
+
+            pixel_index = (pixel[1]-16)*2 + (pixel[0]-1)
+
+            # grab the data
+            time_series = self.pir_raw_data[pixel_index, :]
+
+            # the histogram of the data
+            num_bins = 50
+            fig = plt.figure(figsize=(16,8), dpi=100)
+            n, bins, patches = plt.hist(time_series, num_bins, normed=1, facecolor='green', alpha=0.75)
+
+            # add a 'best fit' line
+            norm_fit_line = mlab.normpdf(bins, mu[pixel_index], sigma[pixel_index])
+            l = plt.plot(bins, norm_fit_line, 'r--', linewidth=1)
+
+            plt.xlabel('Temperature ($^{\circ}C$)')
+            plt.ylabel('Probability')
+            plt.title(r'Histogram of pixel {0} at 32 Hz: $\mu$= {1}, $\sigma$={2}'.format(pixel,
+                                                                                            mu[pixel_index],
+                                                                                            sigma[pixel_index]))
+            # plt.axis([40, 160, 0, 0.03])
+            plt.grid(True)
+
+        plt.show()
+
+    def plot_time_series_for_pixel(self, t_start=None, t_end=None, pixel_list=None, data_option=None):
+        """
+        Visualization:
+        This function plots the time series from t_start to t_end for pixels in pixel_list; data_option specifies whether
+        it should plot the raw data or the data with background removed.
+        :param t_start: float, in seconds; plot all data if None
+        :param t_end: float, in seconds, millisecond; plot all data if None
+        :param pixel_list: list, [pixel_1, pixel_2...]; pixel_n := (row, col) in ([0,3] [0,47])
+        :param data_option: string, 'raw', 'background_removed'
+        :return: a figure with all the pixels time series
+        """
+
+        time_series_to_plot = []
+
+        for pixel in pixel_list:
+
+            pixel_index = (pixel[1]-16)*2 + (pixel[0]-1)
+
+            if 1<= pixel[0] <=2 and 16 <= pixel[1] <= 31:
+                timestramps = self.pir_timestamps
+            else:
+                print 'Error: pixel {0} is not sampled'.format(pixel)
+                return 1
+
+            # get the data for the corresponding pixel
+            if data_option == 'raw':
+                data = self.pir_raw_data[pixel_index,:]
+            elif data_option == 'background_removed':
+                data = self.pir_data_background_removed[pixel_index, :]
+            else:
+                data = []
+                print 'Error: pixel {0} is not recognized'.format(pixel)
+
+            pixel_series = {}
+            pixel_series['info'] = pixel
+            pixel_series['time'] = timestramps
+            pixel_series['data'] = data
+
+            time_series_to_plot.append(pixel_series)
+
+            # call the generic function to plot
+            self.plot_time_series(None, time_series_to_plot, t_start, t_end)
+
+    def plot_time_series_for_ultra(self, t_start, t_end):
+        """
+        Visualization:
+        This function plots the time series for the ultrasonics sensor data from t_start to t_end
+        :param t_start: format to be defined; plot all data if None
+        :param t_end: format to be defined; plot all data if None
+        :return: a figure with the ultrasonic data plotted
+        """
+        pass
+
+    def plot_time_series(self, fig_handle, time_series_list, t_start, t_end):
+        """
+        Visualization:
+        This function plots all the time series in the time_series_list, which offers more flexibility.
+        :param fig_handle: fig or ax handle to plot on; create new figure if None
+        :param time_series_list: list, [time_series_1, time_series_2,...];
+                                 time_series_n: dict; time_series_n['info'] = string or label in figure
+                                                      time_series_n['time'] = list of float
+                                                      time_series_n['data'] = list of float
+        :param t_start: format to be defined; plot all data if None
+        :param t_end: format to be defined; plot all data if None
+        :return: a (new) figure with all time series
+        """
+        # plot in new figure window if not specified
+        if fig_handle is None:
+            fig = plt.figure(figsize=(16,8), dpi=100)
+
+        for time_series in time_series_list:
+            if t_start is None or t_end is None:
+                # if not specified, then plot all data
+                time_to_plot = time_series['time']
+                data_to_plot = time_series['data']
+            else:
+                index = np.nonzero(t_start <= time_series['time'] <= t_end)[0]
+                time_to_plot = time_series['time'][index]
+                data_to_plot = time_series['data'][index]
+
+            plt.plot(time_to_plot, data_to_plot, label=time_series['info'])
+
+        plt.title('Time series of pixels'.format())
+        plt.ylabel('Temperature ($^{\circ}C$)')
+        plt.xlabel('Time stamps in seconds')
+        plt.legend()
+        plt.grid(True)
+        plt.draw()
+
+    def plot_heat_map_single_frame(self, timestamp, T_min, T_max):
+        """
+        Visualization:
+        This function plots the heat map for single frame 4x48 at timestamp
+        :param timestamp: format to be defined;
+        :param T_min: the min temperature for the color bar
+        :param T_max: the max temperature for the color bar
+        :return: a figure with 4 x 48 color pixel heat map
+        """
+        pass
+
+    def plot_heat_map_in_period(self, t_start, t_end, T_min, T_max):
+        """
+        Visualization:
+        This function plots the heat map from t_start to t_end with each frame 4x48 pixels stacked column by column to 1 x 192
+        :param t_start: format to be defined; plot all if None
+        :param t_end: format to be defined;; plot all if None
+        :param T_min: the min temperature for the color bar
+        :param T_max: the max temperature for the color bar
+        :return: a figure with 192 x n color map for n frame
+        """
+        pass
 
 
 

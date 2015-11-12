@@ -14,16 +14,22 @@ import time
 
 from TrafficDataClasses import *
 
-file_str_list = ['./datasets/data_11_11_Noise_Analysis/PIR_8Hz_4x48_sample1.csv']
+file_str_list_8Hz = ['./datasets/data_11_11_Noise_Analysis/PIR_8Hz_4x48_sample1.csv']
+file_str_list_32Hz = ['./datasets/data_11_11_Noise_Analysis/PIR_32Hz_2x16_sample2.csv']
 
-traffic_data = TrafficData_4x48()
+# 8 Hz
+traffic_data_8Hz = TrafficData_4x48()
+traffic_data_8Hz.read_data_file(file_str_list_8Hz)
+traffic_data_8Hz.plot_time_series_for_pixel(None, None, [[1,8], [1, 24], [1,40]], 'raw')
+traffic_data_8Hz.plot_histogram_for_pixel([[1,8], [1, 24], [1,40]])
 
-traffic_data.read_data_file(file_str_list)
 
-print 'Done reading data\n\n\n'
+# 32 Hz
+traffic_data_32Hz = TrafficData_2x16()
+traffic_data_32Hz.read_data_file(file_str_list_32Hz)
+traffic_data_32Hz.plot_time_series_for_pixel(None, None, [[1, 20], [1, 27]], 'raw')
+traffic_data_32Hz.plot_histogram_for_pixel([[1, 20], [1, 27]])
 
-traffic_data.plot_time_series_for_pixel(None, None, [[1,8], [1, 24], [1,40]], 'raw')
-
-traffic_data.calculate_std()
+plt.show()
 
 
