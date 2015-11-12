@@ -102,7 +102,6 @@ def parse(date="090315"):
                         print "\n\nInvalid read: "
                         print line
                         return
-    PIRR_data = np.array([x.pirr for x in PIR])
 
     # Import speed log to a struct (namedtuple)
     LOG_instance = namedtuple(
@@ -136,10 +135,18 @@ def parse(date="090315"):
     IMUU_reduced_idx = [bisect_left(IMUU_timestamps, t) for t in PIR_timestamps]
     LOG_inflated_idx = [bisect_left(PIR_timestamps, t) for t in LOG_timestamps]
     PIR_data = [x.pirl+x.pirm+x.pirr for x in PIR]
-    IMUU_reduced_data = [IMUU[i].uson for i in IMUU_reduced_idx]
+    IMUU_reduced_data = []
+    for i in IMUU_reduced_idx:
+        if i < len(IMUU):
+            IMUU_reduced_data.append(IMUU[i])
+        else:
+            IMUU_reduced_data.append(IMUU[-1])
     LOG_inflated_data = [0]*len(PIR_timestamps)
     for i in LOG_inflated_idx:
-        LOG_inflated_data[i] = 10
+        if i < len(LOG_inflated_data):
+            LOG_inflated_data[i] = 10
+        else:
+            LOG_inflated_data[-1] = 10
    
     return PIR_data, IMUU_reduced_data, LOG_inflated_data
 

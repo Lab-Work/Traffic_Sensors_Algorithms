@@ -13,9 +13,11 @@ from copy import deepcopy
 print "Executing MAIN..."
 
 PIR_data, IMUU_reduced_data, LOG_inflated_data = parse()
+IMUU_reduced_data = [data.uson for data in IMUU_reduced_data]
 #colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, -1,
 #         save_fig=False, smooth=False)
 
+# thresholding on derivative
 def thresholding(thresholdu=2.9, thresholdl = -2.9, plotfig=False):
 
     Uson = cp.deepcopy(IMUU_reduced_data)
@@ -154,12 +156,12 @@ upper = np.arange(0.1,5,0.1)
 lower = np.arange(0.1,5,0.1)
 upper, lower = np.meshgrid(upper, lower)
 
-print "Minimum false postive %d" % np.min(false_pos)
-np.savetxt("false_positive.csv", false_pos, delimiter=',')
-print "Minimum false negative %d" % np.min(false_neg)
-np.savetxt("false_negative.csv", false_neg, delimiter=',')
-print "Minimum false all %d" % np.min(false_all)
-np.savetxt("false_all.csv", false_all, delimiter=',')
+#print "Minimum false postive %d" % np.min(false_pos)
+#np.savetxt("false_positive.csv", false_pos, delimiter=',')
+#print "Minimum false negative %d" % np.min(false_neg)
+#np.savetxt("false_negative.csv", false_neg, delimiter=',')
+#print "Minimum false all %d" % np.min(false_all)
+#np.savetxt("false_all.csv", false_all, delimiter=',')
 
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
