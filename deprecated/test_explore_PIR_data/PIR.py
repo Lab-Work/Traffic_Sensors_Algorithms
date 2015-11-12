@@ -1,6 +1,6 @@
 # This is the Class for PIR90620 sensor.
 # This class can:
-# 1. import the EEPROM register values and copmute the temperature from IRraw data
+# 1. import the EEPROM register values and compute the temperature from IRraw data
 # 2. Save all data in clean data structure, either from serial port reading or data files
 # 3. visualize the data, heat_map or time series of a single pixel
 
@@ -64,6 +64,7 @@ class PIR_MLX90620:
         self.pixel_id = 0   # by default 0
 
     # PIR LIBRARY
+    # TODO: changed the property of the PIR class to np array. Need to update.
     # import EEPROM, must be called if want to compute temperature from IRraw data.
     def import_eeprom(self, alpha_ij, eepromData):
         self.alpha_ij = np.copy(alpha_ij)
@@ -151,8 +152,7 @@ class PIR_MLX90620:
         for col in range(0, 16):
             for row in range(0, 4):
                 i = col*4 + row
-                #1: Calculate Offset Compensation
-                v_ir_off_comp = irData[row, col] - (self.a_ij[i] + (self.b_ij[i]/np.power(2, self.b_i_scale)) * (self.Tambient - 25)) 
+                v_ir_off_comp = irData[row, col] - (self.a_ij[i] + (self.b_ij[i]/np.power(2, self.b_i_scale)) * (self.Tambient - 25)) #1: Calculate Offset Compensation
 
                 v_ir_tgc_comp = v_ir_off_comp - ((self.tgc/32) * v_cp_off_comp) #2: Calculate Thermal Gradien Compensation (TGC)
 
@@ -181,6 +181,37 @@ class PIR_MLX90620:
             print 'std of PIR {0} with mean std {1}: \n'.format(self.pir_id, np.mean(std))
             # print 'std {0}'.format(std)
             print 'std of each pix:{0}'.format(np.reshape(std, (16, 4) ).T)
+
+
+    # statistic analysis
+    # aggregate the values across pixels in the second row
+    def plot_agg_temp(self, pixel_id, t_start, t_end):
+        # extract data to plot from the properties
+        if t_start is None or t_end is None:
+            # if not specified, then plot all data
+            index = np.nonzero(self.time_stamps)[0]
+        else:
+            index = np.nonzero(t_start <= self.time_stamps <= t_end)[0]
+
+        data_to_plot = []
+        # only extract the pixels data to be plotted
+        for i in range(0, len(pixel_id)):
+            pixel_index = pixel_id[i][1]*4 + pixel_id[i][0]
+            data_to_plot.append(self.all_temperatures[pixel_index, index])
+
+        data_to_plot_sum = np.zeros(len(data_to_plot[0]))
+        # sum the values across pixels
+        for i in range(0, len(data_to_plot[0])):
+            for pix in range(0,len(pixel_id)):
+                data_to_plot_sum[i] += data_to_plot[pix][i]
+
+        fig = plt.figure(figsize=(16,8), dpi=100)
+        plt.plot(self.time_stamps, data_to_plot_sum)
+
+        plt.title('Aggregated time series of PIR {0}, pixel {1}'.format(self.pir_id, pixel_id))
+        plt.ylabel('Temperature ($^{\circ}C$)')
+        plt.xlabel('Time stamps in EPOCH')
+        plt.show()
 
 
     # visualization
@@ -242,41 +273,92 @@ class PIR_MLX90620:
     def plot_time_series_of_pixel(self, t_start, t_end, pixel_id):
 
         # extract data to plot from the properties
-        if t_start is None or t_end is None:
-            # if not specified, then plot all data
-            index = np.nonzero(self.time_stamps)[0]
-        else:
-            index = np.nonzero(t_start <= self.time_stamps <= t_end)[0]
-
         data_to_plot = []
+        time_stamps_to_plot = []
+        if t_start is not None and t_end is not None:
+            print 'extracting data between {0} and {1}'.format(t_start, t_end)
+            for index in range(0, len(self.time_stamps)):
+                if self.time_stamps[index] >= t_start and self.time_stamps[index] <= t_end:
+                    time_stamps_to_plot.append(self.time_stamps[index])
+                    data_to_plot.append(self.all_temperatures[:, index])
+                    # print data_to_plot
+
+        else:
+            time_stamps_to_plot = self.time_stamps
+            data_to_plot = self.all_temperatures
+
+        # print 'data_to_plot size: {0}'.format(len(data_to_plot))
+
+        if len(data_to_plot) == 0:
+            print 'Warning: no data between the specified start and end time'
+            return 1
+
+        # make sure the dimension is correct: 64 x n frames
+        data_to_plot = np.array(data_to_plot)
+        if data_to_plot.shape[0] != 64:
+            data_to_plot = data_to_plot.T
+
+            if data_to_plot.shape[0] != 64:
+                print 'Error: check the dimension of the data. It should be 64 x n frames'
+                return 1
+
+        print 'data_to_plot dimension: {0}'.format(data_to_plot.shape)
+
+
+        pixel_data_to_plot = []
         # only extract the pixels data to be plotted
         for i in range(0, len(pixel_id)):
             pixel_index = pixel_id[i][1]*4 + pixel_id[i][0]
-            data_to_plot.append(self.all_temperatures[pixel_index, index])
+            pixel_data_to_plot.append(data_to_plot[pixel_index, :])
 
-        fig = plt.figure(figsize=(16,8), dpi=100)
+
+        print 'time_stamps_to_plot dim:{0} and pixel_data_to_plot dim {1}'.format(len(time_stamps_to_plot), len(pixel_data_to_plot[0]))
+
+        fig = plt.figure(figsize=(8,4), dpi=100)
         for i in range(0, len(pixel_id)):
-            plt.plot(self.time_stamps, data_to_plot[i])
+            plt.plot(time_stamps_to_plot, pixel_data_to_plot[i])
 
         plt.title('Time series of PIR {0}, pixel {1}'.format(self.pir_id, pixel_id))
         plt.ylabel('Temperature ($^{\circ}C$)')
         plt.xlabel('Time stamps in EPOCH')
-        plt.show()
+        plt.draw()
 
 
     # visualization
     # The following function plot a static single 4x16 pixel frame given the time interval
     # input: each frame in the [t_start, t_end] interval will be plotted in separate figures
     #        T_min and T_max are the limit for the color bar
-    # TODO: There is a minor bug on im[2]
     def plot_heat_map(self, t_start, t_end, T_min, T_max):
-        
+
         # extract data to plot from the properties
-        index = np.nonzero(t_start <= self.time_stamps <= t_end)[0]
-        data_to_plot = self.all_temperatures[:, index]
+        time_stamps_to_plot = []
+        data_to_plot = []
+        if t_start is not None and t_end is not None:
+            for index in range(0, len(self.time_stamps)):
+                if self.time_stamps[index] >= t_start and self.time_stamps[index] <= t_end:
+                    time_stamps_to_plot.append(self.time_stamps[index])
+                    data_to_plot.append(self.all_temperatures[:, index])
+
+        else:
+            if len(self.time_stamps) >= 10:
+                print 'Warning: there are too many frames ({0}) to plot, please use plot_heat_map_video'.format(len(self.time_stamps))
+                return 1
+            else:
+                time_stamps_to_plot = self.time_stamps
+                data_to_plot = self.all_temperatures
+
+        data_to_plot = np.array(data_to_plot)
+
+        # make sure the data to plot has the righ dimension: 64 x n frames
+        if data_to_plot.shape[0] != 64:
+            data_to_plot = data_to_plot.T
+
+            if data_to_plot.shape[0] != 64:
+                print 'Error: check the dimension of the data. It should be 64 x n frames'
+                return 1
 
         for i in range(0, data_to_plot.shape[1]):
-            fig = plt.figure(figsize=(16,8), dpi=100)
+            fig = plt.figure(figsize=(10,5), dpi=100)
             im = plt.imshow(data_to_plot[i][:,i].reshape(16,4).T,
                             cmap=plt.get_cmap('jet'),
                             interpolation='nearest',
@@ -285,7 +367,7 @@ class PIR_MLX90620:
             cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
             fig.colorbar(im[2], cax=cax)
             plt.title('heat map of PIR {0}'.format(self.pir_id))
-            plt.show()
+            plt.draw()
 
 
     # visualization
@@ -293,9 +375,9 @@ class PIR_MLX90620:
     # input: t_start and t_end are in epoch time,
     #        T_min and T_max are the limits for color bar
     #        fps is the number of frames per second
-    def plot_heat_map_video(self, t_start, t_end, T_min, T_max, fps):
+    def plot_heat_map_video(self, t_start, t_end, T_min, T_max, fps, num_background_frame):
         # initialize figure
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(10,5))
 
         ax.set_aspect('equal')
         ax.set_xlim(-0.5, 15.5)
@@ -305,12 +387,12 @@ class PIR_MLX90620:
         # cache the background
         background = fig.canvas.copy_from_bbox(ax.bbox)
 
-        im = []
         T_init = np.zeros((4, 16)) + T_min
-        im.append(ax.imshow(T_init, cmap=plt.get_cmap('jet'), interpolation='nearest', vmin=T_min, vmax=T_max))
+        im = ax.imshow(T_init, cmap=plt.get_cmap('jet'), interpolation='nearest', vmin=T_min, vmax=T_max)
+        # im = ax.imshow(T_init, cmap=plt.get_cmap('jet'), interpolation='nearest')
 
-        cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
-        fig.colorbar(im[2], cax=cax)
+        cax = fig.add_axes([0.92, 0.3, 0.01, 0.5])
+        fig.colorbar(im, cax=cax)
 
         ax.set_ylabel('PIR {0}'.format(self.pir_id))
         # self.ax[i].get_xaxis().set_visible(False)
@@ -319,25 +401,56 @@ class PIR_MLX90620:
         plt.show(False)
         plt.draw()
 
-        # extract data to play from the properties
-        index = np.nonzero(t_start <= self.time_stamps <= t_end)[0]
-        # each columnn is one frame
-        data_to_play = self.all_temperatures[:, index]
+        # extract data to play in a time period
+        data_to_play = []
+        if t_start is not None and t_end is not None:
+            for index in range(0, len(self.time_stamps)):
+                if self.time_stamps[index] >= t_start and self.time_stamps[index] <= t_end:
+                    data_to_play.append(self.all_temperatures[:, index])
+        else:
+            # otherwise plot all data
+            data_to_play = self.all_temperatures
+
+        data_to_play = np.array(data_to_play)
+
+        if data_to_play.shape[0] != 64:
+            data_to_play = data_to_play.T
+
+            if data_to_play.shape[0] != 64:
+                print 'Error: check the dimension of the data. It should be 64 x n frames'
+                return 1
 
         timer_start = time.time()
         for frame_index in range(0, data_to_play.shape[1]):
 
             # wait using the fps
-            while time.time() - timer_start <= 1/fps:
+            while time.time() - timer_start <= 1.0/fps:
                 time.sleep(0.005)   # sleep 5 ms
                 continue
 
             # reset timer
             timer_start = time.time()
+            # print('%.5f' % timer_start)
 
             # update figure
             # print 'T[{0}]: {1}'.format(i, T[i])
-            im.set_data(data_to_play[:,frame_index].reshape(16,4).T)
+            if num_background_frame is None or frame_index < num_background_frame:
+                frame_to_plot = data_to_play[:, frame_index].reshape(16,4).T
+            else:
+                # subtract the background which is the average of the past num_background_frame
+                start_background_index = frame_index - num_background_frame
+                end_background_index = frame_index # in fact should be frame_index - 1; not included in numpy indexing
+                background_data = data_to_play[:, start_background_index: end_background_index]
+                background = np.mean(background_data, 1)
+
+                # subtract the background
+                frame_background_subtracted = data_to_play[:, frame_index] - background
+                frame_to_plot = frame_background_subtracted.reshape(16,4).T
+
+                print 'before: {0}\nafter:  {1}'.format(data_to_play[:, frame_index], frame_background_subtracted)
+
+
+            im.set_data(frame_to_plot)
 
             fig.canvas.restore_region(background)
             ax.draw_artist(im)
@@ -490,12 +603,28 @@ class PIR_3_MLX90620:
             # if none, then play the entire date set
             index = np.nonzero(self.pir1.time_stamps)[0]
         else:
-            index = np.nonzero(t_start <= self.pir1.time_stamps <= t_end)[0]
+            index = np.nonzero([i&j for i in t_start <= self.pir1.time_stamps for j in self.pir1.time_stamps <= t_end])[0]
         # each columnn is one frame
+
+        temp_pir1_data = self.pir1.all_temperatures[:, index]
+        temp_pir2_data = self.pir2.all_temperatures[:, index]
+        temp_pir3_data = self.pir3.all_temperatures[:, index]
+
+        # for pix_id in range(0,64):
+        #     temp_pir1_data[pix_id,:] -= np.mean(temp_pir1_data[i,:])
+        #     temp_pir2_data[pix_id,:] -= np.mean(temp_pir2_data[i,:])
+        #     temp_pir3_data[pix_id,:] -= np.mean(temp_pir3_data[i,:])
+
+
         data_to_play = []
-        data_to_play.append(self.pir1.all_temperatures[:, index])
-        data_to_play.append(self.pir2.all_temperatures[:, index])
-        data_to_play.append(self.pir3.all_temperatures[:, index])
+        # data_to_play.append(self.pir1.all_temperatures[:, index] - np.mean(self.pir1.all_temperatures[:, index],1))
+        # data_to_play.append(self.pir2.all_temperatures[:, index] - np.mean(self.pir2.all_temperatures[:, index],1))
+        # data_to_play.append(self.pir3.all_temperatures[:, index] - np.mean(self.pir3.all_temperatures[:, index],1))
+        data_to_play.append(temp_pir1_data)
+        data_to_play.append(temp_pir2_data)
+        data_to_play.append(temp_pir3_data)
+
+
 
         timer_start = time.time()
         for frame_index in range(0, data_to_play[0].shape[1]):
@@ -529,6 +658,7 @@ class PIR_3_MLX90620:
 # it plots three subfigures in three rows and one column, each figure use imshow to plot a 4x16 matrix
 # theoretically this plot can refresh as fast as 300 frames/s
 class PlotPIR:
+
     def __init__(self, num_plot, T_min, T_max):
         self.fig, self.ax = plt.subplots(num_plot, 1)
         for i in range(0, num_plot):
