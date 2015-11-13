@@ -25,7 +25,7 @@ def find_slope(PIR_data, begin, end, display=False):
             col.append(line[i])
         colormap_col.append(col)
     passing_window = np.array(colormap_col)
-    smoothed_passing_window = ss.blur_image(passing_window, 3)
+    smoothed_passing_window = passing_window
     
     T = []
     P = []
@@ -58,18 +58,19 @@ def find_slope(PIR_data, begin, end, display=False):
     if display:
         plt.figure()
         plt.imshow(np.transpose(smoothed_passing_window), interpolation="nearest",
-                   aspect="auto", origin="lower")
+                   aspect="auto", origin="lower", cmap="gray", vmin=-2, vmax=5)
         plt.scatter(T[inlier_mask], P[inlier_mask], color='g', label="Inliers")
         plt.scatter(T[outlier_mask], P[outlier_mask], color='r', label="Outliers")
-        plt.plot(T, lr_P, 'b', label="Linear Regression", linewidth=2.0)
-        plt.plot(T, ransac_P, 'c', label="Robust LR", linewidth=2.0)
+        #plt.plot(T, lr_P, 'b', label="Linear Regression", linewidth=2.0)
+        plt.plot(T, ransac_P, 'r', label="Robust LR", linewidth=2.0)
         plt.xlim(-0.5, smoothed_passing_window.shape[0]-0.5)
         plt.ylim(-0.5, smoothed_passing_window.shape[1]-0.5)
         
         plt.xlabel("Time (0.125 sec)")
         plt.ylabel("Pixels")
         plt.title("Linear Regression Results")
-        plt.legend(loc="lower right")
+        #plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05),
+        #           fancybox=True, ncol=4)
         plt.show()
     #print lr_model.coef_
     #print ransac_model.estimator_.coef_
@@ -144,7 +145,7 @@ if True:
     S = []
     D = []
     for x in count:
-        s = find_slope(background_subtracted_PIR, x[0], x[1], False)
+        s = find_slope(background_subtracted_PIR, x[0], x[1], True)
         #print "Slope:", s
         d= np.min(Uson[x[0]:x[1]+1])
         S.append(s)
