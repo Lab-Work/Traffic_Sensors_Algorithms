@@ -147,7 +147,10 @@ def parse(date="090315"):
             LOG_inflated_data[i] = 10
         else:
             LOG_inflated_data[-1] = 10
-   
+  
+    print "Start:", PIR[50].begin
+    print "End:", PIR[4875+50].begin
+    print "Frequency:", 4875/(PIR[4875+50].begin - PIR[50].begin).total_seconds()
     return PIR_data, IMUU_reduced_data, LOG_inflated_data
 
 if __name__ == "__main__":
