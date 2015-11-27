@@ -7,10 +7,34 @@ import matplotlib
 matplotlib.rc("font", family="Liberation Sans")
 import numpy as np
 from copy import deepcopy
-import cookb_signalsmooth as ss
-from scipy import stats
 from sklearn import linear_model
+from sklearn.cluster import DBSCAN
 
+# Nonlinear trasnformation factor
+# Left PIR center
+center_left = np.pi/180 * (-42)
+# Middle PIR center
+center_mid = np.pi/180 * 0
+# Right PIR center
+center_right = np.pi/180 * 42
+
+transform = np.arange(-7.5, 8.5) * np.pi/180 * 60 / 16
+transform_left = [np.arctan(angle) for angle in transform+center_left]
+transform_mid = [np.arctan(angle) for angle in transform+center_mid]
+transform_right = [np.arctan(angle) for angle in transform+center_right]
+
+#transform_base = transform_mid[8]
+#transform_left = [factor/transform_base for factor in transform_left]
+#transform_mid = [factor/transform_base for factor in transform_mid]
+#transform_right = [factor/transform_base for factor in transform_right]
+
+plt.figure()
+plt.scatter(np.arange(16), transform_left)
+plt.scatter(np.arange(16, 32), transform_mid)
+plt.scatter(np.arange(32, 48), transform_right)
+plt.show()
+
+distance_book = np.concatenate((transform_left, transform_mid, transform_right))
 
 def find_slope(PIR_data, begin, end, display=False):
     #print "Finding PIR Slope..."
@@ -25,74 +49,59 @@ def find_slope(PIR_data, begin, end, display=False):
             col.append(line[i])
         colormap_col.append(col)
     passing_window = np.array(colormap_col)
-    smoothed_passing_window = passing_window
     
-    T = []
-    P = []
-    time = 0
-    threshold = np.percentile(smoothed_passing_window, 90)
-    for sample in smoothed_passing_window:
+    Time = []
+    Pixel = []
+    t = 0
+    # This assumes that vehicles are hotter than ambient temperature
+    threshold = np.percentile(passing_window, 90)
+    for sample in passing_window:
         for idx in range(len(sample)):
             if sample[idx] > threshold:
-                T.append(time)
-                P.append(idx)
-        time += 1
-
-    # Fit data into a linear regression model
-    lr_model = linear_model.LinearRegression()
-    T = np.array(T).reshape((len(T),1))
-    P = np.array(P).reshape((len(P),1))
-    lr_model.fit(T, P)
-
+                Time.append(t)
+                Pixel.append(distance_book[idx/4])
+        t += 1
+    
+    # Transform data into linear space
+    Time = np.array(Time).reshape((len(Time),1))
+    Pixel = np.array(Pixel).reshape((len(Pixel),1))
+    
+    
+    
     # Robustly fit the linear model with RANSAC algorithm
     ransac_model = linear_model.RANSACRegressor(linear_model.LinearRegression())
-    ransac_model.fit(T, P)
+    ransac_model.fit(Time, Pixel)
     inlier_mask = ransac_model.inlier_mask_
     outlier_mask = np.logical_not(inlier_mask)
     
-    # Prediction based on linear regression
-    lr_P = lr_model.predict(T)
     # Prediction based on ransac algorithm
-    ransac_P = ransac_model.predict(T)
+    ransac_Pixel = ransac_model.predict(Time)
 
     if display:
         plt.figure()
-        plt.imshow(np.transpose(smoothed_passing_window), interpolation="nearest",
-                   aspect="auto", origin="lower", cmap="gray", vmin=-2, vmax=5)
-        plt.scatter(T[inlier_mask], P[inlier_mask], color='g', label="Inliers")
-        plt.scatter(T[outlier_mask], P[outlier_mask], color='r', label="Outliers")
-        #plt.plot(T, lr_P, 'b', label="Linear Regression", linewidth=2.0)
-        plt.plot(T, ransac_P, 'r', label="Robust LR", linewidth=2.0)
-        plt.xlim(-0.5, smoothed_passing_window.shape[0]-0.5)
-        plt.ylim(-0.5, smoothed_passing_window.shape[1]-0.5)
-        
+        plt.scatter(Time[inlier_mask], Pixel[inlier_mask], color='g', label="Inliers")
+        plt.scatter(Time[outlier_mask], Pixel[outlier_mask], color='r', label="Outliers")
+        plt.plot(Time, ransac_Pixel, 'c', label="Robust LR", linewidth=1.5)
+        #plt.xlim(-0.5, passing_window.shape[0]-0.5)
+        #plt.ylim(-0.5, passing_window.shape[1]-0.5)
         plt.xlabel("Time (0.125 sec)")
         plt.ylabel("Pixels")
         plt.title("Linear Regression Results")
-        #plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05),
-        #           fancybox=True, ncol=4)
+        plt.legend(loc="lower right")
         plt.show()
-    #print lr_model.coef_
-    #print ransac_model.estimator_.coef_
-    return [lr_model.coef_[0], ransac_model.estimator_.coef_]
-
+    
+    return ransac_model.estimator_.coef_[0][0]
 
 PIR_data, IMUU_reduced_data, LOG_inflated_data = parse()
 IMUU_reduced_data = [data.uson for data in IMUU_reduced_data]
-#colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, -1,
-#         save_fig=False, smooth=True)
 
 MEAN = []
 for i in range(len(PIR_data[0])):
     MEAN.append(np.mean([t[i] for t in PIR_data]))
 MEAN = np.array(MEAN)
-STDEV = []
-for i in range(len(PIR_data[0])):
-    STDEV.append(np.std([t[i] for t in PIR_data]))
-STDEV = np.array(STDEV)
 background_subtracted_PIR = []
 for data in PIR_data:
-    background_subtracted_PIR.append((np.array(data)-MEAN)/STDEV)
+    background_subtracted_PIR.append(np.array(data)-MEAN)
 background_subtracted_PIR = np.array(background_subtracted_PIR)
 
 threshold = 2
@@ -124,13 +133,12 @@ while idx < len(Veh):
             else:
                 break
         if Veh[idx] == 1:
-            print "Missing exit condition at index:", idx
+            pass
         else:
             exit = idx
             count.append([enter, exit])
             idx += 1
     elif Veh[idx] == -1:
-        print "Missing enter condition at index:", idx
         idx += 1
     else:
         idx += 1
@@ -145,37 +153,26 @@ if True:
     S = []
     D = []
     for x in count:
-        s = find_slope(background_subtracted_PIR, x[0], x[1], True)
-        #print "Slope:", s
+        s = find_slope(background_subtracted_PIR, x[0], x[1], False)
         d= np.min(Uson[x[0]:x[1]+1])
         S.append(s)
         D.append(d)
 
     S = np.array(S)
-    lr_mean = np.mean(S[:,0])
-    ransac_mean = np.mean(S[:,1])
-    lr_std = np.std(S[:,0])
-    ransac_std = np.std(S[:,1])
-    print "LR measures slope of %.2f +/- %.2f 8px/sec" % (lr_mean, lr_std)
+    D = np.array(D)
+    V = S*D 
+    ransac_mean = np.mean(S)
+    ransac_std = np.std(S)
     print "Robust LR measures slope of %.2f +/- %.2f 8px/sec" % (ransac_mean, ransac_std)
     
-    # Leave off unrealistic estimates based on common sense
-    for est_idx in range(len(S[:,0])):
-        if S[est_idx][0] < 1:
-            S[est_idx][0] = lr_mean 
-    for est_idx in range(len(S[:,1])):
-        if S[est_idx][1] < 1:
-            S[est_idx][1] = lr_mean
-
     plt.figure()
-    plt.plot(S[:,0], 'b', label="LR Slope", linewidth=2.0)
-    plt.plot(S[:,1], 'r', label="Robust LR Slope", linewidth=2.0)
+    plt.plot(S, 'r', label="Robust LR Slope", linewidth=2.0)
     #plt.plot(D, label="Normal distance")
-    plt.axhline(lr_mean, linestyle='--', color='b', label="LR Average")
+    plt.plot(V, label="Speed estimation")
     plt.axhline(ransac_mean, linestyle='--', color='r', 
                 label="Robust LR Average")
     plt.xlabel("Nth Vehicle Passing")
     plt.ylabel("Slope (8px/sec)")
-    plt.title("Slope Estimation")
+    plt.title("Estimation")
     plt.legend()
     plt.show()

@@ -323,10 +323,10 @@ passing_speeds_original = speed_estimation(PIR, Uson, passing_intervals_original
 passing_speeds_derivative = speed_estimation(PIR, Uson, passing_intervals_derivative)
 
 # Report sensors status
-
-for t in np.arange(50,4875+50):
+for t in np.arange(50,1+50):
     sensors_status(PIR, Uson, Log, 
                    passing_intervals_original, passing_intervals_derivative,
-                   passing_speeds_original, passing_speeds_derivative, t, save=True)
+                   passing_speeds_original, passing_speeds_derivative, t,
+                   save=False)
 
 print "Done." 
