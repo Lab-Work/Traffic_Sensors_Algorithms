@@ -9,6 +9,11 @@ import numpy as np
 from copy import deepcopy
 from sklearn import linear_model
 from sklearn.cluster import DBSCAN
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+from matplotlib.ticker import LinearLocator, FormatStrFormatter
+from skimage.filters import roberts, sobel
+
 
 # Nonlinear trasnformation factor
 # Left PIR center
@@ -19,27 +24,35 @@ center_mid = np.pi/180 * 0
 center_right = np.pi/180 * 42
 
 transform = np.arange(-7.5, 8.5) * np.pi/180 * 60 / 16
-transform_left = [np.arctan(angle) for angle in transform+center_left]
-transform_mid = [np.arctan(angle) for angle in transform+center_mid]
-transform_right = [np.arctan(angle) for angle in transform+center_right]
-
-#transform_base = transform_mid[8]
-#transform_left = [factor/transform_base for factor in transform_left]
-#transform_mid = [factor/transform_base for factor in transform_mid]
-#transform_right = [factor/transform_base for factor in transform_right]
-
-plt.figure()
-plt.scatter(np.arange(16), transform_left)
-plt.scatter(np.arange(16, 32), transform_mid)
-plt.scatter(np.arange(32, 48), transform_right)
-plt.show()
-
+transform_left = [np.tan(angle) for angle in transform+center_left]
+transform_mid = [np.tan(angle) for angle in transform+center_mid]
+transform_right = [np.tan(angle) for angle in transform+center_right]
 distance_book = np.concatenate((transform_left, transform_mid, transform_right))
 
-def find_slope(PIR_data, begin, end, display=False):
-    #print "Finding PIR Slope..."
+# Background subtraction by pixel median
+def background_subtraction(_PIR_data):
+    #print "Running background subtraction"
+    #plt.figure()
+    #plt.imshow(_PIR_data)
+    median = []
+    for i in range(len(_PIR_data[0])):
+        median.append(np.median([t[i] for t in _PIR_data]))
+    median = np.array(median)
+    _PIR = []
+    for data in _PIR_data:
+        _PIR.append(np.array(data)-median)
+    #plt.figure()
+    #plt.imshow(_PIR)
+    #plt.show()
+    return _PIR
+
+
+def find_slope(PIR_data, begin, end, distance, display=False):
+    #print "Finding colormap slope..."
     passing_window = np.array(PIR_data[begin-8:end+8])
-    
+    passing_window = background_subtraction(passing_window)
+
+    # Change PIR data from row major to column major
     column_major = np.array([[[i*64+k*16+j for k in range(4)] for j in range(16)]
                             for i in range(3)]).reshape(192)
     colormap_col = []
@@ -54,40 +67,74 @@ def find_slope(PIR_data, begin, end, display=False):
     Pixel = []
     t = 0
     # This assumes that vehicles are hotter than ambient temperature
-    threshold = np.percentile(passing_window, 90)
+    threshold = np.percentile(passing_window, 95)
     for sample in passing_window:
         for idx in range(len(sample)):
             if sample[idx] > threshold:
                 Time.append(t)
                 Pixel.append(distance_book[idx/4])
         t += 1
-    
-    # Transform data into linear space
     Time = np.array(Time).reshape((len(Time),1))
     Pixel = np.array(Pixel).reshape((len(Pixel),1))
-    
-    
     
     # Robustly fit the linear model with RANSAC algorithm
     ransac_model = linear_model.RANSACRegressor(linear_model.LinearRegression())
     ransac_model.fit(Time, Pixel)
     inlier_mask = ransac_model.inlier_mask_
     outlier_mask = np.logical_not(inlier_mask)
-    
+    estimated_speed = 23*ransac_model.estimator_.coef_[0][0]*distance
+
     # Prediction based on ransac algorithm
     ransac_Pixel = ransac_model.predict(Time)
+    
+    if False:
+        # Experiment with edge detection
+        edge_roberts = roberts(passing_window)
+        edge_sobel = sobel(passing_window)
+
+        fig = plt.figure()
+        ax1 = fig.add_subplot(311)
+        ax1.imshow(edge_roberts, cmap="gray")
+        ax1.set_title("Roberts")
+        ax2 = fig.add_subplot(312)
+        ax2.imshow(edge_sobel, cmap="gray")
+        ax2.set_title("Sobel")
+        ax3 = fig.add_subplot(313)
+        ax3.imshow(passing_window, cmap="gray")
+        ax3.set_title("Original")
+        plt.show()
 
     if display:
-        plt.figure()
-        plt.scatter(Time[inlier_mask], Pixel[inlier_mask], color='g', label="Inliers")
-        plt.scatter(Time[outlier_mask], Pixel[outlier_mask], color='r', label="Outliers")
-        plt.plot(Time, ransac_Pixel, 'c', label="Robust LR", linewidth=1.5)
-        #plt.xlim(-0.5, passing_window.shape[0]-0.5)
-        #plt.ylim(-0.5, passing_window.shape[1]-0.5)
-        plt.xlabel("Time (0.125 sec)")
-        plt.ylabel("Pixels")
-        plt.title("Linear Regression Results")
-        plt.legend(loc="lower right")
+        topo_Y = np.concatenate((distance_book, distance_book))
+        topo_Y = np.concatenate((topo_Y, topo_Y))
+        topo_Y = np.sort(topo_Y)
+        topo_X = np.arange(passing_window.shape[0])
+        topo_X, topo_Y = np.meshgrid(topo_X, topo_Y)
+        topo_Z = np.transpose(passing_window)
+
+        fig = plt.figure(figsize=(15, 5), dpi=100)
+        ax0 = fig.add_subplot(121, projection="3d")
+        ax0.plot_surface(topo_X, topo_Y, topo_Z, rstride=1, cstride=1, cmap=cm.coolwarm,
+                         linewidth=0, antialiased=False, vmin=-5, vmax=20)
+        ax0.set_xlabel("Time (0.125 sec)")
+        ax0.set_ylabel("Norminal Distance from Centerline")
+        ax0.set_zlabel("Nominal Temperature")
+        ax0.set_title("Measured Distance = %.2f m" % distance)
+
+        ax = fig.add_subplot(122)
+        ax.contourf(topo_X, topo_Y, topo_Z, 100, vmin=-5, vmax=20)
+        ax.set_xlim(0, passing_window.shape[0]-1)
+        ax.set_ylim(-np.tan(2*np.pi/5)+0.3, np.tan(2*np.pi/5)-0.3)
+        ax.set_xlabel("Time (0.125 sec)")
+        ax.set_ylabel("Norminal Distance from Centerline")
+        ax.set_title("Estimated Slope = %.2f /sec Estimated Speed = %.2f mph" 
+                     % (ransac_model.estimator_.coef_[0][0], estimated_speed))
+        
+        ax.scatter(Time[inlier_mask], Pixel[inlier_mask], color='g', label="Inliers")
+        ax.scatter(Time[outlier_mask], Pixel[outlier_mask], color='r', label="Outliers")
+        ax.plot(Time, ransac_Pixel, 'c', label="Robust LR", linewidth=1.5)
+        #ax.legend(loc="lower right")
+        
         plt.show()
     
     return ransac_model.estimator_.coef_[0][0]
@@ -95,84 +142,52 @@ def find_slope(PIR_data, begin, end, display=False):
 PIR_data, IMUU_reduced_data, LOG_inflated_data = parse()
 IMUU_reduced_data = [data.uson for data in IMUU_reduced_data]
 
-MEAN = []
-for i in range(len(PIR_data[0])):
-    MEAN.append(np.mean([t[i] for t in PIR_data]))
-MEAN = np.array(MEAN)
-background_subtracted_PIR = []
-for data in PIR_data:
-    background_subtracted_PIR.append(np.array(data)-MEAN)
-background_subtracted_PIR = np.array(background_subtracted_PIR)
-
-threshold = 2
+threshold = 9
 Uson = deepcopy(IMUU_reduced_data)
-Uson_grad = [y-x for x, y in zip(Uson[:-1], Uson[1:])] 
-Veh = []
-for x in Uson_grad:
-    if x < -threshold:
-        Veh.append(1) # Vehicle enters
-    elif x > threshold:
-        Veh.append(-1) # Vehicle leaves
-    else:
-        Veh.append(0)
-
 idx = 0
-count = []
 enter = 0
 exit = 0
-while idx < len(Veh):
-    if Veh[idx] == 1:
+passing_intervals = []
+while idx < len(Uson):
+    if Uson[idx] < threshold:
         enter = idx
-        if idx+1 < len(Veh):
+        if idx+1 < len(Uson):
             idx += 1
         else:
             break
-        while Veh[idx] == 0:
-            if idx+1 < len(Veh):
+        while Uson[idx] < threshold:
+            if idx+1 < len(Uson):
                 idx += 1
             else:
                 break
-        if Veh[idx] == 1:
-            pass
-        else:
-            exit = idx
-            count.append([enter, exit])
-            idx += 1
-    elif Veh[idx] == -1:
+        exit = idx
+        passing_intervals.append([enter, exit])
         idx += 1
     else:
         idx += 1
+S = []
+D = []
+for x in passing_intervals:
+    d= np.min(Uson[x[0]:x[1]+1])
+    s = find_slope(PIR_data, x[0], x[1], d, True)
+    S.append(s)
+    D.append(d)
 
-cumulat = [0]*len(Veh)
-for x in count:
-    cumulat[x[1]] = 1
-for i in range(len(cumulat)-1):
-    cumulat[i+1] += cumulat[i]
+S = np.array(S)
+D = np.array(D)
+V = S*D 
+ransac_mean = np.mean(S)
+ransac_std = np.std(S)
+print "Robust LR measures slope of %.2f +/- %.2f 8px/sec" % (ransac_mean, ransac_std)
 
-if True:
-    S = []
-    D = []
-    for x in count:
-        s = find_slope(background_subtracted_PIR, x[0], x[1], False)
-        d= np.min(Uson[x[0]:x[1]+1])
-        S.append(s)
-        D.append(d)
-
-    S = np.array(S)
-    D = np.array(D)
-    V = S*D 
-    ransac_mean = np.mean(S)
-    ransac_std = np.std(S)
-    print "Robust LR measures slope of %.2f +/- %.2f 8px/sec" % (ransac_mean, ransac_std)
-    
-    plt.figure()
-    plt.plot(S, 'r', label="Robust LR Slope", linewidth=2.0)
-    #plt.plot(D, label="Normal distance")
-    plt.plot(V, label="Speed estimation")
-    plt.axhline(ransac_mean, linestyle='--', color='r', 
-                label="Robust LR Average")
-    plt.xlabel("Nth Vehicle Passing")
-    plt.ylabel("Slope (8px/sec)")
-    plt.title("Estimation")
-    plt.legend()
-    plt.show()
+plt.figure()
+plt.plot(S, 'r', label="Robust LR Slope", linewidth=2.0)
+#plt.plot(D, label="Normal distance")
+plt.plot(V, label="Speed estimation")
+plt.axhline(ransac_mean, linestyle='--', color='r', 
+            label="Robust LR Average")
+plt.xlabel("Nth Vehicle Passing")
+plt.ylabel("Slope (8px/sec)")
+plt.title("Estimation")
+plt.legend()
+plt.show()
