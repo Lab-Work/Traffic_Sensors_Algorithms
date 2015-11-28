@@ -68,9 +68,13 @@ def find_slope(PIR_data, begin, end, distance, display=False):
     t = 0
     # This assumes that vehicles are hotter than ambient temperature
     threshold = np.percentile(passing_window, 95)
-    for sample in passing_window:
-        for idx in range(len(sample)):
-            if sample[idx] > threshold:
+    for sample, left_sample, right_sample in zip(passing_window[1:-1], 
+                                                 passing_window[:-1],
+                                                 passing_window[1:]):
+        for idx in np.arange(3, len(sample)-3):
+            if (np.sum(sample[idx-3:idx+3]) + 
+                np.sum(left_sample[idx-1:idx+1]) + 
+                np.sum(right_sample[idx-1:idx+1])) > 6*threshold:
                 Time.append(t)
                 Pixel.append(distance_book[idx/4])
         t += 1
