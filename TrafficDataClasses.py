@@ -42,12 +42,14 @@ class TrafficData_4x48:
         # 1 x n samples
         self.ultra_timestamps = None
         # 1 x n samples
-        self.ultra_raw_data = None
+        self.ultra_raw_data = []
 
         # 1 x n samples:
         self.imu_timestamps = None
-        # m x n samples; m is the dimension of data (accel, gyro, mag)
-        self.imu_data = None
+        # 9 x n samples; m is the dimension of data (mag, accel, gyro)
+        self.imu_data = []
+        for i in range(0,9):
+            self.imu_data.append([])
 
         # data with background subtracted ultrasonic, three PIRs, and IMU
         self.pir_data_background_removed = None
@@ -56,6 +58,12 @@ class TrafficData_4x48:
         """
         This function reads and parses the file into raw data; it should be updated for new data format
         :param file_name_str: string, the file name string
+                            Two types of files can be parsed; format specified by file names
+                            PIR_~_4x48.csv: only PIR data with timestamps being the milliseconds; each row:
+                                ms_1, ms_2, ms_3, ptat_1, ptat_2, ptat_3, pir1_pixel00, pir1_pixel10, ... pir2_pixel00..
+                            ALL_~.csv: all IMU and PIR data; time format: HH_MM_SS_MS;
+                                timestamp,'IMU',magx,magy,magz,accelx,accely,accelz,ultra
+                                timestamp,'PIR',ms_1,ms_2,ms_3,ptat_1,ptat_2,ptat_3, pir1_pixel00, pir1_pixel10, ...
         :return: saved data in class
         """
 
@@ -67,8 +75,20 @@ class TrafficData_4x48:
 
             f = open(file_str, 'r')
 
+            # identify the file format
+            file_str = file_str.strip()
+            file_str_items = file_str.split('/')
+            file_name_items = file_str_items[-1].split('_')
+            if file_name_items[0] == 'PIR':
+                file_format = 'PIR'
+            elif file_name_items[0] == 'ALL':
+                file_format = 'ALL'
+            else:
+                print 'Error: Could not recognize data format for file {0}\n Name should start with PIR or ALL'.format(file_str)
+                return 1
+
             for line in f:
-                self.line_parser(line)
+                self.line_parser(line, file_format)
 
             # change to numpy for easier access
             self.pir_timestamps = np.array(self.pir_timestamps)
@@ -91,7 +111,7 @@ class TrafficData_4x48:
             # subtract the first time stamp offset and convert to seconds
             for i in range(0,3):
                 self.pir_timestamps[i, :] = self.pir_timestamps[i, :] - self.pir_timestamps[i, 0]
-                self.pir_timestamps[i, :] = self.pir_timestamps[i, :]/1000.0
+                # self.pir_timestamps[i, :] = self.pir_timestamps[i, :]/1000.0
 
             self.pir_raw_data = np.array(self.pir_raw_data)
 
@@ -100,28 +120,68 @@ class TrafficData_4x48:
 
             f.close()
 
-    def line_parser(self, line):
+    def line_parser(self, line=None, parser_option='ALL'):
         """
         This function parses each line of data and save in corresponding class property. Need to be updated if new data
         is in a different format.
-        :param line: The line in the data file; assumes PIR data line length is 192
+        :param line: The line in the data file;
+        :param parser_option: 'PIR', 'ALL'; different data format
         :return: save data self.pir_raw_data, self.ultra_raw_data, self.imu_data
         """
         line = line.strip()
         items = line.split(',')
 
-        if len(items) != 198:
-            print 'Error: Data format is incorrect. Update parser!'
-            return 1
+        # file only contains PIR data
+        if parser_option == 'PIR':
+            if len(items) != 198:
+                print 'Error: Data format is incorrect. Update parser!'
+                return 1
 
-        self.pir_timestamps[0].append(int(items[0]))
-        self.pir_timestamps[1].append(int(items[1]))
-        self.pir_timestamps[2].append(int(items[2]))
+            self.pir_timestamps[0].append(int(items[0]))
+            self.pir_timestamps[1].append(int(items[1]))
+            self.pir_timestamps[2].append(int(items[2]))
 
-        for i in range(6, 198):
-                self.pir_raw_data[i-6].append(float(items[i]))
+            for i in range(0, 192):
+                    self.pir_raw_data[i].append(float(items[i+6]))
 
-        return 0
+        # file contains both PIR and ultrasonics data
+        if parser_option == 'ALL':
+            # TODO: parse the timestamp format
+            timestamp_str = items[0]
+
+            if items[1] == 'IMU':
+                # parse IMU data
+                self.imu_timestamps = timestamp_str
+                if len(items) == 9:
+                    print 'Warning: missing Gyro data'
+                    for i in range(0, 6):
+                        self.imu_data[i].append(float(items[i+2]))
+                elif len(items) == 12:
+                    for i in range(0, 9):
+                        self.imu_data[i].append(float(items[i+2]))
+
+                # get the ultrasonic sensor data
+                self.ultra_timestamps = timestamp_str
+                self.ultra_raw_data.append(float(items[-1]))
+
+            elif items[1] == 'PIR':
+                # parse PIR data
+                if len(items) < 10:
+                    # THe full line should be 2+6+64*3 = 200; shorter length means corrupted data, skip
+                    return
+                else:
+                    # use the same timestamp for 3 pir sensors
+                    for i in range(0,3):
+                        self.pir_timestamps[i].append(timestamp_str)
+
+                    for i in range(0,192):
+                        self.pir_raw_data[i].append(float(items[i+8]))
+
+            else:
+                print 'Error: incorrect data format.'
+                return 1
+
+
 
     def subtract_background(self, background_duration):
         """
@@ -148,6 +208,13 @@ class TrafficData_4x48:
 
                 print '8Hz: Pixel {0} with mean {1} and std {2}'.format(i, mean[i], std[i])
 
+        print '8 Hz: Average Std: {0}'.format(np.mean(std))
+
+        # sort the std; remove the large 20% (pixels not well calibrated); then compute the mean std
+        std_sorted = sorted(std)
+        std_sorted_partial = std_sorted[0:int(len(std_sorted)*0.8)]
+        print '8 Hz: Average Std for 80% well calibrated pixels: {0}'.format(np.mean(std_sorted_partial))
+
         return mean, std
 
     def plot_histogram_for_pixel(self, pixel_list):
@@ -168,7 +235,7 @@ class TrafficData_4x48:
             time_series = self.pir_raw_data[pixel_index, :]
 
             # the histogram of the data
-            num_bins = 50
+            num_bins = 25
             fig = plt.figure(figsize=(16,8), dpi=100)
             n, bins, patches = plt.hist(time_series, num_bins, normed=1, facecolor='green', alpha=0.75)
 
@@ -184,7 +251,7 @@ class TrafficData_4x48:
             # plt.axis([40, 160, 0, 0.03])
             plt.grid(True)
 
-        plt.show()
+        plt.draw()
 
     def plot_time_series_for_pixel(self, t_start=None, t_end=None, pixel_list=None, data_option=None):
         """
@@ -303,6 +370,32 @@ class TrafficData_4x48:
         """
         pass
 
+    def plot_2d_colormap(self, data_to_plot=None, v_min=None, v_max=None, title=None):
+        """
+        Visualization:
+        This function is a universal function for plotting a 2d color map.
+        :param data_to_plot: a 2D float array with values to be plotted
+        :param v_min: the min value for the color bar; if None, will use min(data_to_plot)
+        :param v_max: the max value for the color bar; if None, will use max(data_to_plot)
+        :param title: string, the title for the figure
+        :return: a 2d colormap figure
+        """
+
+        if v_min is None:
+            v_min = np.min(data_to_plot)
+        if v_max is None:
+            v_max = np.max(data_to_plot)
+
+        fig = plt.figure(figsize=(16,8), dpi=100)
+        im = plt.imshow(data_to_plot,
+                        cmap=plt.get_cmap('jet'),
+                        interpolation='nearest',
+                        vmin=v_min, vmax=v_max)
+
+        plt.title('{0}'.format(title))
+        cax = fig.add_axes([0.12, 0.3, 0.78, 0.03])
+        fig.colorbar(im, cax=cax, orientation='horizontal')
+        plt.draw()
 
 
 
@@ -310,8 +403,10 @@ class TrafficData_4x48:
 
 
 
-
-
+"""
+########################################################################################################################
+A new class for 2x16 data format
+"""
 
 class TrafficData_2x16:
     """
@@ -345,6 +440,12 @@ class TrafficData_2x16:
         """
         This function reads and parses the file into raw data; it should be updated for new data format
         :param file_name_str: string, the file name string
+                            Two types of files can be parsed; format specified by file names
+                            PIR_~_2x16.csv: only PIR data with timestamps being the milliseconds; each row:
+                                ms, ptat, pir2_pixel00, pir2_pixel10, ...
+                            ALL_~.csv: all IMU and PIR data; time format: HH_MM_SS_MS;
+                                timestamp,'IMU',magx,magy,magz,accelx,accely,accelz,ultra
+                                timestamp,'PIR',ms,ptat, pir2_pixel00, pir2_pixel10, ...
         :return: saved data in class
         """
 
@@ -356,8 +457,20 @@ class TrafficData_2x16:
 
             f = open(file_str, 'r')
 
+            # identify the file format
+            file_str = file_str.strip()
+            file_str_items = file_str.split('/')
+            file_name_items = file_str_items[-1].split('_')
+            if file_name_items[0] == 'PIR':
+                file_format = 'PIR'
+            elif file_name_items[0] == 'ALL':
+                file_format = 'ALL'
+            else:
+                print 'Error: Could not recognize data format for file {0}\n Name should start with PIR or ALL'.format(file_str)
+                return 1
+
             for line in f:
-                self.line_parser(line)
+                self.line_parser(line, file_format)
 
             # change to numpy for easier access
             self.pir_timestamps = np.array(self.pir_timestamps)
@@ -376,35 +489,71 @@ class TrafficData_2x16:
 
             # subtract the first time stamp offset and convert to seconds
             self.pir_timestamps = self.pir_timestamps - self.pir_timestamps[0]
-            self.pir_timestamps[:] = self.pir_timestamps[:]/1000.0
+            # self.pir_timestamps[:] = self.pir_timestamps[:]/1000.0
 
             self.pir_raw_data = np.array(self.pir_raw_data)
 
             print '\n 32 Hz: size of time {0}; size of data {1}\n'.format(self.pir_timestamps.shape,
-                                                                   self.pir_raw_data.shape)
+                                                                         self.pir_raw_data.shape)
 
             f.close()
 
-    def line_parser(self, line):
+    def line_parser(self, line, parser_option='ALL'):
         """
         This function parses each line of data and save in corresponding class property. Need to be updated if new data
         is in a different format.
-        :param line: The line in the data file; assumes PIR data line length is 2+32 = 34
+        :param line: The line in the data file;
+        :param parser_option: 'PIR', 'ALL'; different data format
         :return: save data self.pir_raw_data, self.ultra_raw_data, self.imu_data
         """
         line = line.strip()
         items = line.split(',')
 
-        if len(items) != 34:
-            print 'Error: Data format is incorrect. Update parser!'
-            return 1
+        if parser_option == 'PIR':
+            if len(items) != 34:
+                print 'Error: Data format is incorrect. Update parser!'
+                return 1
 
-        self.pir_timestamps.append(int(items[0]))
+            self.pir_timestamps.append(int(items[0]))
 
-        for i in range(2, 34):
-                self.pir_raw_data[i-2].append(float(items[i]))
+            for i in range(2, 34):
+                    self.pir_raw_data[i-2].append(float(items[i]))
 
-        return 0
+        # file contains both PIR and ultrasonics data
+        if parser_option == 'ALL':
+            # TODO: parse the timestamp format
+            timestamp_str = items[0]
+
+            if items[1] == 'IMU':
+                # parse IMU data
+                self.imu_timestamps = timestamp_str
+                if len(items) == 9:
+                    print 'Warning: missing Gyro data'
+                    for i in range(0, 6):
+                        self.imu_data[i].append(float(items[i+2]))
+                elif len(items) == 12:
+                    for i in range(0, 9):
+                        self.imu_data[i].append(float(items[i+2]))
+
+                # get the ultrasonic sensor data
+                self.ultra_timestamps = timestamp_str
+                self.ultra_raw_data.append(float(items[-1]))
+
+            elif items[1] == 'PIR':
+                # parse PIR data
+                if len(items) < 10:
+                    # THe full line should be 2+6+2x16 = 40; shorter length means corrupted data, skip
+                    return
+                else:
+                    self.pir_timestamps.append(timestamp_str)
+
+                    for i in range(0,32):
+                        self.pir_raw_data[i].append(float(items[i+4]))
+
+            else:
+                print 'Error: incorrect data format.'
+                return 1
+
 
     def subtract_background(self, background_duration):
         """
@@ -430,6 +579,13 @@ class TrafficData_2x16:
                 std.append( np.std(self.pir_raw_data[i]) )
 
                 print '32Hz: Pixel {0} with mean {1} and std {2}'.format(i, mean[i], std[i])
+
+        print '32 Hz: Average Std: {0}'.format(np.mean(std))
+
+        # sort the std; remove the large 20% (pixels not well calibrated); then compute the mean std
+        std_sorted = sorted(std)
+        std_sorted_partial = std_sorted[0:int(len(std_sorted)*0.8)]
+        print '32 Hz: Average Std for 80% well calibrated pixels: {0}'.format(np.mean(std_sorted_partial))
 
         return mean, std
 
@@ -467,7 +623,7 @@ class TrafficData_2x16:
             # plt.axis([40, 160, 0, 0.03])
             plt.grid(True)
 
-        plt.show()
+        plt.draw()
 
     def plot_time_series_for_pixel(self, t_start=None, t_end=None, pixel_list=None, data_option=None):
         """
@@ -581,12 +737,36 @@ class TrafficData_2x16:
         """
         pass
 
+    def plot_2d_colormap(self, data_to_plot=None, v_min=None, v_max=None, title=None):
+        """
+        Visualization:
+        This function is a universal function for plotting a 2d color map.
+        :param data_to_plot: a 2D float array with values to be plotted
+        :param v_min: the min value for the color bar; if None, will use min(data_to_plot)
+        :param v_max: the max value for the color bar; if None, will use max(data_to_plot)
+        :param title: string, the title for the figure
+        :return: a 2d colormap figure
+        """
 
+        if v_min is None:
+            v_min = np.min(data_to_plot)
+        if v_max is None:
+            v_max = np.max(data_to_plot)
 
+        fig = plt.figure(figsize=(16,8), dpi=100)
+        im = plt.imshow(data_to_plot,
+                        cmap=plt.get_cmap('jet'),
+                        interpolation='nearest',
+                        vmin=v_min, vmax=v_max)
 
+        plt.title('{0}'.format(title))
+        cax = fig.add_axes([0.12, 0.3, 0.78, 0.03])
+        fig.colorbar(im, cax=cax, orientation='horizontal')
+        plt.draw()
 
 
 '''
+
 # This is the class for a single MLX90620
 # including the library for computing the temperature from IRraw
 # also a variety of visualization methods
@@ -1045,8 +1225,8 @@ class PlotPIR:
             self.ax[i].draw_artist(self.im[i])
 
             self.fig.canvas.blit(self.ax[i].bbox)
-
 '''
+
 
 
 

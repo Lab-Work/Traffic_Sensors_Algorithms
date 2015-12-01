@@ -1,0 +1,16 @@
+Classes under development:
+- TrafficDataClasses
+
+
+Nov 12 updates:
+1. Added a few statistic analysis functions: plotting the time series and the 2d map of the pixels.
+
+
+TODO:
+1. Integrate Fangyu’s parser in the class
+2. add default values for the arguments for easier use
+3. plot the heat map
+
+
+Issue:
+1. plot_time_series_for_pixel: plots three figures incrementally with more lines, instead of just one figure with all lines.
