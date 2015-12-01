@@ -38,7 +38,7 @@ smooth=True.
 @OUT: the corresponding colormap either display in gui or save to current
 directory
 _____________________________________________________________________________"""
-def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
+def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label=0,
         save_fig=False, smooth=False):
     print "Generating colormaps"
     MEAN = []
@@ -111,6 +111,7 @@ def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
     # obtain stable cross correlation results.
     if smooth:
         # Smoothing colormap_row
+        """
         plt.figure(figsize=(15,10), dpi=150)
         colormap_row = colormap_row[:-12]
         colormap_row_blur = ss.blur_image(colormap_row, 3)
@@ -120,8 +121,9 @@ def colormap(PIR_data, IMUU_reduced_data, LOG_inflated_data, label,
         plt.title("Colormap (Row Major) from the Data Collected on 09/03/15")
         plt.ylabel("Normalized Signal from PIR and Uson")
         plt.xlabel("Elapsed Time (0.125 sec)")
-        
-        # Smoothing colormap
+        """
+
+        # Smoothing colormap_col
         plt.figure(figsize=(15,10), dpi=150)
         colormap_col = colormap_col[:-12]
         colormap_col_blur = ss.blur_image(colormap_col, 5)
