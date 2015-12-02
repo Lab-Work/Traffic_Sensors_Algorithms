@@ -1,7 +1,7 @@
 __author__ = 'Yanning'
 
 """
-This scripts uses the TraffcDataClasses to do quick analysis of the PIR noise
+This script uses the TraffcDataClasses to do quick analysis of the PIR noise
 """
 
 import numpy as np

@@ -147,7 +147,7 @@ class TrafficData_4x48:
         # file contains both PIR and ultrasonics data
         if parser_option == 'ALL':
             # TODO: parse the timestamp format
-            timestamp_str = items[0]
+            timestamp_str = self.parse_time(items[0])
 
             if items[1] == 'IMU':
                 # parse IMU data
@@ -181,6 +181,19 @@ class TrafficData_4x48:
                 print 'Error: incorrect data format.'
                 return 1
 
+
+    def parse_time(self, datestr=None, year=2015, month=11, day=20):
+        """
+        This funciton parses the datestr in format %H_%M_%S_%f
+        :param datestr: The time string, e.g. 15_25_23_123456
+        :param year: int year
+        :param month: int month
+        :param day: int day
+        :return: datetime type
+        """
+        return datetime.strptime(datestr, "%H_%M_%S_%f").replace(year=year,
+                                                                 month=month,
+                                                                 day=day)
 
 
     def subtract_background(self, background_duration):
@@ -396,8 +409,6 @@ class TrafficData_4x48:
         cax = fig.add_axes([0.12, 0.3, 0.78, 0.03])
         fig.colorbar(im, cax=cax, orientation='horizontal')
         plt.draw()
-
-
 
 
 
@@ -763,6 +774,361 @@ class TrafficData_2x16:
         cax = fig.add_axes([0.12, 0.3, 0.78, 0.03])
         fig.colorbar(im, cax=cax, orientation='horizontal')
         plt.draw()
+
+
+
+
+
+class TrafficData_1x16:
+    """
+    This class deals with the ultrasonic, 1x16 (2nd row center PIR sensor), and IMU data
+    """
+
+    def __init__(self):
+
+        # raw data for ultrasonic, three PIRs, and IMU
+        # 1 x n samples datetime type
+        self.pir_timestamps = []
+
+        # 16 x n samples. stacked column by column from sensor 1 to sensor 3
+        self.pir_raw_data = []
+        for i in range(0,16):
+            self.pir_raw_data.append([])
+
+        # 1 x n samples
+        self.ultra_timestamps = None
+        # 1 x n samples
+        self.ultra_raw_data = []
+
+        # 1 x n samples:
+        self.imu_timestamps = None
+        # 9 x n samples; m is the dimension of data (mag, accel, gyro)
+        self.imu_data = []
+        for i in range(0,9):
+            self.imu_data.append([])
+
+        # data with background subtracted ultrasonic, three PIRs, and IMU
+        self.pir_data_background_removed = None
+
+    def read_data_file(self, file_name_str=None, datestr=None):
+        """
+        This function reads and parses the file into raw data; it should be updated for new data format
+        :param file_name_str: string, the file name string
+                            Two types of files can be parsed; format specified by file names
+                            PIR_~_1x16.csv: only PIR data with timestamps being the milliseconds; each row:
+                                timstamps (HH_MM_SS_MS), ms, ptat, pir2_pixel10, pir2_pixel11, ... pir2_pixel115..
+                            ALL_~.csv: all IMU and PIR data; time format: HH_MM_SS_MS;
+                                timestamp,'IMU',magx,magy,magz,accelx,accely,accelz,ultra
+                                timestamp,'PIR',ms, ptat, pir2_pixel10, pir2_pixel11, ... pir2_pixel115..
+        :param datestr: string 'YYYY_MM_DD'
+        :return: saved data in class
+        """
+
+        for file_str in file_name_str:
+
+            if not exists(file_str):
+                print 'Error: file {0} does not exists'.format(file_str)
+                return 1
+
+            f = open(file_str, 'r')
+
+            # identify the file format
+            file_str = file_str.strip()
+            file_str_items = file_str.split('/')
+            file_name_items = file_str_items[-1].split('_')
+            if file_name_items[0] == 'PIR':
+                file_format = 'PIR'
+            elif file_name_items[0] == 'ALL':
+                file_format = 'ALL'
+            else:
+                print 'Error: Could not recognize data format for file {0}\n Name should start with PIR or ALL'.format(file_str)
+                return 1
+
+            for line in f:
+                self.line_parser(line, file_format, datestr)
+
+            # timestamp is saved in datetime type
+            self.pir_timestamps = np.array(self.pir_timestamps)
+
+            self.pir_raw_data = np.array(self.pir_raw_data)
+
+            print '\n size of time {0}; size of data {1}\n'.format(len(self.pir_timestamps),
+                                                                   self.pir_raw_data.shape)
+
+            f.close()
+
+    def line_parser(self, line=None, parser_option='ALL', datestr=None):
+        """
+        This function parses each line of data and save in corresponding class property. Need to be updated if new data
+        is in a different format.
+        :param line: The line in the data file;
+        :param parser_option: 'PIR', 'ALL'; different data format
+        :param datestr: string, 'YYYY_MM_DD'
+        :return: save data self.pir_raw_data, self.ultra_raw_data, self.imu_data
+        """
+        line = line.strip()
+        items = line.split(',')
+
+        # file only contains PIR data
+        if parser_option == 'PIR':
+            if len(items) != 19:
+                print 'Skip corrupted line with length {0}'.format(len(items))
+                return 0
+
+            self.pir_timestamps.append(self.parse_time(datestr, items[0]))
+
+            for i in range(0, 16):
+                    self.pir_raw_data[i].append(float(items[i+3]))
+
+        # file contains both PIR and ultrasonics data
+        elif parser_option == 'ALL':
+            # TODO
+            print 'parser for ALL data file type not defined'
+            pass
+
+
+    def parse_time(self, datestr='2015_12_01', timestr=None):
+        """
+        This funciton parses the datestr in format %H_%M_%S_%f
+        :param datestr: The date string, e.g. 2015_12_23
+        :param timestr: The time string %H_%M_%S_%f
+        :return: datetime type
+        """
+        items = datestr.split('_')
+        return datetime.strptime(timestr, "%H_%M_%S_%f").replace(year=int(items[0]),
+                                                                 month=int(items[1]),
+                                                                 day=int(items[2]))
+
+
+    def subtract_background(self, background_duration):
+        """
+        This function subtracts the background of the PIR sensor data; the background is defined as the median of the
+        past background_duration samples
+        :param background_duration: int, the number of samples regarded as the background
+        :return: data saved in self.pir_data_background_removed
+        """
+        pass
+
+    def calculate_std(self):
+        """
+        Statistic Analysis:
+        This function calculates the mean and standard deviation of each pixel, to better understand the noise.
+        :return: print two 1 x 16 matrix: Mean, and STD
+        """
+        mean = []
+        std = []
+        for i in range(0, 16):
+
+            if len(self.pir_raw_data[i]) != 0:    # if not empty
+                mean.append( np.mean(self.pir_raw_data[i] ) )
+                std.append( np.std(self.pir_raw_data[i]) )
+
+                print 'Pixel {0} with mean {1} and std {2}'.format(i, mean[i], std[i])
+
+        print 'Average Std: {0}'.format(np.mean(std))
+
+        # sort the std; remove the large 20% (pixels not well calibrated); then compute the mean std
+        std_sorted = sorted(std)
+        std_sorted_partial = std_sorted[0:int(len(std_sorted)*0.8)]
+        print 'Average Std for 80% well calibrated pixels: {0}'.format(np.mean(std_sorted_partial))
+
+        return mean, std
+
+    def plot_histogram_for_pixel(self, pixel_list):
+        """
+        Statistic Analysis:
+        This function plots the histogram of the data for a selected pixel, to better understand the noise
+        :param pixel_list: list, [pixel_1, pixel_2...]; pixel_n := (row, col) in ([1] [0,15])
+        :return: one figure for each pixel
+        """
+
+        mu, sigma = self.calculate_std()
+
+        for pixel in pixel_list:
+
+            pixel_index = pixel[1]
+
+            # grab the data
+            time_series = self.pir_raw_data[pixel_index, :]
+
+            # the histogram of the data
+            num_bins = 25
+            fig = plt.figure(figsize=(16,8), dpi=100)
+            n, bins, patches = plt.hist(time_series, num_bins, normed=1, facecolor='green', alpha=0.75)
+
+            # add a 'best fit' line
+            norm_fit_line = mlab.normpdf(bins, mu[pixel_index], sigma[pixel_index])
+            l = plt.plot(bins, norm_fit_line, 'r--', linewidth=1)
+
+            plt.xlabel('Temperature ($^{\circ}C$)')
+            plt.ylabel('Probability')
+            plt.title(r'Histogram of pixel {0}: $\mu$= {1}, $\sigma$={2}'.format(pixel,
+                                                                                            mu[pixel_index],
+                                                                                            sigma[pixel_index]))
+            # plt.axis([40, 160, 0, 0.03])
+            plt.grid(True)
+
+        plt.draw()
+
+    def plot_time_series_for_pixel(self, t_start=None, t_end=None, pixel_list=None, data_option=None):
+        """
+        Visualization:
+        This function plots the time series from t_start to t_end for pixels in pixel_list; data_option specifies whether
+        it should plot the raw data or the data with background removed.
+        :param t_start: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param t_end: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param pixel_list: list, [pixel_1, pixel_2...]; pixel_n := (row, col) in ([1] [0,15])
+        :param data_option: string, 'raw', 'background_removed'
+        :return: a figure with all the pixels time series
+        """
+
+        time_series_to_plot = []
+
+        for pixel in pixel_list:
+
+            pixel_index = pixel[1]
+
+            timestamps = self.pir_timestamps
+
+            # get the data for the corresponding pixel
+            if data_option == 'raw':
+                data = self.pir_raw_data[pixel_index, :]
+            elif data_option == 'background_removed':
+                data = self.pir_data_background_removed[pixel_index, :]
+            else:
+                data = []
+                print 'Error: pixel {0} is not recognized'.format(pixel)
+
+            pixel_series = {}
+            pixel_series['info'] = pixel
+            pixel_series['time'] = timestamps
+            pixel_series['data'] = data
+
+            time_series_to_plot.append(pixel_series)
+
+            # call the generic function to plot
+            self.plot_time_series(None, time_series_to_plot, t_start, t_end)
+
+    def plot_time_series_for_ultra(self, t_start, t_end):
+        """
+        Visualization:
+        This function plots the time series for the ultrasonics sensor data from t_start to t_end
+        :param t_start: format to be defined; plot all data if None
+        :param t_end: format to be defined; plot all data if None
+        :return: a figure with the ultrasonic data plotted
+        """
+        pass
+
+    def plot_time_series(self, fig_handle, time_series_list, t_start_str, t_end_str):
+        """
+        Visualization:
+        This function plots all the time series in the time_series_list, which offers more flexibility.
+        :param fig_handle: fig or ax handle to plot on; create new figure if None
+        :param time_series_list: list, [time_series_1, time_series_2,...];
+                                 time_series_n: dict; time_series_n['info'] = string or label in figure
+                                                      time_series_n['time'] = list of float
+                                                      time_series_n['data'] = list of float
+        :param t_start_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param t_end_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :return: a (new) figure with all time series
+        """
+        # plot in new figure window if not specified
+        if fig_handle is None:
+            fig = plt.figure(figsize=(16,8), dpi=100)
+
+        for time_series in time_series_list:
+            if t_start_str is None or t_end_str is None:
+                # if not specified, then plot all data
+                time_to_plot = time_series['time']
+                data_to_plot = time_series['data']
+            else:
+                t_start = datetime.strptime(t_start_str, '%Y_%m_%d_%H_%M_%S_%f')
+                t_end = datetime.strptime(t_end_str, '%Y_%m_%d_%H_%M_%S_%f')
+
+                index_start = time_series['time'] >= t_start
+                index_end = time_series['time'] <= t_end
+                index = index_start & index_end
+
+                time_to_plot = time_series['time'][index]
+                data_to_plot = time_series['data'][index]
+
+            plt.plot(time_to_plot, data_to_plot, label=time_series['info'])
+
+        plt.title('Time series of pixels'.format())
+        plt.ylabel('Temperature ($^{\circ}C$)')
+        plt.xlabel('Time')
+        plt.legend()
+        plt.grid(True)
+        plt.draw()
+
+    def plot_heat_map_single_frame(self, timestamp, T_min, T_max):
+        """
+        Visualization:
+        This function plots the heat map for single frame 1x16 at timestamp
+        :param timestamp: format to be defined;
+        :param T_min: the min temperature for the color bar
+        :param T_max: the max temperature for the color bar
+        :return: a figure with 4 x 48 color pixel heat map
+        """
+        pass
+
+    def plot_heat_map_in_period(self, t_start_str, t_end_str, T_min, T_max):
+        """
+        Visualization:
+        This function plots the heat map from t_start to t_end with each frame 1x16 pixels
+                    stacked column by column to 16 x n samples
+        :param t_start_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param t_end_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param T_min: the min temperature for the color bar
+        :param T_max: the max temperature for the color bar
+        :return: a figure with 16 x n color map for n frame
+        """
+
+        if t_start_str is None or t_end_str is None:
+            temperature_16xn = self.pir_raw_data
+        else:
+            t_start = datetime.strptime(t_start_str, '%Y_%m_%d_%H_%M_%S_%f')
+            t_end = datetime.strptime(t_end_str, '%Y_%m_%d_%H_%M_%S_%f')
+
+            index_start = self.pir_timestamps >= t_start
+            index_end = self.pir_timestamps <= t_end
+            index = index_start & index_end
+            temperature_16xn = self.pir_raw_data[:,index]
+
+        self.plot_2d_colormap(temperature_16xn, T_min, T_max, '{0}: {1} to {2}'.format(
+                                  t_start.strftime('%Y/%m/%d'),
+                                  t_start.strftime('%H:%M:%S.%f'),
+                                  t_end.strftime('%H:%M:%S.%f')))
+
+
+    def plot_2d_colormap(self, data_to_plot=None, v_min=None, v_max=None, title=None):
+        """
+        Visualization:
+        This function is a universal function for plotting a 2d color map.
+        :param data_to_plot: a 2D float array with values to be plotted
+        :param v_min: the min value for the color bar; if None, will use min(data_to_plot)
+        :param v_max: the max value for the color bar; if None, will use max(data_to_plot)
+        :param title: string, the title for the figure
+        :return: a 2d colormap figure
+        """
+
+        if v_min is None:
+            v_min = np.min(data_to_plot)
+        if v_max is None:
+            v_max = np.max(data_to_plot)
+
+        fig = plt.figure(figsize=(16,8), dpi=100)
+        im = plt.imshow(data_to_plot,
+                        cmap=plt.get_cmap('jet'),
+                        interpolation='nearest',
+                        vmin=v_min, vmax=v_max)
+
+        plt.title('{0}'.format(title))
+        cax = fig.add_axes([0.12, 0.3, 0.78, 0.03])
+        fig.colorbar(im, cax=cax, orientation='horizontal')
+        plt.draw()
+
+
 
 
 '''
