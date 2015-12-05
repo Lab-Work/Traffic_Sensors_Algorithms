@@ -1,9 +1,12 @@
+__author__ = 'Yanning Li (emlynlyn@gmail.com), Fangyu Wu (fwu10@illinois.edu)'
 
 """
-The classes interface with the data files. It reads, pre-processes, and visualizes the data.
-Since we are using different configurations of the sensor, multiple classes are created here with each class for
-each data configuration. Add a new class based on old ones if using a new data format. It should require only minimum
-amount of modification.
+The classes interface with the data files. It reads the data, conducts statistic analysis of the data, and visualizes
+the data.
+
+The data input should be one single csv file with the format specified in the Data_Collection_Manual.pdf.
+This class can handle different format of the data, e.g. PIR data with different number of pixels, or data missing the
+ultrasonic sensor measurement.
 
 The structure of each class:
 # - Visualization:
@@ -20,6 +23,271 @@ from datetime import datetime
 from os.path import exists
 import sys
 import time
+
+
+
+class TrafficData:
+    """
+    This class is a universal class which deals with different types of data specified in the data collection manual.
+    """
+
+    def __init__(self):
+
+        # There may be multiple PIR data formats: 1x16, 4x48.... Use key-value store
+        # PIR['1x16'] = {'time':narray, 'Ta':narray, 'raw_data':narray, 'cleaned_data':narray}
+        self.PIR = {}
+
+        # ultrasonic sensor data
+        # USON['time'] = narray; USON['data'] = narray
+        self.USON = {}
+
+        # IMU data
+        # IMU = {'time':narray, 'accel':3xn array, 'mag':3xn array, 'gyro':3xn array}
+        self.IMU = {}
+
+        # LABEL data
+        # LABEL = {'time':narray, 'count':narray, 'speed':narray}
+        self.LABEL = {}
+
+
+    def read_data_file(self, file_name_str=None):
+        """
+        This function reads and parses the file according to the data format specified in data collection manual
+        :param file_name_str: string, the file name string: e.g. dataset_20151204_145234.csv
+        :return: 0 if correctly read. Data are saved in key-value stores
+        """
+
+        if not exists(file_name_str):
+            print 'Error: file {0} does not exists'.format(file_name_str)
+            return 1
+
+        f = open(file_name_str, 'r')
+
+        for line in f:
+            self.line_parser(line)
+
+        # change all arrays into np.array for easy access
+        # print out the dataset information
+        print 'Finished reading dataset {0}'.format(file_name_str)
+        print '--PIR dataset:'
+        for pir_mxn in self.PIR.keys():
+            for key in self.PIR[pir_mxn].keys():
+                self.PIR[pir_mxn][key] = np.array(self.PIR[pir_mxn][key])
+            print '----{0}: {1} samples from {2} to {3}'.format(pir_mxn,
+                                                                len(self.PIR[pir_mxn]['time']),
+                                                                self.PIR[pir_mxn]['time'][0].time(),
+                                                                self.PIR[pir_mxn]['time'][-1].time())
+        for key in self.USON.keys():
+            self.USON[key] = np.array(self.USON[key])
+        print '--USON dataset: {0} sampels from {1} to {2}'.format(len(self.USON['time']),
+                                                                   self.USON['time'][0].time(),
+                                                                   self.USON['time'][-1].time())
+        print '--IMU dataset:'
+        for key in self.IMU.keys():
+            self.IMU[key] = np.array(self.IMU[key])
+        print '----Accel: {0} sampels from {1} to {2}'.format(len(self.IMU['accel']),
+                                                                   self.IMU['time'][0].time(),
+                                                                   self.IMU['time'][-1].time())
+        print '----Mag: {0} sampels from {1} to {2}'.format(len(self.IMU['mag']),
+                                                                   self.IMU['time'][0].time(),
+                                                                   self.IMU['time'][-1].time())
+        print '----Gyro: {0} sampels from {1} to {2}'.format(len(self.IMU['gyro']),
+                                                                   self.IMU['time'][0].time(),
+                                                                   self.IMU['time'][-1].time())
+        for key in self.LABEL.keys():
+            self.LABEL[key] = np.array(self.LABEL[key])
+        print '--LABEL: {0} labels from {1} to {2}'.format(len(self.LABEL['time']),
+                                                                   self.LABEL['time'][0].time(),
+                                                                   self.LABEL['time'][-1].time())
+
+        f.close()
+
+
+    def line_parser(self, line=None):
+        """
+        This function parses each line of data and save in corresponding class property. Need to be updated if new data
+        is in a different format.
+        :param line: The line in the data file;
+        :return: 0 if correctly parsed.
+        """
+        line = line.strip()
+        items = line.split(',')
+
+        # Each row is a data slice. Parse according to data collection manual
+        if 'invalid_read' in line:
+            return 0
+
+        elif 'PIR_1x16_2nd' in line:
+            # check if the data set created
+            if 'pir_1x16_2nd' not in self.PIR.keys():
+                self.PIR['pir_1x16_2nd'] = {'time':[], 'Ta':[], 'raw_data':[]}
+                for i in range(0,16):
+                    self.PIR['pir_1x16_2nd']['raw_data'].append([])
+            else:
+                self.PIR['pir_1x16_2nd']['time'].append( self.parse_time(items[1]) )
+                self.PIR['pir_1x16_2nd']['Ta'].append( float(items[2]) )
+                for i in range(0, 16):
+                    self.PIR['pir_1x16_2nd']['raw_data'][i].append( float(items[i+3]) )
+
+        elif 'PIR_2x16' in line:
+            # check if the data set created
+            if 'pir_2x16' not in self.PIR.keys():
+                self.PIR['pir_2x16'] = {'time':[], 'Ta':[], 'raw_data':[]}
+                for i in range(0,32):
+                    self.PIR['pir_2x16']['raw_data'].append([])
+            else:
+                self.PIR['pir_2x16']['time'].append( self.parse_time(items[1]) )
+                self.PIR['pir_2x16']['Ta'].append( float(items[2]) )
+                for i in range(0, 32):
+                    self.PIR['pir_2x16']['raw_data'][i].append( float(items[i+3]) )
+
+        elif 'PIR_4x48' in line:
+            # check if the data set created
+            if 'pir_4x48' not in self.PIR.keys():
+                self.PIR['pir_4x48'] = {'time':[], 'Ta':[], 'raw_data':[]}
+                for i in range(0,192):
+                    self.PIR['pir_4x48']['raw_data'].append([])
+            else:
+                self.PIR['pir_4x48']['time'].append( self.parse_time(items[1]) )
+                self.PIR['pir_4x48']['Ta'].append( float(items[2]) )
+                for i in range(0, 192):
+                    self.PIR['pir_4x48']['raw_data'][i].append( float(items[i+3]) )
+
+        elif 'USON' in line:
+            if len(self.USON.keys()) == 0:
+                self.USON = {'time':[],'data':[]}
+            else:
+                self.USON['time'].append( self.parse_time(items[1]) )
+                self.USON['data'].append(float(items[2]))
+
+        elif 'IMU' in line:
+            if len(self.IMU.keys()) == 0:
+                self.IMU = {'time':[],'accel':[], 'mag':[], 'gyro':[]}
+                for i in range(0,3):
+                    self.IMU['accel'].append([])
+                    self.IMU['mag'].append([])
+                    self.IMU['gyro'].append([])
+            else:
+                self.USON['time'].append(self.parse_time(items[1]))
+                for i in range(0,3):
+                    self.IMU['accel'][i].append(float(items[i+2]))
+                    self.IMU['mag'][i].append(float(items[i+5]))
+                    self.IMU['gyro'][i].append(float(items[i+8]))
+
+        elif 'LABEL' in line:
+            if len(self.LABEL.keys()) == 0:
+                self.LABEL = {'time':[],'count':[], 'speed':[]}
+            else:
+                self.LABEL['time'].append(self.parse_time(items[1]))
+                self.LABEL['count'].append(float(items[2]))
+                self.LABEL['speed'].append(float(items[3]))
+
+        elif len(line) == 1:
+            # This may simply be a blank line
+            return 0
+
+        else:
+            print 'Error: unrecognized data format.'
+            return -1
+
+
+    def parse_time(self, datetime_str=None):
+        """
+        This funciton parses the datestr in format %Y%m%d_%H%M%S_f
+        :param datetime_str: The date string, %Y%m%d_%H%M%S_f
+        :return: datetime type
+        """
+        return datetime.strptime(datetime_str, "%Y%m%d_%H%M%S_f")
+
+
+    def subtract_PIR_background(self, background_duration):
+        """
+        This function subtracts the background of the PIR sensor data; the background is defined as the median of the
+        past background_duration samples
+        :param background_duration: int, the number of samples regarded as the background
+        :return: data saved in self.pir_data_background_removed
+        """
+
+        # For each pir dataset: 1x16 or 4x48
+        for pir_mxn in self.PIR.keys():
+
+            # row is number of pixels, and col is the number of samples
+            row, col = self.PIR[pir_mxn]['raw_data']
+
+            # initialize the cleaned data
+            self.PIR[pir_mxn]['cleaned_data'] = []
+            for i in range(0, row):
+                self.PIR[pir_mxn]['cleaned_data'].append([])
+
+            for pixel in range(0,row):
+
+                for sample in range(0, col):
+
+                    # if history is shorter than background_duration, simply copy
+                    # otherwise subtract background
+                    if sample < background_duration:
+                        self.PIR[pir_mxn]['cleaned_data'][pixel].append(self.PIR[pir_mxn]['raw_data'][pixel][sample])
+                    else:
+                        self.PIR[pir_mxn]['cleaned_data'][pixel].append(
+                            self.PIR[pir_mxn]['raw_data'][pixel][sample] -
+                            np.median(self.PIR[pir_mxn]['raw_data'][pixel][sample-background_duration:sample] )
+                        )
+
+            self.PIR[pir_mxn]['cleaned_data'] = np.array(self.PIR[pir_mxn]['cleaned_data'])
+
+
+    def calculate_std(self):
+        """
+        Statistic Analysis:
+        The goal of this function is to analyze the PIR data background noise. The data should be measuring background.
+        This function calculates the mean and standard deviation of each pixel, to better understand the noise.
+        :return: mean (dict) and std (dict), keys are same as the self.PIR
+        """
+
+        mean = {}
+        std = {}
+
+        for pir_mxn in self.PIR.keys():
+
+            mean[pir_mxn] = []
+            std[pir_mxn] = []
+
+            row, col = self.PIR[pir_mxn]['raw_data']
+            for pixel in range(0, row):
+
+                # For each pixel
+                if len(self.PIR[pir_mxn][pixel]) != 0:
+                    mean[pir_mxn].append( np.mean(self.PIR[pir_mxn]['raw_data'][pixel] ) )
+                    std[pir_mxn].append( np.std(self.PIR[pir_mxn]['raw_data'][pixel] ) )
+
+            print 'Average Std: {0}'.format(np.mean(std[pir_mxn]))
+
+            # convert the 1xn array in to a matrix which corresponds to the pixel position
+
+            mean[pir_mxn] = np.array(mean[pir_mxn])
+            std[pir_mxn] = np.array(std[pir_mxn])
+
+
+            mu_2x16.reshape((16,2)).T
+
+        return mean, std
+
+
+
+
+
+
+
+
+
+
+"""
+########################################################################################################################
+A new class for 2x16 data format
+"""
+
+
+
 
 
 class TrafficData_4x48:
@@ -808,7 +1076,7 @@ class TrafficData_1x16:
             self.imu_data.append([])
 
         # data with background subtracted ultrasonic, three PIRs, and IMU
-        self.pir_data_background_removed = None
+        self.pir_data_cleaned = []
 
     def read_data_file(self, file_name_str=None, datestr=None):
         """
@@ -886,7 +1154,6 @@ class TrafficData_1x16:
             print 'parser for ALL data file type not defined'
             pass
 
-
     def parse_time(self, datestr='2015_12_01', timestr=None):
         """
         This funciton parses the datestr in format %H_%M_%S_%f
@@ -899,7 +1166,6 @@ class TrafficData_1x16:
                                                                  month=int(items[1]),
                                                                  day=int(items[2]))
 
-
     def subtract_background(self, background_duration):
         """
         This function subtracts the background of the PIR sensor data; the background is defined as the median of the
@@ -907,7 +1173,29 @@ class TrafficData_1x16:
         :param background_duration: int, the number of samples regarded as the background
         :return: data saved in self.pir_data_background_removed
         """
-        pass
+        row, col = self.pir_raw_data.shape
+
+        # initialize the cleaned pir data list
+        self.pir_data_cleaned = []
+        for i in range(0,16):
+            self.pir_data_cleaned.append([])
+
+        for pixel in range(0,16):
+
+            for measure in range(0,col):
+
+                # if history is shorter than background_duration, simply copy
+                # otherwise subtract background
+                if measure < background_duration:
+                    self.pir_data_cleaned[pixel].append(self.pir_raw_data[pixel][measure])
+                else:
+                    self.pir_data_cleaned[pixel].append(
+                        self.pir_raw_data[pixel][measure] -
+                        np.median(self.pir_raw_data[pixel][measure-background_duration:measure] )
+                    )
+
+        self.pir_data_cleaned = np.array(self.pir_data_cleaned)
+
 
     def calculate_std(self):
         """
@@ -970,15 +1258,15 @@ class TrafficData_1x16:
 
         plt.draw()
 
-    def plot_time_series_for_pixel(self, t_start=None, t_end=None, pixel_list=None, data_option=None):
+    def plot_time_series_for_pixel(self, t_start_str=None, t_end_str=None, pixel_list=None, data_option=None):
         """
         Visualization:
         This function plots the time series from t_start to t_end for pixels in pixel_list; data_option specifies whether
         it should plot the raw data or the data with background removed.
-        :param t_start: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
-        :param t_end: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param t_start_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param t_end_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
         :param pixel_list: list, [pixel_1, pixel_2...]; pixel_n := (row, col) in ([1] [0,15])
-        :param data_option: string, 'raw', 'background_removed'
+        :param data_option: string, 'raw', 'cleaned'
         :return: a figure with all the pixels time series
         """
 
@@ -993,8 +1281,8 @@ class TrafficData_1x16:
             # get the data for the corresponding pixel
             if data_option == 'raw':
                 data = self.pir_raw_data[pixel_index, :]
-            elif data_option == 'background_removed':
-                data = self.pir_data_background_removed[pixel_index, :]
+            elif data_option == 'cleaned':
+                data = self.pir_data_cleaned[pixel_index, :]
             else:
                 data = []
                 print 'Error: pixel {0} is not recognized'.format(pixel)
@@ -1007,7 +1295,7 @@ class TrafficData_1x16:
             time_series_to_plot.append(pixel_series)
 
             # call the generic function to plot
-            self.plot_time_series(None, time_series_to_plot, t_start, t_end)
+            self.plot_time_series(None, time_series_to_plot, t_start_str, t_end_str)
 
     def plot_time_series_for_ultra(self, t_start, t_end):
         """
@@ -1072,7 +1360,8 @@ class TrafficData_1x16:
         """
         pass
 
-    def plot_heat_map_in_period(self, t_start_str, t_end_str, T_min, T_max):
+    def plot_heat_map_in_period(self, t_start_str=None, t_end_str=None,
+                                T_min=None, T_max=None, data_option=None):
         """
         Visualization:
         This function plots the heat map from t_start to t_end with each frame 1x16 pixels
@@ -1081,11 +1370,24 @@ class TrafficData_1x16:
         :param t_end_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
         :param T_min: the min temperature for the color bar
         :param T_max: the max temperature for the color bar
+        :param data_option: string 'raw' or 'cleaned'; 'cleaned' removed the background
         :return: a figure with 16 x n color map for n frame
         """
 
         if t_start_str is None or t_end_str is None:
-            temperature_16xn = self.pir_raw_data
+
+            if data_option == 'raw':
+                temperature_16xn = self.pir_raw_data
+            elif data_option == 'cleaned':
+                temperature_16xn = self.pir_data_cleaned
+            else:
+                print 'Error: data_option not recognized'
+                return
+
+            temperature_16xn = np.array(temperature_16xn)
+
+            self.plot_2d_colormap(temperature_16xn, T_min, T_max, 'All data')
+
         else:
             t_start = datetime.strptime(t_start_str, '%Y_%m_%d_%H_%M_%S_%f')
             t_end = datetime.strptime(t_end_str, '%Y_%m_%d_%H_%M_%S_%f')
@@ -1093,9 +1395,18 @@ class TrafficData_1x16:
             index_start = self.pir_timestamps >= t_start
             index_end = self.pir_timestamps <= t_end
             index = index_start & index_end
-            temperature_16xn = self.pir_raw_data[:,index]
 
-        self.plot_2d_colormap(temperature_16xn, T_min, T_max, '{0}: {1} to {2}'.format(
+            if data_option == 'raw':
+                temperature_16xn = self.pir_raw_data[:,index]
+            elif data_option == 'cleaned':
+                temperature_16xn = self.pir_data_cleaned[:,index]
+            else:
+                print 'Error: data_option not recognized'
+                return
+
+            temperature_16xn = np.array(temperature_16xn)
+
+            self.plot_2d_colormap(temperature_16xn, T_min, T_max, '{0}: {1} to {2}'.format(
                                   t_start.strftime('%Y/%m/%d'),
                                   t_start.strftime('%H:%M:%S.%f'),
                                   t_end.strftime('%H:%M:%S.%f')))
@@ -1117,15 +1428,18 @@ class TrafficData_1x16:
         if v_max is None:
             v_max = np.max(data_to_plot)
 
-        fig = plt.figure(figsize=(16,8), dpi=100)
+        # adjust the figure width and height to best represent the data matrix
+        row,col = data_to_plot.shape
+
+        fig = plt.figure(figsize=( int(1.2*col/row)*8,8), dpi=100)
         im = plt.imshow(data_to_plot,
                         cmap=plt.get_cmap('jet'),
                         interpolation='nearest',
                         vmin=v_min, vmax=v_max)
 
         plt.title('{0}'.format(title))
-        cax = fig.add_axes([0.12, 0.3, 0.78, 0.03])
-        fig.colorbar(im, cax=cax, orientation='horizontal')
+        cax = fig.add_axes([0.02, 0.25, 0.01, 0.4])
+        fig.colorbar(im, cax=cax, orientation='vertical')
         plt.draw()
 
 
