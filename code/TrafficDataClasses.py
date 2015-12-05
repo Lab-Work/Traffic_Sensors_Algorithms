@@ -1,4 +1,4 @@
-__author__ = 'Yanning Li (emlynlyn@gmail.com), Fangyu Wu (fwu10@illinois.edu)'
+__author__ = 'Yanning Li (yli171@illinois.edu), Fangyu Wu (fwu10@illinois.edu)'
 
 """
 The classes interface with the data files. It reads the data, conducts statistic analysis of the data, and visualizes
@@ -102,7 +102,6 @@ class TrafficData:
 
         f.close()
 
-
     def line_parser(self, line=None):
         """
         This function parses each line of data and save in corresponding class property. Need to be updated if new data
@@ -190,17 +189,19 @@ class TrafficData:
             print 'Error: unrecognized data format.'
             return -1
 
-
     def parse_time(self, datetime_str=None):
         """
-        This funciton parses the datestr in format %Y%m%d_%H%M%S_f
-        :param datetime_str: The date string, %Y%m%d_%H%M%S_f
+        This funciton parses the datestr in format %Y%m%d_%H%M%S_%f
+        :param datetime_str: The datetime string, %Y%m%d_%H%M%S_%f
         :return: datetime type
         """
-        return datetime.strptime(datetime_str, "%Y%m%d_%H%M%S_f")
+        if datetime_str is None:
+            print 'Error: invalid date time string for parse_time'
+            return None
+        else:
+            return datetime.strptime(datetime_str, "%Y%m%d_%H%M%S_f")
 
-
-    def subtract_PIR_background(self, background_duration):
+    def subtract_PIR_background(self, background_duration=100):
         """
         This function subtracts the background of the PIR sensor data; the background is defined as the median of the
         past background_duration samples
@@ -235,7 +236,6 @@ class TrafficData:
 
             self.PIR[pir_mxn]['cleaned_data'] = np.array(self.PIR[pir_mxn]['cleaned_data'])
 
-
     def calculate_std(self):
         """
         Statistic Analysis:
@@ -267,14 +267,237 @@ class TrafficData:
             mean[pir_mxn] = np.array(mean[pir_mxn])
             std[pir_mxn] = np.array(std[pir_mxn])
 
-
-            mu_2x16.reshape((16,2)).T
+            mean[pir_mxn] = mean[pir_mxn].reshape((col,row)).T
+            std[pir_mxn] = std[pir_mxn].reshape((col,row)).T
 
         return mean, std
 
+    def plot_histogram_for_pixel(self, pixel_list=list()):
+        """
+        Statistic Analysis:
+        This function plots the histogram of the raw data for a selected pixel, to better understand the noise
+        :param pixel_list: list of tuples, [('pir_1x16', [(1,1),(1,5)]), ('pir_2x16', [(1,1),(2,1)]) ]
+        :return: one figure for each pixel
+        """
 
+        mu, sigma = self.calculate_std()
 
+        for pir_mxn in pixel_list:
 
+            pir_mxn_name = pir_mxn[0]
+            pixels = pir_mxn[1]
+            if pir_mxn_name not in self.PIR.keys():
+                print 'Error: incorrect pixel definition.'
+                return -1
+
+            # get the size of this pir data set
+            row, col = self.PIR[pir_mxn]['raw_data']
+
+            for pixel in pixels:
+
+                pixel_index = (pixel[1]-col)*row + (pixel[0]-1)
+
+                # grab the data
+                time_series = self.PIR[pir_mxn]['raw_data'][pixel_index, :]
+
+                # the histogram of the data
+                num_bins = 50
+                fig = plt.figure(figsize=(16,8), dpi=100)
+                n, bins, patches = plt.hist(time_series, num_bins,
+                                            normed=1, facecolor='green', alpha=0.75)
+
+                # add a 'best fit' line
+                norm_fit_line = mlab.normpdf(bins, mu[pir_mxn][pixel],
+                                                   sigma[pixel])
+                l = plt.plot(bins, norm_fit_line, 'r--', linewidth=1)
+
+                plt.xlabel('Temperature ($^{\circ}C$)')
+                plt.ylabel('Probability')
+                plt.title(r'Histogram of pixel {0} for set {1}: $\mu$= {2}, $\sigma$={3}'.format(pixel,
+                                                                                                 pir_mxn_name,
+                                                                                                 mu[pixel],
+                                                                                                 sigma[pixel]))
+            # plt.axis([40, 160, 0, 0.03])
+            plt.grid(True)
+
+        plt.draw()
+
+    def plot_time_series_for_pixel(self, t_start_str=None, t_end_str=None,
+                                   pixel_list=list(), data_option=None):
+        """
+        Visualization:
+        This function plots the time series from t_start to t_end for pixels in pixel_list; data_option specifies whether
+        it should plot the raw data or the data with background removed.
+        :param t_start_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param t_end_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param pixel_list: list of tuples, [('pir_1x16', [(1,1),(1,5)]), ('pir_2x16', [(1,1),(2,1)]) ]
+        :param data_option: string, 'raw', 'cleaned'
+        :return: a figure with all the pixels time series
+        """
+
+        time_series_to_plot = []
+
+        for pir_mxn in pixel_list:
+
+            pir_mxn_name = pir_mxn[0]
+            pixels = pir_mxn[1]
+            if pir_mxn_name not in self.PIR.keys():
+                print 'Error: incorrect pixel definition.'
+                return -1
+
+            # get the size of this pir data set
+            row, col = self.PIR[pir_mxn]['raw_data']
+
+            for pixel in pixels:
+
+                # This pixel is used to get the raw and cleaned data
+                pixel_index = (pixel[1]-col)*row + (pixel[0]-1)
+
+                timestamps = self.PIR[pir_mxn]['time']
+
+                # get the data for the corresponding pixel
+                if data_option == 'raw':
+                    data = self.PIR[pir_mxn]['raw_data'][pixel_index, :]
+                elif data_option == 'cleaned':
+                    data = self.PIR[pir_mxn]['cleaned_data'][pixel_index, :]
+                else:
+                    data = []
+                    print 'Error: pixel {0} is not recognized'.format(pixel)
+
+                pixel_series = {}
+                pixel_series['info'] = pixel
+                pixel_series['time'] = timestamps
+                pixel_series['data'] = data
+
+                time_series_to_plot.append(pixel_series)
+
+                # call the generic function to plot
+                self.plot_time_series(None, time_series_to_plot, t_start_str, t_end_str)
+
+    def plot_time_series(self, fig_handle=None, time_series_list=list(),
+                         t_start_str=None, t_end_str=None):
+        """
+        Visualization:
+        This function plots all the time series in the time_series_list, which offers more flexibility.
+        :param fig_handle: fig or ax handle to plot on; create new figure if None
+        :param time_series_list: list, [time_series_1, time_series_2,...];
+                                 time_series_n: dict; time_series_n['info'] = string or label in figure
+                                                      time_series_n['time'] = list of float
+                                                      time_series_n['data'] = list of float
+        :param t_start_str: The datetime string, %Y%m%d_%H%M%S_%f
+        :param t_end_str: The datetime string, %Y%m%d_%H%M%S_%f
+        :return: a (new) figure with all time series
+        """
+        # plot in new figure window if not specified
+        if fig_handle is None:
+            fig = plt.figure(figsize=(16,8), dpi=100)
+
+        for time_series in time_series_list:
+
+            if t_start_str is None or t_end_str is None:
+                # if not specified, then plot all data
+                time_to_plot = time_series['time']
+                data_to_plot = time_series['data']
+            else:
+                t_start = datetime.strptime(t_start_str, '%Y_%m_%d_%H_%M_%S_%f')
+                t_end = datetime.strptime(t_end_str, '%Y_%m_%d_%H_%M_%S_%f')
+
+                index_start = time_series['time'] >= t_start
+                index_end = time_series['time'] <= t_end
+                index = index_start & index_end
+
+                time_to_plot = time_series['time'][index]
+                data_to_plot = time_series['data'][index]
+
+            plt.plot(time_to_plot, data_to_plot, label=time_series['info'])
+
+        plt.title('Time series')
+        plt.ylabel('Temperature ($^{\circ}C$)')
+        plt.xlabel('Time')
+        plt.legend()
+        plt.grid(True)
+        plt.draw()
+
+    def plot_heat_map_in_period(self, t_start_str=None, t_end_str=None,
+                                T_min=None, T_max=None, data_option=None):
+        """
+        Visualization:
+        This function plots the heat map from t_start to t_end with each frame 1x16 pixels
+                    stacked column by column to 16 x n samples
+        :param t_start_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param t_end_str: str %Y_%m_%d_%H_%M_%S_%f e.g. 2015_11_31_15_23_33_123456
+        :param T_min: the min temperature for the color bar
+        :param T_max: the max temperature for the color bar
+        :param data_option: string 'raw' or 'cleaned'; 'cleaned' removed the background
+        :return: a figure with 16 x n color map for n frame
+        """
+
+        for pir_mxn in self.PIR.keys():
+
+            if t_start_str is None or t_end_str is None:
+
+                if data_option == 'raw':
+                    temperature_mxn = self.PIR[pir_mxn]['raw_data']
+                elif data_option == 'cleaned':
+                    temperature_mxn = self.PIR[pir_mxn]['cleaned_data']
+                else:
+                    print 'Error: data_option not recognized'
+                    return
+
+                self.plot_2d_colormap(temperature_mxn, T_min, T_max, 'All data')
+
+            else:
+                t_start = datetime.strptime(t_start_str, '%Y_%m_%d_%H_%M_%S_%f')
+                t_end = datetime.strptime(t_end_str, '%Y_%m_%d_%H_%M_%S_%f')
+
+                index_start = self.PIR[pir_mxn]['time'] >= t_start
+                index_end = self.PIR[pir_mxn]['time'] <= t_end
+                index = index_start & index_end
+
+                if data_option == 'raw':
+                    temperature_mxn = self.PIR[pir_mxn]['raw_data'][:,index]
+                elif data_option == 'cleaned':
+                    temperature_mxn = self.PIR[pir_mxn]['cleaned_data'][:,index]
+                else:
+                    print 'Error: data_option not recognized'
+                    return
+
+                temperature_mxn = np.array(temperature_mxn)
+
+                self.plot_2d_colormap(temperature_mxn, T_min, T_max, '{0}: {1} to {2}'.format(
+                                      t_start.strftime('%Y/%m/%d'),
+                                      t_start.strftime('%H:%M:%S.%f'),
+                                      t_end.strftime('%H:%M:%S.%f')))
+
+    def plot_2d_colormap(self, data_to_plot=None, v_min=None, v_max=None, title=None):
+        """
+        Visualization:
+        This function is a universal function for plotting a 2d color map.
+        :param data_to_plot: a 2D float array with values to be plotted
+        :param v_min: the min value for the color bar; if None, will use min(data_to_plot)
+        :param v_max: the max value for the color bar; if None, will use max(data_to_plot)
+        :param title: string, the title for the figure
+        :return: a 2d colormap figure
+        """
+
+        if v_min is None:
+            v_min = np.min(data_to_plot)
+        if v_max is None:
+            v_max = np.max(data_to_plot)
+
+        # adjust the figure width and height to best represent the data matrix
+        row,col = data_to_plot.shape
+
+        fig = plt.figure(figsize=( int(1.2*col/row)*8,8), dpi=100)
+        im = plt.imshow(data_to_plot,
+                        cmap=plt.get_cmap('jet'),
+                        interpolation='nearest',
+                        vmin=v_min, vmax=v_max)
+
+        plt.title('{0}'.format(title))
+        cax = fig.add_axes([0.02, 0.25, 0.01, 0.4])
+        fig.colorbar(im, cax=cax, orientation='vertical')
+        plt.draw()
 
 
 
@@ -1195,7 +1418,6 @@ class TrafficData_1x16:
                     )
 
         self.pir_data_cleaned = np.array(self.pir_data_cleaned)
-
 
     def calculate_std(self):
         """
