@@ -125,6 +125,7 @@ class TrafficData:
             else:
                 self.PIR['pir_1x16_2nd']['time'].append( self.parse_time(items[1]) )
                 self.PIR['pir_1x16_2nd']['Ta'].append( float(items[2]) )
+
                 for i in range(0, 16):
                     self.PIR['pir_1x16_2nd']['raw_data'][i].append( float(items[i+3]) )
 
@@ -137,6 +138,7 @@ class TrafficData:
             else:
                 self.PIR['pir_2x16']['time'].append( self.parse_time(items[1]) )
                 self.PIR['pir_2x16']['Ta'].append( float(items[2]) )
+
                 for i in range(0, 32):
                     self.PIR['pir_2x16']['raw_data'][i].append( float(items[i+3]) )
 
@@ -148,6 +150,7 @@ class TrafficData:
                     self.PIR['pir_4x48']['raw_data'].append([])
             else:
                 self.PIR['pir_4x48']['time'].append( self.parse_time(items[1]) )
+
                 self.PIR['pir_4x48']['Ta'].append( float(items[2]) )
                 for i in range(0, 192):
                     self.PIR['pir_4x48']['raw_data'][i].append( float(items[i+3]) )
@@ -161,16 +164,16 @@ class TrafficData:
 
         elif 'IMU' in line:
             if len(self.IMU.keys()) == 0:
-                self.IMU = {'time':[],'accel':[], 'mag':[], 'gyro':[]}
+                self.IMU = {'time':[], 'mag':[], 'accel':[], 'gyro':[]}
                 for i in range(0,3):
-                    self.IMU['accel'].append([])
                     self.IMU['mag'].append([])
+                    self.IMU['accel'].append([])
                     self.IMU['gyro'].append([])
             else:
                 self.USON['time'].append(self.parse_time(items[1]))
                 for i in range(0,3):
-                    self.IMU['accel'][i].append(float(items[i+2]))
-                    self.IMU['mag'][i].append(float(items[i+5]))
+                    self.IMU['mag'][i].append(float(items[i+2]))
+                    self.IMU['accel'][i].append(float(items[i+5]))
                     self.IMU['gyro'][i].append(float(items[i+8]))
 
         elif 'LABEL' in line:
