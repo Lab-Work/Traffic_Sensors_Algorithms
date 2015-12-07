@@ -14,6 +14,10 @@ Concretely, the repository contains the following components:
     - `hough_line_transform.py` an experimental Hough line transformation model
     - `hex_converter.py` a script to convert raw hexadecimal PIR data to decimal format
     - `cookb_signalsmooth.py` Gaussian filter
+- `code/`
+    - `TrafficDataClass.py` a universal traffic data class which handles different PIR configuration data in the format specified in Data_Collection_Manual.pdf
+    - `analyze~.py` short scripts which performs simple plotting and analysis of the data
+    - `test~.py` a script for debugging the TrafficDataClass
 - `vehicle_detection.py` vehicle detection models
 - `speed_estimation.py` speed estimation models
 - `logger.py` a small traffic logger for creating manual traffic labels
