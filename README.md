@@ -5,8 +5,8 @@ The repository constains quick **implementations of vehicle detectoin and speed 
 Concretely, the repository contains the following components:
 
 - `datasets/`
-    - `tsa_090315/` data collected on september 3, 2015
-    - `tsa_old/` an archive of old data
+    - All field data sets are now saved in Google Drive: https://drive.google.com/open?id=0B1EgxrmaGlFaN29sOUNmNl9INUE
+    - `data_~_Noise_Analysis/` folders containing the dataset and results for analyzing the PIR noise. 
 - `tools/`
     - `_parser.py` a parser that parse original sensors csv data into Python lists
     - `colormap.py` a visualization tool to generate colormaps
