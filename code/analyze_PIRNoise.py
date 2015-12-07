@@ -12,7 +12,7 @@ from os.path import exists
 import sys
 import time
 
-from TrafficDataClasses import *
+from TrafficDataClass import *
 
 # file_str_list_8Hz = ['./datasets/data_11_12_Noise_Analysis/PIR_32Hz_4x48.csv']
 file1 = ['./datasets/data_11_13_Noise_Analysis/PIR_32Hz_1_2x16.csv']

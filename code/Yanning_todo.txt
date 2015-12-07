@@ -1,16 +1,15 @@
 Classes under development:
-- TrafficDataClasses
+- TrafficDataClass
 
 
 Nov 12 updates:
 1. Added a few statistic analysis functions: plotting the time series and the 2d map of the pixels.
 
+Dec 6 updates:
+- Wrote a Data Collection Manual which defines the data format.
+- Developed an universal data class which can handle different PIR configurations.
+
 
 TODO:
-1. Integrate Fangyu’s parser in the class
-2. add default values for the arguments for easier use
-3. plot the heat map
-
-
-Issue:
-1. plot_time_series_for_pixel: plots three figures incrementally with more lines, instead of just one figure with all lines.
+- Develop a vehicle detection and speed estimation class.
+- Add more functionality in the TrafficDataClass

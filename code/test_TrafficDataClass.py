@@ -1,7 +1,7 @@
 __author__ = 'Yanning'
 
 
-from TrafficDataClasses import *
+from TrafficDataClass import *
 
 file = 'cleaned_data.csv'
 
