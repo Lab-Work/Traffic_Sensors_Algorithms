@@ -18,7 +18,7 @@ The structure of each class:
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
-import csv
+import matplotlib.dates as mdates
 from datetime import datetime
 from os.path import exists
 import sys
@@ -85,18 +85,18 @@ class TrafficData:
         print '--IMU dataset:'
         for key in self.IMU.keys():
             self.IMU[key] = np.array(self.IMU[key])
-        print '----Accel: {0} sampels from {1} to {2}'.format(len(self.IMU['accel']),
+        print '----mag: {0} sampels from {1} to {2}'.format(len(self.IMU['mag'][0]),
                                                                    self.IMU['time'][0].time(),
                                                                    self.IMU['time'][-1].time())
-        print '----Mag: {0} sampels from {1} to {2}'.format(len(self.IMU['mag']),
+        print '----accel: {0} sampels from {1} to {2}'.format(len(self.IMU['accel'][0]),
                                                                    self.IMU['time'][0].time(),
                                                                    self.IMU['time'][-1].time())
-        print '----Gyro: {0} sampels from {1} to {2}'.format(len(self.IMU['gyro']),
+        print '----gyro: {0} sampels from {1} to {2}'.format(len(self.IMU['gyro'][0]),
                                                                    self.IMU['time'][0].time(),
                                                                    self.IMU['time'][-1].time())
         for key in self.LABEL.keys():
             self.LABEL[key] = np.array(self.LABEL[key])
-        print '--LABEL: {0} labels from {1} to {2}'.format(len(self.LABEL['time']),
+        print '--LABEL: {0} labels from {1} to {2}\n'.format(len(self.LABEL['time']),
                                                                    self.LABEL['time'][0].time(),
                                                                    self.LABEL['time'][-1].time())
 
@@ -157,10 +157,10 @@ class TrafficData:
 
         elif 'USON' in line:
             if len(self.USON.keys()) == 0:
-                self.USON = {'time':[],'data':[]}
+                self.USON = {'time':[],'distance':[]}
             else:
                 self.USON['time'].append( self.parse_time(items[1]) )
-                self.USON['data'].append(float(items[2]))
+                self.USON['distance'].append(float(items[2]))
 
         elif 'IMU' in line:
             if len(self.IMU.keys()) == 0:
@@ -170,7 +170,7 @@ class TrafficData:
                     self.IMU['accel'].append([])
                     self.IMU['gyro'].append([])
             else:
-                self.USON['time'].append(self.parse_time(items[1]))
+                self.IMU['time'].append(self.parse_time(items[1]))
                 for i in range(0,3):
                     self.IMU['mag'][i].append(float(items[i+2]))
                     self.IMU['accel'][i].append(float(items[i+5]))
@@ -202,13 +202,23 @@ class TrafficData:
             print 'Error: invalid date time string for parse_time'
             return None
         else:
-            return datetime.strptime(datetime_str, "%Y%m%d_%H:%M:%S_f")
+            return datetime.strptime(datetime_str, "%Y%m%d_%H:%M:%S_%f")
 
-    def subtract_PIR_background(self, background_duration=100):
+    def time_to_string(self, dt):
+        """
+        This function returns a string in format %Y%m%d_%H:%M:%S_%f
+        :param dt: datetime type
+        :return: str
+        """
+        return dt.strftime("%Y%m%d_%H:%M:%S_%f")
+
+
+    def subtract_PIR_background(self, background_duration=100, save_in_file_name=None):
         """
         This function subtracts the background of the PIR sensor data; the background is defined as the median of the
         past background_duration samples
         :param background_duration: int, the number of samples regarded as the background
+        :param save_in_file_name: string, the file name which saves the cleaned data; Put None if not save
         :return: data saved in self.pir_data_background_removed
         """
 
@@ -216,7 +226,7 @@ class TrafficData:
         for pir_mxn in self.PIR.keys():
 
             # row is number of pixels, and col is the number of samples
-            row, col = self.PIR[pir_mxn]['raw_data']
+            row, col = self.PIR[pir_mxn]['raw_data'].shape
 
             # initialize the cleaned data
             self.PIR[pir_mxn]['cleaned_data'] = []
@@ -239,6 +249,52 @@ class TrafficData:
 
             self.PIR[pir_mxn]['cleaned_data'] = np.array(self.PIR[pir_mxn]['cleaned_data'])
 
+        print 'Background subtracted in PIR data, saved in self.PIR["cleaned_data"]\n'
+
+        # save cleaned data in file in the same format specified in Data Collection Manual
+        if save_in_file_name is not None:
+            self.save_data_in_file(save_in_file_name)
+
+    def save_data_in_file(self, file_name_str='cleaned_data.csv'):
+        """
+        Saves the PIR, IMU, USON, LABEL data from the key-value store to files in Data Collection Manual format
+        :param file_name_str: the file name to save in
+        :return: 0 if successful
+        """
+
+        f = open(file_name_str, 'w')
+
+        # For all the PIR data
+        for pir_mxn in self.PIR.keys():
+
+            for sample in range(0, len(self.PIR[pir_mxn]['time'])):
+
+                f.write('PIR_{0},{1},{2},{3}\n'.format(pir_mxn.split('_')[1],
+                                                       self.time_to_string( self.PIR[pir_mxn]['time'][sample] ),
+                                                       self.PIR[pir_mxn]['Ta'][sample],
+                                                       ','.join( str(i) for i in self.PIR[pir_mxn]['cleaned_data'][:,sample])))
+
+        # For all the IMU data
+        for sample in range(0, len(self.IMU['time'])):
+
+            f.write('IMU,{0},{1},{2},{3}\n'.format(self.time_to_string( self.IMU['time'][sample] ),
+                                                   ','.join( str(i) for i in self.IMU['mag'][:,sample]),
+                                                   ','.join( str(i) for i in self.IMU['accel'][:,sample]),
+                                                   ','.join( str(i) for i in self.IMU['gyro'][:,sample]) ) )
+        # For all the Ultrasonic data
+        for sample in range(0, len(self.USON['time'])):
+            f.write('USON,{0},{1}\n'.format( self.time_to_string( self.USON['time'][sample] ),
+                                           self.USON['distance'][sample] ) )
+
+        # For all the labled data
+        for sample in range(0, len(self.LABEL['time'])):
+            f.write('LABEL,{0},{1},{2}\n'.format( self.time_to_string( self.LABEL['time'][sample] ),
+                                                  self.LABEL['count'][sample],
+                                                  self.LABEL['speed'][sample]) )
+
+
+
+
     def calculate_std(self):
         """
         Statistic Analysis:
@@ -255,11 +311,11 @@ class TrafficData:
             mean[pir_mxn] = []
             std[pir_mxn] = []
 
-            row, col = self.PIR[pir_mxn]['raw_data']
-            for pixel in range(0, row):
+            num_pixels, num_samples = self.PIR[pir_mxn]['raw_data'].shape
+            for pixel in range(0, num_pixels):
 
                 # For each pixel
-                if len(self.PIR[pir_mxn][pixel]) != 0:
+                if len(self.PIR[pir_mxn]['raw_data'][pixel]) != 0:
                     mean[pir_mxn].append( np.mean(self.PIR[pir_mxn]['raw_data'][pixel] ) )
                     std[pir_mxn].append( np.std(self.PIR[pir_mxn]['raw_data'][pixel] ) )
 
@@ -270,6 +326,9 @@ class TrafficData:
             mean[pir_mxn] = np.array(mean[pir_mxn])
             std[pir_mxn] = np.array(std[pir_mxn])
 
+            row, col = pir_mxn.split('_')[1].split('x')
+            row = int(row)
+            col = int(col)
             mean[pir_mxn] = mean[pir_mxn].reshape((col,row)).T
             std[pir_mxn] = std[pir_mxn].reshape((col,row)).T
 
@@ -288,16 +347,16 @@ class TrafficData:
         mu, sigma = self.calculate_std()
 
         # For each PIR configuration
-        for pir_mxn in pixel_list:
+        for pir_mxn_list in pixel_list:
 
-            pir_mxn_name = pir_mxn[0]
-            pixels = pir_mxn[1]
-            if pir_mxn_name not in self.PIR.keys():
+            pir_mxn = pir_mxn_list[0]
+            pixels = pir_mxn_list[1]
+            if pir_mxn not in self.PIR.keys():
                 print 'Error: incorrect pixel definition.'
                 return -1
 
             # get the size of this pir data set
-            row, col = pir_mxn_name.split('_')[1].split('x')
+            row, col = pir_mxn.split('_')[1].split('x')
             row = float(row)
             col = float(col)
 
@@ -324,17 +383,21 @@ class TrafficData:
                 n, bins, patches = plt.hist(time_series, num_bins,
                                             normed=1, facecolor='green', alpha=0.75)
 
+                # Need tuple for indexing. Make sure is tuple
+                if not isinstance(pixel, tuple):
+                    pixel = tuple(pixel)
+
                 # add a 'best fit' line
                 norm_fit_line = mlab.normpdf(bins, mu[pir_mxn][pixel],
-                                                   sigma[pixel])
+                                                   sigma[pir_mxn][pixel])
                 l = plt.plot(bins, norm_fit_line, 'r--', linewidth=1)
 
                 plt.xlabel('Temperature ($^{\circ}C$)')
                 plt.ylabel('Probability')
                 plt.title(r'Histogram of pixel {0} for set {1}: $\mu$= {2}, $\sigma$={3}'.format(pixel,
-                                                                                                 pir_mxn_name,
-                                                                                                 mu[pixel],
-                                                                                                 sigma[pixel]))
+                                                                                                 pir_mxn,
+                                                                                                 mu[pir_mxn][pixel],
+                                                                                                 sigma[pir_mxn][pixel]))
             # plt.axis([40, 160, 0, 0.03])
             plt.grid(True)
 
@@ -355,16 +418,16 @@ class TrafficData:
 
         time_series_to_plot = []
 
-        for pir_mxn in pixel_list:
+        for pir_mxn_list in pixel_list:
 
-            pir_mxn_name = pir_mxn[0]
-            pixels = pir_mxn[1]
-            if pir_mxn_name not in self.PIR.keys():
+            pir_mxn = pir_mxn_list[0]
+            pixels = pir_mxn_list[1]
+            if pir_mxn not in self.PIR.keys():
                 print 'Error: incorrect pixel definition.'
                 return -1
 
             # get the size of this pir data set
-            row, col = pir_mxn_name.split('_')[1].split('x')
+            row, col = pir_mxn.split('_')[1].split('x')
             row = float(row)
             col = float(col)
 
@@ -391,8 +454,8 @@ class TrafficData:
 
                 time_series_to_plot.append(pixel_series)
 
-                # call the generic function to plot
-                self.plot_time_series(None, time_series_to_plot, t_start_str, t_end_str)
+            # call the generic function to plot
+            self.plot_time_series(None, time_series_to_plot, t_start_str, t_end_str)
 
     def plot_time_series(self, fig_handle=None, time_series_list=list(),
                          t_start_str=None, t_end_str=None):
@@ -411,6 +474,9 @@ class TrafficData:
         # plot in new figure window if not specified
         if fig_handle is None:
             fig = plt.figure(figsize=(16,8), dpi=100)
+            ax = fig.add_subplot(111)
+        else:
+            ax = fig_handle.subplot(111)
 
         for time_series in time_series_list:
 
@@ -431,9 +497,13 @@ class TrafficData:
 
             plt.plot(time_to_plot, data_to_plot, label=time_series['info'])
 
+        ax.xaxis.set_major_locator(mdates.MinuteLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+
         plt.title('Time series')
         plt.ylabel('Temperature ($^{\circ}C$)')
         plt.xlabel('Time')
+
         plt.legend()
         plt.grid(True)
         plt.draw()
@@ -484,6 +554,7 @@ class TrafficData:
 
                 temperature_mxn = np.array(temperature_mxn)
 
+                print 'Temperature range: {0} ~ {1}\n'.format(np.min(temperature_mxn), np.max(temperature_mxn))
                 self.plot_2d_colormap(temperature_mxn, T_min, T_max, '{0}: {1} to {2}'.format(
                                       t_start.strftime('%Y/%m/%d'),
                                       t_start.strftime('%H:%M:%S.%f'),
@@ -506,9 +577,15 @@ class TrafficData:
             v_max = np.max(data_to_plot)
 
         # adjust the figure width and height to best represent the data matrix
+        # Best figure size (,12):(480,192)
         row,col = data_to_plot.shape
+        fig_height = 12
+        fig_width = int(0.8*col/row)*12
+        if fig_width >= 2000:
+            # two wide
+            fig_width = 2000
 
-        fig = plt.figure(figsize=( int(1.2*col/row)*8,8), dpi=100)
+        fig = plt.figure(figsize=( fig_width, fig_height), dpi=100)
         im = plt.imshow(data_to_plot,
                         cmap=plt.get_cmap('jet'),
                         interpolation='nearest',
