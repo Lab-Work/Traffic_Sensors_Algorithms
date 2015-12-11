@@ -38,8 +38,8 @@ The project is mainly developed in Python 2. In order to run most of the scripts
 Run the program with `logger.py`. Enter anything and press enter to make a log. Type 'exit' to terminate the program. The log file will be automatically stored in the working directory.
 
 Below is a list of YouTube videos that provide visualization for collected dataset:
-	- June 25th: https://www.youtube.com/watch?v=U-MzDkoVVvI
-	- September 3rd: https://www.youtube.com/watch?v=AKLSiwKt6Aw
+- June 25th: https://www.youtube.com/watch?v=U-MzDkoVVvI
+- September 3rd: https://www.youtube.com/watch?v=AKLSiwKt6Aw
 
 # Future Works
 
