@@ -16,11 +16,10 @@ Concretely, the repository contains the following components:
     - `hex_converter.py` a script to convert raw hexadecimal PIR data to decimal format
     - `cookb_signalsmooth.py` Gaussian filter
 - `code/`
-    - `TrafficDataClass.py` a universal traffic data class which handles different PIR configuration data in the format specified in Data_Collection_Manual.pdf
+    - `TrafficDataClass.py` a universal traffic data class which handles different PIR configuration data in the format specified in data_collection\manual.pdf
+	- `TrafficModelsClass.py` a model-packed class used for vehicle detection and speed estimation.
     - `analyze~.py` short scripts which performs simple plotting and analysis of the data
     - `test~.py` a script for debugging the TrafficDataClass
-- `vehicle_detection.py` vehicle detection models
-- `speed_estimation.py` speed estimation models
 - `logger.py` a small traffic logger for creating manual traffic labels
 - `visualization`
     - `colormaps_row` visualization of colormaps in row major
@@ -32,18 +31,14 @@ Concretely, the repository contains the following components:
 
 The project is mainly developed in Python 2. In order to run most of the scripts, users would need Python 2 as well as Numpy, Matplotlib, and scikit-learn libraries.
 
-# Vehicle Detection
-
-Run the test with `vehicle_detection.py`. The functionality has yet to be fully developed.
-
-# Speed Estimation
-
-Run the test with `speed_estimation.py`. The functionality has yet to be fully developed.
-
 # Data Collection
 
 Run the program with `logger.py`. Enter anything and press enter to make a log. Type 'exit' to terminate the program. The log file will be automatically stored in the working directory.
-https://www.youtube.com/watch?v=AKLSiwKt6Aw
+
+Below is a list of YouTube videos that provide visualization for collected dataset:
+	- June 25th: https://www.youtube.com/watch?v=U-MzDkoVVvI
+	- September 3rd: https://www.youtube.com/watch?v=AKLSiwKt6Aw
+
 # Future Works
 
 To use off-the-shell tools to do camera vehicle detection to expand the contents of label data. 
