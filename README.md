@@ -21,9 +21,9 @@ Concretely, the repository contains the following components:
     - `analyze~.py` short scripts which performs simple plotting and analysis of the data
     - `test~.py` a script for debugging the TrafficDataClass
 - `data_collection/`
-	- `manual.pdf` the protocol by which the input data is stored
-	- `tables.pdf` the tables to be filled by hardware tester(s) and field work surveyer(s)
-	- `logger.py` a small traffic logger for creating manual traffic labels
+    - `manual.pdf` the protocol by which the input data is stored
+    - `tables.pdf` the tables to be filled by hardware tester(s) and field work surveyer(s)
+    - `logger.py` a small traffic logger for creating manual traffic labels
 - `visualization`
     - `colormaps_row` visualization of colormaps in row major
     - `colormaps_col` visualization of colormaps in column major
