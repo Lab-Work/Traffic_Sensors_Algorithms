@@ -84,14 +84,21 @@ def find_slope(PIR_data, begin, end, distance, display=False):
     #            #Pixel.append(idx)
     #    t += 1
     
-    threshold = np.percentile(passing_window, 80)
+    threshold = np.percentile(passing_window, 90)
     for sample in passing_window:
         for idx in np.arange(len(sample)):
             if sample[idx] > threshold:
                 for iter in range(int(sample[idx])):
-                    Time.append(t + np.random.random())
-                    Pixel.append(distance_book[idx/4] * 
-                                 (1 + 0.05*np.random.random()))
+                    if idx/4 > 0:
+                        Time.append(t + np.random.random())
+                        Pixel.append(distance_book[idx/4] + 
+                            (distance_book[idx/4]-distance_book[idx/4-1]) *
+                            np.random.random())
+                    elif idx/4 < 0:
+                        Time.append(t + np.random.random())
+                        Pixel.append(distance_book[idx/4] + 
+                            (distance_book[idx/4+1]-distance_book[idx/4]) *
+                            np.random.random())
         t += 1
 
     Time = np.array(Time).reshape((len(Time),1))

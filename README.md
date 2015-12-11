@@ -1,6 +1,6 @@
 # Traffic Sensors Algorithms
 
-The repository constains quick **implementations of vehicle detectoin and speed estimation algorithms** and **tools for data processing and visualization**. 
+The repository constains quick **implementations of vehicle detectoin and speed estimation algorithms** and **tools for data processing and visualization**.
 
 Concretely, the repository contains the following components:
 
@@ -30,7 +30,7 @@ Concretely, the repository contains the following components:
 
 # Installation
 
-The project is mainly developed in Python 2. In order to run most of the scripts, users would need Python 2 as well as Numpy and Matplotlib libraries. Specifically, to run the Hough line transformation, one should also install OpenCV Python libray.
+The project is mainly developed in Python 2. In order to run most of the scripts, users would need Python 2 as well as Numpy, Matplotlib, and scikit-learn libraries.
 
 # Vehicle Detection
 
@@ -43,7 +43,7 @@ Run the test with `speed_estimation.py`. The functionality has yet to be fully d
 # Data Collection
 
 Run the program with `logger.py`. Enter anything and press enter to make a log. Type 'exit' to terminate the program. The log file will be automatically stored in the working directory.
-
+https://www.youtube.com/watch?v=AKLSiwKt6Aw
 # Future Works
 
-To write a shell script that can automatically compile videos from specified datasets.
+To use off-the-shell tools to do camera vehicle detection to expand the contents of label data. 
