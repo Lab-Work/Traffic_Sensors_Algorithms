@@ -1,0 +1,10 @@
+Winter 2015
+- Port old code into new standards
+- Build vehicle detection benchmark from human percetion
+- Test energy-based robust multi-model regression (PEARL)
+- Test existing vehicle detection algorithm using camera video from OpenCV
+
+Spring 2016
+- Test reinforcement learning using camera label
+- Test smoothing using HMM
+- Develop Python GUI
