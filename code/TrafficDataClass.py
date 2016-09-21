@@ -31,6 +31,7 @@ import sys
 import time
 import glob
 from sklearn import mixture
+import cv2
 
 
 
@@ -173,32 +174,32 @@ class TrafficData:
                                                               t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
                                                               t_end_str= self.time_to_string(periods[sensor_id][1]) )
 
-            self.PIR[sensor_id]['norm_temp_data'] = (self.PIR[sensor_id]['temp_data'] - noise_mu)/noise_std
+            self.PIR[sensor_id]['norm_temp_data'] = (self.PIR[sensor_id]['temp_data'] - noise_mu)/noise_std*32
 
-            # self.PIR[sensor_id]['norm_temp_data'][ self.PIR[sensor_id]['norm_temp_data'] > 2 ] = 2
-            # self.PIR[sensor_id]['norm_temp_data'][ self.PIR[sensor_id]['norm_temp_data'] < -255 ] = -255
+            self.PIR[sensor_id]['norm_temp_data'][ self.PIR[sensor_id]['norm_temp_data'] > 255 ] = 255
+            self.PIR[sensor_id]['norm_temp_data'][ self.PIR[sensor_id]['norm_temp_data'] < 0 ] = 0
 
             # visualize the data
             # self.plot_histogram_for_pixel(t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
             #                               t_end_str= self.time_to_string( periods[sensor_id][1]),
             #                           pixel_list=[(sensor_id, [(0,4), (1,8), (2, 12), (3, 15)])], data_type='norm_temp_data')
 
-            self.plot_heat_map_in_period(sensor_id=sensor_id, data_type='norm_temp_data',
-                                         t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
-                                         t_end_str= self.time_to_string(periods[sensor_id][1]),
-                                         T_min=1, T_max=None, option='vec')
-            self.plot_heat_map_in_period(sensor_id=sensor_id, data_type='norm_temp_data',
-                                         t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
-                                         t_end_str= self.time_to_string(periods[sensor_id][1]),
-                                         T_min=1, T_max=None, option='max')
-            self.plot_heat_map_in_period(sensor_id=sensor_id, data_type='norm_temp_data',
-                                         t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
-                                         t_end_str= self.time_to_string(periods[sensor_id][1]),
-                                         T_min=1, T_max=None, option='mean')
-            self.plot_heat_map_in_period(sensor_id=sensor_id, data_type='norm_temp_data',
-                                         t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
-                                         t_end_str= self.time_to_string(periods[sensor_id][1]),
-                                         T_min=1, T_max=None, option='tworow')
+            # self.plot_heat_map_in_period(sensor_id=sensor_id, data_type='norm_temp_data',
+            #                              t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
+            #                              t_end_str= self.time_to_string(periods[sensor_id][1]),
+            #                              T_min=1, T_max=15, option='vec')
+            # self.plot_heat_map_in_period(sensor_id=sensor_id, data_type='norm_temp_data',
+            #                              t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
+            #                              t_end_str= self.time_to_string(periods[sensor_id][1]),
+            #                              T_min=1, T_max=None, option='max')
+            # self.plot_heat_map_in_period(sensor_id=sensor_id, data_type='norm_temp_data',
+            #                              t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
+            #                              t_end_str= self.time_to_string(periods[sensor_id][1]),
+            #                              T_min=1, T_max=8, option='mean')
+            # self.plot_heat_map_in_period(sensor_id=sensor_id, data_type='norm_temp_data',
+            #                              t_start_str= self.time_to_string(periods[sensor_id][0] + dt),
+            #                              t_end_str= self.time_to_string(periods[sensor_id][1]),
+            #                              T_min=1, T_max=None, option='tworow')
 
 
     def calculate_std(self, sensor_id=None, data_type=None, t_start_str=None, t_end_str=None):
@@ -712,6 +713,31 @@ class TrafficData:
         plt.draw()
 
 
+    def save_as_avi(self, sensor_id=None, data_type='norm_temp_data', fps=64):
+        """
+        This function saves the selected data in avi file
+        :param sensor_id: the sensor id
+        :param data_type: 'raw_data' or 'temp_data'
+        :return:
+        """
+        scale  = 64
+
+        # fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        fourcc = cv2.cv.CV_FOURCC(*'XVID')
+        out = cv2.VideoWriter( sensor_id + ".avi",fourcc, fps, (16*scale,4*scale))
+        pir_cam = []
+        for frame in self.PIR[sensor_id][data_type]:
+            #print frame
+            img = np.asarray(frame).astype(np.uint8)
+            img = cv2.resize(img,None,fx=scale, fy=scale, interpolation = cv2.INTER_CUBIC)
+            #img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            img = cv2.applyColorMap(img, cv2.COLORMAP_JET)
+            out.write(img)
+
+            cv2.imshow("PIR Cam", img)
+            cv2.waitKey(10)
+        out.release()
+        cv2.destroyAllWindows()
 
 
 

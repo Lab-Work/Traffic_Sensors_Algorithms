@@ -11,10 +11,10 @@ __author__ = 'Yanning Li'
 # ================================================================================
 # configuration
 # read the data
-sensor_id = '60fov32hz'
+sensor_id = '60fov16hztemp'
 
-raw_data_file = '../datasets/data_09_15_2016/{0}.npy'.format(sensor_id)
-temp_data_file = '../datasets/data_09_15_2016/{0}temp.npy'.format(sensor_id)
+# raw_data_file = '../datasets/data_09_15_2016/{0}.npy'.format(sensor_id)
+temp_data_file = '../datasets/data_09_15_2016/{0}.npy'.format(sensor_id)
 
 
 
@@ -26,7 +26,7 @@ dt = timedelta(seconds=1)
 periods = data.get_data_periods('../datasets/data_09_15_2016/*.npy')
 
 data.normalize_data([temp_data_file], periods=periods, skip_dt=1)
-
+data.save_as_avi(sensor_id=sensor_id, data_type='norm_temp_data', fps=16)
 
 
 # data.load_npy_data(file_name_str=raw_data_file, sensor_id=sensor_id, data_type='raw_data')
@@ -45,7 +45,7 @@ data.normalize_data([temp_data_file], periods=periods, skip_dt=1)
 
 # data.plot_histogram_for_pixel(t_start_str=data.time_to_string(periods[sensor_id][0] + dt),
 #                               t_end_str=data.time_to_string(periods[sensor_id][1]),
-#                               pixel_list=[(sensor_id, [(0,1),(2,6)])],data_type='temp_data')
+#                               pixel_list=[(sensor_id, [(0,3),(1,7),(2,11),(3,15)])],data_type='temp_data')
 
 
 
