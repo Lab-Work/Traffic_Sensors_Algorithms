@@ -4,55 +4,29 @@ from datetime import timedelta
 import glob
 
 """
-This script is used to visualize the PIR data collected by MLX90621 60 and 120 FOV. Explore the speed estimation
-algorithm as well.
+This script is used to visualize the datasets collected in the field: 1013, 1027, 1103, 1116, 1118
 """
 __author__ = 'Yanning Li'
+
 
 # ================================================================================
 # configuration
 # ================================================================================
-# read the data
-# folder = '0915_2016'
-# folder = '0927_2016'
-# folder = '0928_2016'
-# folder = '1004_2016'
-# folder = '../datasets/1005_2016/'
-# folder = '../datasets/1006_2016/'
+
+# --------------------------------------------------
+# dataset 1003:
+# - Neil street. Freeflow and stop-and-to in total 33 min
+# - One PIR sensor array 4x32, at 64 Hz
+# --------------------------------------------------
 folder = '../datasets/1013_2016/'
-
-# dataset = '0915_128hz_corrected'
-# dataset = '0927_ff_128hz'
-# dataset = '0928_ff_128hz'
-# dataset = '64_600_0_s2'
-# dataset = '64_300_0_150142'
-# dataset = '64_300_0_152445'
-# dataset = '64_180_0_161152'
-# dataset = '128_300_0_150821p1'
-# dataset = '128_300_0_150821p2'
-
-# dataset = '64_300_0_150142'
-# dataset = '64_180_0_c2_s1'
-# dataset = '64_180_1_c2_s2'
-# dataset = '64_180_0_c2_s3'
-# dataset = '64_180_0_210838'
-# dataset = '64_180_20_c2_s2'
-# dataset = '64_180_0_s2_211656'
-# dataset = '64_600_1_c2_s1'
-# dataset = '64_180_10_c2_s1'
-# dataset = '64_180_0_184109_c1s1_c2s2'
-# dataset = '64_300_0_163435'
-
-
-# ======================================================
-# dataset = '1310-205905' # initial 10 second
-# dataset = '1310-213154'
-# dataset='1310-210300'
-dataset='1310-221543'
+# dataset = '1310-205905'   # initial 10 second
+# dataset = '1310-213154'   # freeflow part 1
+# dataset='1310-210300'     # freeflow part 2
+dataset='1310-221543'       # stop and go
 
 fps = 64
 
-data_key = 'temp_data'
+data_key = 'raw_data'
 
 # ================================================================================
 temp_data_file = folder + '{0}.txt'.format(dataset)
@@ -62,11 +36,11 @@ data = TrafficData()
 
 periods = data.get_txt_data_periods(folder+'*.txt', update=True)
 
-data.load_txt_data(file_name_str=temp_data_file, dataset=dataset, data_key='temp_data')
+data.load_txt_data(file_name_str=temp_data_file, dataset=dataset, data_key=data_key)
 
 
 # ================================================================================
-# Check sampling speed
+# Check sampling frequency
 # ================================================================================
 # data.plot_sample_timing(dataset=dataset)
 
@@ -81,14 +55,14 @@ data.load_txt_data(file_name_str=temp_data_file, dataset=dataset, data_key='temp
 # data.plot_noise_evolution(dataset=dataset, data_key=data_key, p_outlier=0.01, stop_thres=(0.1,0.01),
 #                       pixel=(0,15), window_s=10, step_s=1.0/16.0, fps=fps)
 
-data.plot_noise_evolution(dataset=dataset, data_key=data_key, p_outlier=0.01, stop_thres=(0.1,0.01),
-                      pixel=(1,5), window_s=5, step_s=1.0/16.0, fps=fps)
-
-data.plot_noise_evolution(dataset=dataset, data_key=data_key, p_outlier=0.01, stop_thres=(0.1,0.01),
-                      pixel=(1,20), window_s=5, step_s=1.0/16.0, fps=fps)
+# data.plot_noise_evolution(dataset=dataset, data_key=data_key, p_outlier=0.01, stop_thres=(0.1,0.01),
+#                       pixel=(1,5), window_s=5, step_s=1.0/16.0, fps=fps)
 #
 # data.plot_noise_evolution(dataset=dataset, data_key=data_key, p_outlier=0.01, stop_thres=(0.1,0.01),
-#                       pixel=(2,10), window_s=5, step_s=1.0/16.0, fps=fps)
+#                       pixel=(1,20), window_s=5.0, step_s=1.0, fps=fps)
+#
+# data.plot_noise_evolution(data_key=data_key, p_outlier=0.01, stop_thres=(0.1,0.01),
+#                       pixel=(2,10), window_s=5, step_s=1.0, fps=fps)
 
 # data.plot_noise_evolution(dataset=dataset, data_key=data_key, p_outlier=0.01, stop_thres=(0.1,0.01),
 #                       pixel=(3,0), window_s=10, step_s=1.0/16.0, fps=fps)
@@ -131,13 +105,15 @@ data.plot_noise_evolution(dataset=dataset, data_key=data_key, p_outlier=0.01, st
 # ================================================================================
 # Normalize the data and visualize in heat maps
 # ================================================================================
-# data.normalize_data(dataset=dataset, data_key=data_key, norm_data_key=None,
-#                     t_start=None, t_end=None)
+data.normalize_data(data_key=data_key, norm_data_key=None,
+                    t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.1, 0.01),
+                    window_s=5, step_s=1, fps=64)
 
-# data.plot_heat_map_in_period(dataset=dataset, data_key='norm_'+data_key,
-#                              t_start= periods[dataset][0]+timedelta(seconds=33),
-#                              t_end=periods[dataset][0]+timedelta(seconds=48),
-#                              cbar_limit=(2,6), option='vec', nan_thres=2.038)
+data.plot_heat_map_in_period(data_key='norm_'+data_key,
+                             t_start= periods[dataset][0],
+                             t_end=periods[dataset][1],
+                             cbar_limit=(2,6), option='vec', nan_thres_p=0.98,
+                             plot=True, folder=None, save_img=False, save_npy=False)
 
 
 

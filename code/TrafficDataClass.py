@@ -37,14 +37,12 @@ import cv2
 
 class TrafficData:
     """
-    This class is a universal class which deals with different types of data specified in the data collection manual.
+    This class is used for data preprocessing, including visualize the data, and exploring potential algorithms.
     """
 
     def __init__(self):
 
-        # There may be multiple PIR data formats: 1x16, 4x48.... Use key-value store
-        # PIR['1x16'] = {'time':narray, 'Ta':narray, 'raw_data':narray, 'cleaned_data':narray}
-        # raw_data and cleaned_data are 3d array, first index is the frames
+        # self.PIR[data_key] = {'time': [], 'data':[]}
         self.PIR = {}
 
         # ultrasonic sensor data
@@ -74,27 +72,70 @@ class TrafficData:
                 # default dataset name is the file name
                 dataset = file_name_str.strip().split('/')[-1].replace('.npy', '')
 
+            self.dataset = dataset
+
             # check if read other types of data previously
-            if dataset not in self.PIR.keys():
-                self.PIR[dataset] = OrderedDict()
+            if data_key not in self.PIR.keys():
+                self.PIR[data_key] = {}
 
-            if 'time' not in self.PIR[dataset].keys():
+            if 'time' not in self.PIR[data_key].keys():
                 # get the time stamp
-                self.PIR[dataset]['time'] = []
+                self.PIR[data_key]['time'] = []
                 for entry in data:
-                    self.PIR[dataset]['time'].append(entry[0])
+                    self.PIR[data_key]['time'].append(entry[0])
 
-                self.PIR[dataset]['time'] = np.array(self.PIR[dataset]['time'])
+                self.PIR[data_key]['time'] = np.asarray(self.PIR[data_key]['time'])
 
-            if data_key not in self.PIR[dataset].keys():
+            if 'data' not in self.PIR[data_key].keys():
                 # get the data
-                self.PIR[dataset][data_key] = []
+                self.PIR[data_key]['data'] = []
                 for entry in data:
-                    self.PIR[dataset][data_key].append( entry[1] )
-                self.PIR[dataset][data_key] = np.array(self.PIR[dataset][data_key])
+                    self.PIR[data_key]['data'].append( entry[1] )
+                self.PIR[data_key]['data'] = np.asarray(self.PIR[data_key]['data'])
 
         else:
             raise Exception('Dataset file not exists: {0}'.format(file_name_str))
+
+    def load_txt_data(self, file_name_str=None, dataset=None, data_key='raw_data'):
+        """
+        This function loads the txt data file
+        :param file_name_str:
+        :param dataset:
+        :param data_key:
+        :return:
+        """
+        if file_name_str is not None and exists(file_name_str):
+
+            if dataset is None:
+                # default dataset name is the file name
+                dataset = file_name_str.strip().split('/')[-1].replace('.npy', '')
+
+            self.dataset = dataset
+
+            if data_key not in self.PIR.keys():
+                    self.PIR[data_key] = {}
+
+            if 'time' not in self.PIR[data_key].keys():
+                # get the time stamp
+                self.PIR[data_key]['time'] = []
+
+            if 'data' not in self.PIR[data_key].keys():
+                # get the data
+                self.PIR[data_key]['data'] = []
+
+            with open(file_name_str, 'r') as f:
+                for line in f:
+                    item = line.strip().split('|')
+
+                    self.PIR[data_key]['time'].append( self.video_string_to_time(item[0]) )
+
+                    # convert string to list
+                    val = [float(i) for i in item[1].split(',')]
+                    self.PIR[data_key]['data'].append( np.array(val).reshape((4,32)) )
+
+            self.PIR[data_key]['time'] = np.asarray(self.PIR[data_key]['time'])
+            self.PIR[data_key]['data'] = np.\
+                asarray(self.PIR[data_key]['data'])
 
 
     def get_data_periods(self, dir, update=True):
@@ -104,7 +145,7 @@ class TrafficData:
         :return: save in file and return the periods
         """
         periods = OrderedDict()
-        f_periods = dir.replace('*.npy', '')+'dataset_periods.txt'
+        f_periods = dir.replace('*.npy', '')+'dataset_periods.cfg'
 
         if update is True:
             files = glob.glob(dir)
@@ -124,7 +165,63 @@ class TrafficData:
                 for key in periods:
                     f.write('{0},{1},{2}\n'.format(key, self.time_to_string(periods[key][0]),
                                                    self.time_to_string(periods[key][1]) ))
-            print('Updated dataset_periods.txt.')
+            print('Updated dataset_periods.cfg.')
+        else:
+
+            # load previously extracted file if exists
+            if exists(f_periods):
+                print('Loading dataset_periods.cfg ...')
+                with open(f_periods,'r') as fi:
+                    for line in fi:
+                        items = line.strip().split(',')
+                        periods[items[0]] = ( self.string_to_time(items[1]), self.string_to_time(items[2]) )
+                print('Loaded dataset_periods.cfg.')
+
+            else:
+                raise Exception('Previous f_periods not exit')
+
+        return periods
+
+
+    def get_txt_data_periods(self, dir, update=True):
+        """
+        This function returns the periods for all data collection experiments saved in a directory
+        :param dir: the directory
+        :return: save in file and return the periods
+        """
+        periods = OrderedDict()
+        f_periods = dir.replace('*.txt', '')+'dataset_periods.cfg'
+
+        if update is True:
+            files = glob.glob(dir)
+
+            for f in files:
+                # get the sensor config
+                sensor_id = f.split('/')[-1].replace('.txt', '')
+
+                with open(f,'r') as fi:
+                    first_line = fi.readline()
+                    # print 'first line:'
+                    # print first_line
+                    t_start = self.video_string_to_time( first_line.strip().split('|')[0] )
+
+                    for line in fi:
+                        pass
+
+                    # last line
+                    # print 'last' \
+                    #       ' line:'
+                    # print line
+                    t_end = self.video_string_to_time( line.strip().split('|')[0] )
+
+                periods[sensor_id] = (t_start, t_end)
+
+            # save in a file
+            with open(f_periods, 'w') as f:
+                for key in periods:
+                    f.write('{0},{1},{2}\n'.format(key, self.time_to_string(periods[key][0]),
+                                                   self.time_to_string(periods[key][1]) ))
+            print('Updated dataset_periods.cfg.')
         else:
 
             # load previously extracted file if exists
@@ -142,27 +239,25 @@ class TrafficData:
         return periods
 
 
-    def get_noise_distribution(self, dataset=None, data_key=None, t_start=None, t_end=None,
+    def get_noise_distribution(self, data_key=None, t_start=None, t_end=None,
                                p_outlier=0.01, stop_thres=(0.1, 0.01), pixels=None, suppress_output=False):
         """
         This function returns the noise distribution. It iteratively throw away the data points that has a probability
         below p_outlier and refit a gaussian distribution. It stops when the change fo the mean and std are within the
         specified stop criteria.
-        :param dataset: the dataset
         :param data_key: the key of the dataset. Processed data will be saved in the same dataset but with differnt keys
         :param t_start: datetime type
         :param t_end: datatime type
         :param p_outlier: [0,1], a point is considered as outlier if it is below p_outlier
         :param stop_thres: (delta_mu, delta_sigma) degrees in temperature
         :param pixels: a list of tuples row [0,3], col [0,15] or [0,31]
-        :return: save in self.PIR[dataset]['mean'], self.PIR[dataset]['std'],
-                         self.PIR[dataset]['noise_mean'], self.PIR[dataset]['noise_std'],
+        :return: mu, sigma, noise_mu, noise_sigma
         """
 
-        num_frames, num_rows, num_cols = self.PIR[dataset][data_key].shape
+        num_frames, num_rows, num_cols = self.PIR[data_key]['data'].shape
 
         # find the data in the time interval
-        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[dataset]['time'],
+        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_key]['time'],
                                                           t_start=t_start, t_end=t_end)
 
         mean = np.empty((num_rows, num_cols))
@@ -182,7 +277,7 @@ class TrafficData:
 
         for row, col in pixels:
 
-            time_series = self.PIR[dataset][data_key][index_start:index_end, row, col]
+            time_series = self.PIR[data_key]['data'][index_start:index_end, row, col]
 
             # save the initial estimate
             mean[row, col] = np.nanmean( time_series )
@@ -191,61 +286,136 @@ class TrafficData:
             _pre_mean = mean[row, col]
             _pre_std = std[row, col]
 
+            # =======================================================
+            # This segment is the incorrect way of computing outliers
             # compute the mean and std of the noise
-            p = mlab.normpdf(time_series, _pre_mean, _pre_std)
-
-            _mean = np.nanmean( time_series[ p>=p_outlier] )
-            _std = np.nanstd( time_series[ p>=p_outlier] )
+            # p = mlab.normpdf(time_series, _pre_mean, _pre_std)
+            # _mean = np.nanmean( time_series[ p>=p_outlier] )
+            # _std = np.nanstd( time_series[ p>=p_outlier] )
+            # =======================================================
+            # Pr( x \in [-v_thres, v_thres] ) = 1-p_outlier
+            v_thres = stats.norm.ppf(1-p_outlier/2.0, _pre_mean, _pre_std)
+            _idx = (-v_thres <= time_series) & ( time_series <= v_thres)
+            _mean = np.nanmean( time_series[_idx] )
+            _std = np.nanstd( time_series[_idx] )
 
             while np.abs(_mean - _pre_mean) > stop_thres[0] or np.abs(_std - _pre_std) > stop_thres[1]:
                 if suppress_output is False:
                     print('updating noise distribution for pixel {0}'.format((row, col)))
                 _pre_mean = _mean
                 _pre_std = _std
-                p = mlab.normpdf(time_series, _pre_mean, _pre_std)
-                _mean = np.nanmean( time_series[ p>=p_outlier] )
-                _std = np.nanstd( time_series[ p>=p_outlier] )
+
+                # =======================================================
+                # This segment is the incorrect way of computing outliers
+                # p = mlab.normpdf(time_series, _pre_mean, _pre_std)
+                # _mean = np.nanmean( time_series[ p>=p_outlier] )
+                # _std = np.nanstd( time_series[ p>=p_outlier] )
+                # =======================================================
+                # Pr( x \in [-v_thres, v_thres] ) = 1-p_outlier
+                v_thres = stats.norm.ppf(1-p_outlier/2.0, _pre_mean, _pre_std)
+                _idx = (-v_thres <= time_series) & ( time_series <= v_thres)
+                _mean = np.nanmean( time_series[_idx] )
+                _std = np.nanstd( time_series[_idx] )
+
 
             # save the final noise distribution
             noise_mean[row, col] = _mean
             noise_std[row, col] = _std
 
-        self.PIR[dataset]['mean'] = mean
-        self.PIR[dataset]['std'] = std
-        self.PIR[dataset]['noise_mean'] = noise_mean
-        self.PIR[dataset]['noise_std'] = noise_std
-
         return mean, std, noise_mean, noise_std
 
 
-    def normalize_data(self, dataset=None, data_key=None, norm_data_key=None, t_start=None, t_end=None):
+    def normalize_data(self, data_key=None, norm_data_key=None, t_start=None, t_end=None,
+                       p_outlier=0.01, stop_thres=(0.1, 0.01), window_s=5, step_s=1, fps=64):
         """
-        This function normalizes the data in the period
+        This function normalizes the data in the period [t_start, t_end], and save the normalized data in class
+            - The background is normalized within each window_s, which assumes background temperature changes.
+              If window_s is None, then normalize within entire duration.
+            - The background noise is proven to be normal. Hence it is separated by iteratively throw out outliers that
+              have probability less than p_outliers.
+            - The iteration stops when mean and std of new fitted normal distribution parameter change is less than
+              stop_thres (celcius)
         :param dataset: the dataset identifier
         :param data_key: the key of the data to be normalized
         :param norm_data_key: the key of the normalized data
         :param t_start: datetime type
         :param t_end: datetime type
+        :param p_outlier: the probability threshold for determining outliers.
+        :param stop_thres: (d_mean, d_std) in Celcius. Stop iteration if new distribution parameter change is smaller.
+        :param window_s: second. The window for normalization. If None, normalize in the entire period.
+        :param step_s: second. The incremental step for moving the window.
+        :param fps: the average framerate of the data.
         :return:
         """
 
         if norm_data_key is None:
             norm_data_key = 'norm_' + data_key
 
-        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[dataset]['time'],
+        if t_start is None:
+            t_start = self.PIR[data_key]['time'][0]
+
+        if t_end is None:
+            t_end = self.PIR[data_key]['time'][-1]
+
+        frame_start, frame_end = self.get_index_in_period(timestamps=self.PIR[data_key]['time'],
                                                           t_start=t_start, t_end=t_end)
+        num_frames = frame_end - frame_start
 
-        timestamps = norm_data_key + 'time'
-        self.PIR[dataset][timestamps] = self.PIR[dataset]['time'][index_start:index_end]
+        # save the normalized data to those properties
+        self.PIR[norm_data_key] = {}
+        self.PIR[norm_data_key]['time'] = self.PIR[data_key]['time'][frame_start:frame_end]
+        self.PIR[norm_data_key]['data'] = np.zeros((num_frames, 4, 32))
 
-        if 'noise_mean' not in self.PIR[dataset].keys() or 'noise_std' not in self.PIR[dataset].keys():
-            print('Warning: using default values to compute the noise mean and std')
-            self.get_noise_distribution(dataset=dataset, data_key=data_key, t_start=t_start, t_end=t_end)
+        if window_s is None:
 
-        noise_mu = self.PIR[dataset]['noise_mean']
-        noise_std = self.PIR[dataset]['noise_std']
+            _, _, noise_mu, noise_sigma = self.get_noise_distribution(data_key=data_key, t_start=t_start, t_end=t_end,
+                                        p_outlier=p_outlier, stop_thres=stop_thres, suppress_output=True)
 
-        self.PIR[dataset][norm_data_key] = (self.PIR[dataset][data_key][index_start:index_end] - noise_mu)/noise_std
+
+            self.PIR[norm_data_key]['data'] = \
+                (self.PIR[data_key]['data'][frame_start:frame_end] - noise_mu)/noise_sigma
+
+        else:
+            dt_hw = timedelta(seconds=window_s/2.0)
+
+            # compute the number of frames that corresponds to the duration in seconds
+            d_frame = int(fps*step_s)
+
+            print('Normalizing data: frame {0} ~ {1}'.format(frame_start, frame_end))
+
+            # frame counter
+            frame_counter = d_frame
+            noise_mu, noise_sigma = None, None
+            for frame in range(frame_start, frame_end):
+
+                # reset counter and update mean and std
+                if frame_counter == d_frame:
+                    frame_counter = 0
+
+                    # update the distribution
+                    if self.PIR[data_key]['time'][frame]-dt_hw < t_start:
+                        _t_start = t_start
+                    else:
+                        _t_start = self.PIR[data_key]['time'][frame]-dt_hw
+
+                    if self.PIR[data_key]['time'][frame]+dt_hw > t_end:
+                        _t_end = t_end
+                    else:
+                        _t_end = self.PIR[data_key]['time'][frame]+dt_hw
+
+                    _, _, noise_mu, noise_sigma = self.get_noise_distribution(data_key=data_key,
+                                                                    t_start=_t_start, t_end=_t_end,
+                                                                    p_outlier=p_outlier, stop_thres=stop_thres,
+                                                                    suppress_output=True)
+
+                # save normalized frame
+                self.PIR[norm_data_key]['data'][frame-frame_start] = \
+                    (self.PIR[data_key]['data'][frame] - noise_mu)/noise_sigma
+                frame_counter += 1
+
+                # print status
+                self.print_loop_status('Normalizing frames: ', frame-frame_start, num_frames)
+
 
 
     # @ deprecated
@@ -308,7 +478,7 @@ class TrafficData:
         plt.draw()
 
 
-    def check_duplicates(self, dataset=None, data_key=None, t_start=None, t_end=None):
+    def check_duplicates(self, data_key=None, t_start=None, t_end=None):
         """
         This function checks if there is duplicated data
         :param dataset:
@@ -317,16 +487,16 @@ class TrafficData:
         :param t_end:
         :return:
         """
-        num_frames, num_rows, num_cols = self.PIR[dataset][data_key].shape
+        num_frames, num_rows, num_cols = self.PIR[data_key]['data'].shape
 
         # find the data in the time interval
-        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[dataset]['time'],
+        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_key]['time'],
                                                           t_start=t_start, t_end=t_end)
 
         # find the duplicated frames
         num_duplicated_frames = 0
         for i in range(index_start, index_end-1):
-            if (self.PIR[dataset][data_key][i+1]- self.PIR[dataset][data_key][i]==0).all():
+            if (self.PIR[data_key]['data'][i+1]- self.PIR[data_key]['data'][i]==0).all():
                 num_duplicated_frames+=1
         print('percent of duplicated frames: {0}'.format(num_duplicated_frames/num_frames))
 
@@ -337,7 +507,7 @@ class TrafficData:
         for row in range(0, num_rows):
             for col in range(0, num_cols):
 
-                time_series = self.PIR[dataset][data_key][index_start:index_end, row, col]
+                time_series = self.PIR[data_key]['data'][index_start:index_end, row, col]
 
                 num_duplicates[row, col] = sum( (time_series[1:]-time_series[:-1]==0) )
 
@@ -345,13 +515,12 @@ class TrafficData:
 
         print('percent of duplicates: \n{0}'.format(num_duplicates))
 
-        self.cus_imshow(num_duplicates, cbar_limit=(0,1),title='Duplicates {0}'.format(dataset),
-                        annotate=True, save_name='{0}'.format(dataset))
+        self.cus_imshow(num_duplicates, cbar_limit=(0,1),title='Duplicate {0}, {1}'.format(self.dataset, data_key),
+                        annotate=True, save_name='{0}_{1}'.format(self.dataset, data_key))
 
 
 
-
-    def down_sample(self, dataset=None, data_key=None, from_freq=128, to_freq=64, save_name=None):
+    def down_sample(self, data_key=None, from_freq=128, to_freq=64, save_name=None):
         """
         Reduce the frequece by taking the average of consecutive frames.
         :param from_freq: original frequence
@@ -362,15 +531,15 @@ class TrafficData:
 
         data = []
 
-        num_frames, num_rows, num_cols = self.PIR[dataset][data_key].shape
+        num_frames, num_rows, num_cols = self.PIR[data_key]['data'].shape
 
         for i in range(d_frame, num_frames, d_frame):
 
             idx_start = i - d_frame
             idx_end = i
 
-            data.append([self.PIR[dataset]['time'][i],
-                         np.nanmean( self.PIR[dataset][data_key][idx_start:idx_end] , 0)])
+            data.append([self.PIR[data_key]['time'][i],
+                         np.nanmean( self.PIR[data_key]['data'][idx_start:idx_end] , 0)])
 
         np.save(save_name, data)
 
@@ -471,8 +640,8 @@ class TrafficData:
     # =========================================================================
     # visualization methods
     # =========================================================================
-    def plot_histogram_for_pixel(self, dataset=None, data_key=None, pixels=list(),
-                                 t_start=None, t_end=None):
+    def plot_histogram_for_pixel(self, data_key=None, pixels=list(),
+                                 t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.1,0.01)):
         """
         Statistic Analysis:
         This function plots the histogram of the raw data for a selected pixel, to better understand the noise
@@ -484,21 +653,16 @@ class TrafficData:
         :return: one figure for each pixel
         """
 
-        if dataset not in self.PIR.keys() or data_key not in self.PIR[dataset].keys():
-            raise Exception('Invalid dataset of key identifier')
+        if data_key not in self.PIR.keys():
+            raise Exception('Invalid data key')
 
         # compute the mean and std
-        if 'noise_mean' not in self.PIR[dataset].keys() or 'noise_std' not in self.PIR[dataset].keys():
-            print('Warning: using default values to compute the noise mean and std')
-            mu, sigma, noise_mu, noise_sigma = self.get_noise_distribution(dataset=dataset, data_key=data_key,
-                                                                       t_start=t_start, t_end=t_end)
-        mu = self.PIR[dataset]['mean']
-        sigma = self.PIR[dataset]['std']
-        noise_mu = self.PIR[dataset]['noise_mean']
-        noise_sigma = self.PIR[dataset]['noise_std']
+        mu, sigma, noise_mu, noise_sigma = self.get_noise_distribution(data_key=data_key,
+                                                                       t_start=t_start, t_end=t_end,
+                                                                       p_outlier=p_outlier, stop_thres=stop_thres)
 
         # find the data in the time interval
-        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[dataset]['time'],
+        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_key]['time'],
                                                       t_start=t_start, t_end=t_end)
 
         for pixel in pixels:
@@ -506,7 +670,7 @@ class TrafficData:
             print('{0}: overall {1}, noise {2}'.format(pixel, (mu[pixel], sigma[pixel]),
                                                        (noise_mu[pixel], noise_sigma[pixel])))
 
-            time_series = self.PIR[dataset][data_key][index_start:index_end, pixel[0], pixel[1]]
+            time_series = self.PIR[data_key]['data'][index_start:index_end, pixel[0], pixel[1]]
 
             # the histogram of the data
             num_bins = 200
@@ -521,21 +685,22 @@ class TrafficData:
             # add a 'best fit' line
             norm_fit_line = mlab.normpdf(bins, noise_mu[pixel],
                                                noise_sigma[pixel])
-            l = plt.plot(bins, norm_fit_line, 'r--', linewidth=1.5)
+            l = plt.plot(bins, norm_fit_line, 'r--', linewidth=1.5, label='noise')
             norm_fit_line = mlab.normpdf(bins, mu[pixel],
                                                sigma[pixel])
-            l = plt.plot(bins, norm_fit_line, 'b--', linewidth=1.5)
+            l = plt.plot(bins, norm_fit_line, 'b--', linewidth=1.5, label='all')
 
+            plt.legend()
             plt.xlabel('Temperature ($^{\circ}C$)')
-            plt.ylabel('Probability')
-            plt.title(r'{0} pixel {1}; $\mu$= {2:.2f}, $\sigma$={3:.2f}'.format(dataset, pixel,
+            plt.ylabel('Probability density')
+            plt.title(r'{0} pixel {1}; $\mu$= {2:.2f}, $\sigma$={3:.2f}'.format(self.dataset, pixel,
                                                                                          noise_mu[pixel],
                                                                                          noise_sigma[pixel]))
             plt.grid(True)
 
         plt.draw()
 
-    def plot_sample_timing(self, dataset=None, save_name=None):
+    def plot_sample_timing(self, data_key=None, save_name=None):
         """
         This function plots the timing of the samples
         :param dataset: the dataset
@@ -545,14 +710,14 @@ class TrafficData:
         fig = plt.figure(figsize=(16,8), dpi=100)
         ax = fig.add_subplot(111)
 
-        print(self.PIR[dataset]['time'][101] - self.PIR[dataset]['time'][100]).total_seconds()
+        print(self.PIR[data_key]['time'][101] - self.PIR[data_key]['time'][100]).total_seconds()
 
-        dt = [ (self.PIR[dataset]['time'][i+1] - self.PIR[dataset]['time'][i]).total_seconds()
-               for i in range(0, len(self.PIR[dataset]['time'])-1) ]
+        dt = [ (self.PIR[data_key]['time'][i+1] - self.PIR[data_key]['time'][i]).total_seconds()
+               for i in range(0, len(self.PIR[data_key]['time'])-1) ]
 
         # print dt
         ax.plot(dt)
-        ax.set_title('The sampling timing for dataset {0}'.format(dataset), fontsize=20)
+        ax.set_title('The sampling timing for dataset {0}'.format(data_key), fontsize=20)
         ax.set_xlabel('Samples', fontsize=16)
         ax.set_ylabel('dt (seconds)', fontsize=16)
 
@@ -567,7 +732,7 @@ class TrafficData:
             plt.close()
 
 
-    def plot_time_series_for_pixel(self, dataset=None, data_key=None,
+    def plot_time_series_for_pixel(self, data_key=None,
                                    t_start=None, t_end=None, pixels=list()):
         """
         Visualization:
@@ -584,22 +749,21 @@ class TrafficData:
         fig = plt.figure(figsize=(16,8), dpi=100)
         ax = fig.add_subplot(111)
 
-        if dataset not in self.PIR.keys():
-            print 'Error: incorrect pixel definition.'
-            return -1
+        if data_key not in self.PIR.keys():
+            raise Exception('In correct data key definition: {0}'.format(data_key))
 
         # find the data in the time interval
-        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[dataset]['time'],
+        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_key]['time'],
                                                       t_start=t_start, t_end=t_end)
 
         for pixel in pixels:
 
-            timestamps = self.PIR[dataset]['time'][index_start:index_end]
-            time_series = self.PIR[dataset][data_key][index_start:index_end, pixel[0], pixel[1]]
+            timestamps = self.PIR[data_key]['time'][index_start:index_end]
+            time_series = self.PIR[data_key]['data'][index_start:index_end, pixel[0], pixel[1]]
 
             print('length of data to plot:{0}'.format(len(timestamps)))
 
-            plt.plot(timestamps, time_series, label='{0} pixel {1}'.format(dataset, pixel))
+            plt.plot(timestamps, time_series, label='{0} pixel {1}'.format(self.dataset, pixel))
 
         ax.xaxis.set_major_locator(mdates.MinuteLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
@@ -615,56 +779,76 @@ class TrafficData:
         return ax
 
 
-    def plot_heat_map_in_period(self, dataset=None, data_key=None, t_start=None, t_end=None,
-                                cbar_limit=None, option='vec', nan_thres=None):
+    def plot_heat_map_in_period(self, data_key=None, t_start=None, t_end=None,
+                                cbar_limit=None, option='vec', nan_thres_p=None,
+                                plot=False, folder=None, save_img=False, save_npy=False):
         """
         Visualization:
         This function plots the heat map from t_start to t_end with each vec(frame)
-        :param dataset: the dataset identifier, default the name
         :param data_key: the data identifier, 'raw', 'cleaned'...
         :param t_start: datetime type
         :param t_end: datetime type
         :param cbar_limit: the min and max value for the plot
         :param option: options for stack each column: 'vec', 'mean', 'max', 'tworow'
+        :param nan_thres_p: replace the data that within nan_thres_p probability by nan to highlight vehicles
         :return: a figure with 16 x n color map for n frame
         """
 
         # find the data in the time interval
-        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[dataset]['time'],
+        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_key]['time'],
                                                           t_start=t_start, t_end=t_end)
 
-        print index_start, index_end
+        print('\nPlotting heat map for {0}, index {1} ~{2}'.format(data_key, index_start, index_end))
+
         # reshape the data by vec(frame)
-        num_frames, num_rows, num_cols = self.PIR[dataset][data_key].shape
+        num_frames, num_rows, num_cols = self.PIR[data_key]['data'].shape
+
+        print('{0}x{1}x{2}'.format(num_frames, num_rows, num_cols))
 
         map = []
         if option == 'vec':
             for t in range(index_start, index_end):
-                map.append( self.PIR[dataset][data_key][t].T.reshape(1, num_rows*num_cols).squeeze() )
+                map.append( self.PIR[data_key]['data'][t].T.reshape(1, num_rows*num_cols).squeeze() )
         elif option == 'tworow':
             for t in range(index_start, index_end):
-                map.append( self.PIR[dataset][data_key][t][1:3,:].T.reshape(1, num_rows*num_cols/2).squeeze() )
+                map.append( self.PIR[data_key]['data'][t][1:3,:].T.reshape(1, num_rows*num_cols/2).squeeze() )
         elif option == 'max':
             for t in range(index_start, index_end):
-                map.append( np.max(self.PIR[dataset][data_key][t], 0) )
+                map.append( np.max(self.PIR[data_key]['data'][t], 0) )
         elif option == 'mean':
             for t in range(index_start, index_end):
-                map.append( np.mean(self.PIR[dataset][data_key][t], 0) )
+                map.append( np.mean(self.PIR[data_key]['data'][t], 0) )
 
         map = np.array(map).T
 
-        if nan_thres is not None:
-            map[ map<=nan_thres ] = np.nan
+        if nan_thres_p is not None:
+            # Pr{ v \in [-v_thres, v_thres] } = nan_thres_p
+            print('Warning: assuming dataset {0} is normalized.'.format(data_key))
+            v_thres = stats.norm.ppf(1-(1-nan_thres_p)/2.0)
+            map[ map <= v_thres ] = np.nan
 
-        self.cus_imshow(map, cbar_limit, '{0} to {1}'.format(t_start, t_end))
+        if save_img is True:
+            t_start_str = self.file_time_to_string(t_start)
+            _save_name = folder+'{0}__{1}'.format(t_start_str, int(np.sum(map)))
+        else:
+            _save_name = None
+
+        self.cus_imshow(data_to_plot=map, cbar_limit=cbar_limit, title='{0} to {1}'.format(t_start, t_end),
+                        annotate=False, plot=plot, save_name=_save_name)
+
+        if save_npy is True:
+            t_start_str = self.file_time_to_string(t_start)
+            np.save(folder+'{0}_{1}.npy'.format(t_start_str, int(np.sum(map))), map)
 
 
-    def get_img_in_period(self, dataset=None, data_key=None, t_start=None, t_end=None,
+    # deprecated
+    # to include nonlinear transformation
+    def get_img_in_period(self, data_key=None, t_start=None, t_end=None,
                                 cbar_limit=(0,1), option='vec', nan_thres=None, plot=False,
                                 folder=None):
         """
         Visualization:
-        This function returns the heat image along with a nonlinear transform
+        This function returns the heat image during time.
         :param dataset: the dataset identifier, default the name
         :param data_key: the data identifier, 'raw', 'cleaned'...
         :param t_start: datetime type
@@ -677,25 +861,25 @@ class TrafficData:
         """
 
          # reshape the data by vec(frame)
-        num_frames, num_rows, num_cols = self.PIR[dataset][data_key].shape
+        num_frames, num_rows, num_cols = self.PIR[data_key]['data'].shape
 
 
-        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[dataset]['time'],
+        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_key]['time'],
                                                           t_start=t_start, t_end=t_end)
 
         map = []
         if option == 'vec':
             for t in range(index_start, index_end):
-                map.append( self.PIR[dataset][data_key][t].T.reshape(1, num_rows*num_cols).squeeze() )
+                map.append( self.PIR[data_key]['data'][:,:,t].T.reshape(1, num_rows*num_cols).squeeze() )
         elif option == 'tworow':
             for t in range(index_start, index_end):
-                map.append( self.PIR[dataset][data_key][t][1:3,:].T.reshape(1, num_rows*num_cols/2).squeeze() )
+                map.append( self.PIR[data_key]['data'][:,:,t][1:3,:].T.reshape(1, num_rows*num_cols/2).squeeze() )
         elif option == 'max':
             for t in range(index_start, index_end):
-                map.append( np.max(self.PIR[dataset][data_key][t], 0) )
+                map.append( np.max(self.PIR[data_key]['data'][:,:,t], 0) )
         elif option == 'mean':
             for t in range(index_start, index_end):
-                map.append( np.mean(self.PIR[dataset][data_key][t], 0) )
+                map.append( np.mean(self.PIR[data_key]['data'][:,:,t], 0) )
 
         map = np.array(map).T
 
@@ -709,7 +893,7 @@ class TrafficData:
                         title='{0}'.format(t_start_str),
                         annotate=False,save_name=folder+'{0}__{1}'.format(t_start_str, int(np.sum(map))))
 
-        np.save(folder+'{0}__{1}.npy'.format(t_start_str, int(np.sum(map))), map)
+        np.save(folder+'{0}_{1}.npy'.format(t_start_str, int(np.sum(map))), map)
 
 
         # times = self.PIR[dataset]['time'][index_start:index_end]
@@ -748,109 +932,15 @@ class TrafficData:
         # return map
 
 
-    def get_heat_img_in_period(self, dataset=None, data_key=None, t_start=None, t_end=None,
-                                cbar_limit=(0,1), option='vec', nan_thres=None, plot=False,
-                               dur=1, folder=None):
-        """
-        Visualization:
-        This function returns the heat image along with a nonlinear transform
-        :param dataset: the dataset identifier, default the name
-        :param data_key: the data identifier, 'raw', 'cleaned'...
-        :param t_start: datetime type
-        :param t_end: datetime type
-        :param cbar_limit: the min and max value for the plot
-        :param option: options for stack each column: 'vec', 'mean', 'max', 'tworow'
-        :param dur: seconds, into 1 seconds segments
-        :param folder: save the img as png to folder associated with npy data.
-        :return: a figure with 16 x n color map for n frame
-        """
 
-         # reshape the data by vec(frame)
-        num_frames, num_rows, num_cols = self.PIR[dataset][data_key].shape
-
-        t_1 = t_start
-        t_2 = t_1 + timedelta(seconds=dur)
-
-        while t_2 <= t_end-timedelta(seconds=dur):
-            # find the data in the time interval
-            index_start, index_end = self.get_index_in_period(timestamps=self.PIR[dataset]['time'],
-                                                              t_start=t_1, t_end=t_2)
-
-            map = []
-            if option == 'vec':
-                for t in range(index_start, index_end):
-                    map.append( self.PIR[dataset][data_key][t].T.reshape(1, num_rows*num_cols).squeeze() )
-            elif option == 'tworow':
-                for t in range(index_start, index_end):
-                    map.append( self.PIR[dataset][data_key][t][1:3,:].T.reshape(1, num_rows*num_cols/2).squeeze() )
-            elif option == 'max':
-                for t in range(index_start, index_end):
-                    map.append( np.max(self.PIR[dataset][data_key][t], 0) )
-            elif option == 'mean':
-                for t in range(index_start, index_end):
-                    map.append( np.mean(self.PIR[dataset][data_key][t], 0) )
-
-            map = np.array(map).T
-
-            if nan_thres is not None:
-                map[ map<=nan_thres ] = 0
-                map[ map>nan_thres ] = 1
-
-            t_1_str = self.file_time_to_string(t_1)
-
-            self.cus_imshow(data_to_plot=map, cbar_limit=cbar_limit,
-                            title='{0}'.format(self.time_to_string(t_1)),
-                            annotate=False,save_name=folder+'{0}__{1}'.format(t_1_str, int(np.sum(map))))
-
-            np.save(folder+'{0}__{1}.npy'.format(t_1_str, int(np.sum(map))), map)
-
-            # update the time
-            t_1 = t_2
-            t_2 = t_1 + timedelta(seconds=dur)
-
-
-        # times = self.PIR[dataset]['time'][index_start:index_end]
-        # spaces = []
-        # if num_cols == 16:
-        #     # 60 degree FOV
-        #     d_theta = (60.0/16)*np.pi/180.0
-        #     for i in range(-7, 1):
-        #         spaces.append( np.tan(-d_theta/2 + i*d_theta) )
-        #     for i in range(0, 8):
-        #         spaces.append( np.tan(d_theta/2 + i*d_theta) )
-
-        # plot and compare the nonlinear transform
-        # if plot is True:
-        #     self.cus_imshow(map, cbar_limit, '{0} to {1}'.format(t_start, t_end))
-            #
-            # fig, ax = plt.subplots(figsize=(18, 8))
-            #
-            # x = []
-            # y = []
-            #
-            # img_res = map.shape
-            # for i in range(0, img_res[0]):
-            #     for j in range(0, img_res[1]):
-            #         val = map[i,j]
-            #         if not np.isnan(val):
-            #             x.append(times[j])
-            #             y.append(spaces[i])
-            #
-            # print len(x)
-            # print len(y)
-            #
-            # plt.scatter(x,y)
-            # plt.draw()
-
-        # return map
-
-
+    # deprecated
+    # To include nonlinear transformation and vehicle detection
     def get_veh_img_in_period(self, dataset=None, data_key=None, t_start=None, t_end=None,
                                 cbar_limit=(0,1), option='vec', nan_thres=None, plot=False,
                                dur=1, folder=None, fps=None):
         """
         Visualization:
-        This function returns the heat image along with a nonlinear transform
+        This function aims at plotting the heatmap of only the cars.
         :param dataset: the dataset identifier, default the name
         :param data_key: the data identifier, 'raw', 'cleaned'...
         :param t_start: datetime type
@@ -913,8 +1003,6 @@ class TrafficData:
         plt.draw()
 
 
-
-
         # times = self.PIR[dataset]['time'][index_start:index_end]
         # spaces = []
         # if num_cols == 16:
@@ -951,7 +1039,7 @@ class TrafficData:
         # return map
 
 
-    def cus_imshow(self, data_to_plot=None, cbar_limit=None, title=None, annotate=False, save_name=None):
+    def cus_imshow(self, data_to_plot=None, cbar_limit=None, title=None, annotate=False, plot=False, save_name=None):
         """
         Visualization:
         This function is a universal function for plotting a 2d color map.
@@ -1008,27 +1096,31 @@ class TrafficData:
         cax = fig.add_axes([0.95, 0.15, 0.01, 0.65])
         fig.colorbar(im, cax=cax, orientation='vertical')
 
-        if save_name is None:
+        if plot is True:
             plt.draw()
-        else:
-            plt.savefig('../figs/{0}.png'.format(save_name), bbox_inches='tight')
-            plt.clf()
-            plt.close()
+
+        if save_name is not None:
+            plt.savefig('{0}.png'.format(save_name), bbox_inches='tight')
+
+            # do not close the window
+            if plot is not True:
+                plt.clf()
+                plt.close()
 
 
-    def play_thermal_video(self, sensor_id=None, data_option=('raw_data'), colorbar_limits=None,
+    def play_thermal_video(self, data_keys=None, cbar_limits=None,
                     t_start=None, t_end=None, speed=1):
         """
         This function plays the heat map video
-        :param sensor_id: the key in self.PIR
-        :param t_start_str: str %Y%m%d_%H:%M:%S_%f e.g. 20151131_15:23:33_123456
-        :param t_end_str: str %Y%m%d_%H:%M:%S_%f e.g. 20151131_15:23:33_123456
-        :param colorbar_limits: a list of tuples corresponding to the data options
+            It can also stack multiple data_key in the same frame. E.g., raw data and normalized data.
+        :param data_keys: the keys in self.PIR
+        :param cbar_limits: [(v_min, v_max),(),...], color bar limits corresponding to each data key
+        :param t_start: datetime
+        :param t_end: datetime
         :param speed: Speed of video. 1: realtime; 2: 2x faster; 0.5: 2x slower
-        :param data_option: 'raw_data', 'cleaned data'
         :return: A video plotting
         """
-        num_plots = len(data_option)
+        num_plots = len(data_keys)
 
         if num_plots == 1:
 
@@ -1043,15 +1135,15 @@ class TrafficData:
             background = fig.canvas.copy_from_bbox(ax.bbox)
 
             # Initialize with 4x48 full pixel frame. Will change over the time
-            num_frames, num_rows, num_cols = self.PIR[sensor_id][data_option[0]].shape
-            T_init = np.zeros((num_rows, num_cols)) + colorbar_limits[0][0]
+            num_frames, num_rows, num_cols = self.PIR[data_keys[0]]['data'].shape
+            T_init = np.zeros((num_rows, num_cols)) + cbar_limits[0][0]
             image = ax.imshow(T_init, cmap=plt.get_cmap('jet'),
-                                interpolation='nearest', vmin=colorbar_limits[0][0], vmax=colorbar_limits[0][1])
+                                interpolation='nearest', vmin=cbar_limits[0][0], vmax=cbar_limits[0][1])
 
             # add some initial figure properties
             # cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
             # fig.colorbar(image, cax=cax)
-            ax.set_title('{0}'.format(data_option[0]))
+            ax.set_title('{0}'.format(data_keys[0]))
             # ax.set_xlabel('Column')
             # ax.set_ylabel('Row')
 
@@ -1068,28 +1160,28 @@ class TrafficData:
                 background.append( fig.canvas.copy_from_bbox(ax[i].bbox) )
 
                 # Initialize with 4x48 full pixel frame. Will change over the time
-                num_frames, num_rows, num_cols = self.PIR[sensor_id][data_option[i]].shape
+                num_frames, num_rows, num_cols = self.PIR[data_keys[i]]['data'].shape
 
-                T_init = np.zeros((num_rows, num_cols)) + colorbar_limits[i][0]
+                T_init = np.zeros((num_rows, num_cols)) + cbar_limits[i][0]
                 image.append(ax[i].imshow(T_init, cmap=plt.get_cmap('jet'),
-                                    interpolation='nearest', vmin=colorbar_limits[i][0], vmax=colorbar_limits[i][1]) )
+                                    interpolation='nearest', vmin=cbar_limits[i][0], vmax=cbar_limits[i][1]) )
 
                 # add some initial figure properties
                 # cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
                 # fig.colorbar(image[i], cax=cax)
-                ax[i].set_title('{0}'.format(data_option[i]))
+                ax[i].set_title('{0}'.format(data_keys[i]))
                 # ax.set_xlabel('Column')
                 # ax.set_ylabel('Row')
 
         plt.show(False)
         plt.draw()
 
-        # find the data in the time interval
-        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[sensor_id]['time'],
-                                                          t_start=t_start, t_end=t_end)
-
         # play all frames in the data options
         if num_plots == 1:
+            # find the data in the time interval
+            index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_keys[0]]['time'],
+                                                          t_start=t_start, t_end=t_end)
+
             t0 = None
             for t in range(index_start, index_end-1):
                 t1 = time.time()
@@ -1097,22 +1189,37 @@ class TrafficData:
                     print('fps: {0}'.format(1/(t1-t0)))
                 t0 = t1
 
-                image.set_data(self.PIR[sensor_id][data_option[0]][t, :, :])
+                image.set_data(self.PIR[data_keys[0]]['data'][t, :, :])
                 fig.canvas.restore_region(background)
                 ax.draw_artist(image)
                 fig.canvas.blit(ax.bbox)
 
         else:
-            t0 = None
-            num_data_options = len(data_option)
-            for t in range(index_start, index_end-1):
-                t1 = time.time()
-                if t0 is not None:
-                    print('fps: {0}'.format(1/(t1-t0)))
-                t0 = t1
+            # Use the time scale from the first data set
+            index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_keys[0]]['time'],
+                                                          t_start=t_start, t_end=t_end)
 
-                for i in range(0, num_data_options):
-                    image[i].set_data(self.PIR[sensor_id][data_option[i]][t, :, :])
+            # t0 = None
+            for frame_idx in range(index_start, index_end-1):
+                # t1 = time.time()
+                # if t0 is not None:
+                #     print('fps: {0}'.format(1/(t1-t0)))
+                # t0 = t1
+
+                # plot the first dataset
+                image[0].set_data(self.PIR[data_keys[0]]['data'][frame_idx, :, :])
+                fig.canvas.restore_region(background[0])
+                ax[0].draw_artist(image[0])
+                fig.canvas.blit(ax[0].bbox)
+
+                # for other dataset, find the corresponding frame
+                for i in range(1, num_plots):
+
+                    # current time
+                    t = self.PIR[data_keys[0]]['time'][frame_idx]
+                    idx = self.PIR[data_keys[i]]['time'].index(t)
+
+                    image[i].set_data(self.PIR[data_keys[i]]['data'][idx, :, :])
                     fig.canvas.restore_region(background[i])
                     ax[i].draw_artist(image[i])
                     fig.canvas.blit(ax[i].bbox)
@@ -1226,7 +1333,7 @@ class TrafficData:
         cv2.destroyAllWindows()
 
 
-    def save_thermal_to_avi(self, dataset=None, data_key='norm_temp_data', fps=64):
+    def save_thermal_to_avi(self, data_key='norm_temp_data', fps=64):
         """
         This function saves the selected data in avi file
         :param dataset: the sensor id
@@ -1236,9 +1343,10 @@ class TrafficData:
         scale  = 64
 
         fourcc = cv2.cv.CV_FOURCC('m','p','4','v')
-        out = cv2.VideoWriter( dataset + ".avi", fourcc, fps, (16*scale,4*scale))
+        out = cv2.VideoWriter( self.dataset + ".avi", fourcc, fps, (16*scale,4*scale))
         pir_cam = []
-        for frame in self.PIR[dataset][data_key]:
+
+        for frame in self.PIR[data_key]['data'][:]:
             #print frame
             img = np.asarray(frame).astype(np.uint8)
             img = cv2.resize(img,None,fx=scale, fy=scale, interpolation = cv2.INTER_CUBIC)
@@ -1253,8 +1361,8 @@ class TrafficData:
         cv2.destroyAllWindows()
 
 
-    def plot_noise_evolution(self, dataset=None, data_key=None, p_outlier=0.05, stop_thres=(0.5, 0.1),
-                             pixel=None, window_s=120, step_s=30, fps=128):
+    def plot_noise_evolution(self, data_key=None, p_outlier=0.05, stop_thres=(0.5, 0.1),
+                             pixel=None, window_s=120, step_s=30, fps=64):
         """
         This function plots the evolution of the
         :param dataset: the file name
@@ -1272,24 +1380,23 @@ class TrafficData:
         sigma = []
 
         # compute the number of frames that corresponds to the duration in seconds
-
         d_frame = int(fps*step_s)
-        start_frame = fps*window_s
+        start_frame = int(fps*window_s)
 
-        num_frames= len(self.PIR[dataset]['time'])
+        num_frames= len(self.PIR[data_key]['time'])
 
         print start_frame
         print num_frames
         print d_frame
 
         for i in range(start_frame, num_frames, d_frame):
-            _, _, _mu, _sigma = self.get_noise_distribution(dataset=dataset, data_key=data_key,
-                                                             t_start= self.PIR[dataset]['time'][i]-dt_w,
-                                                             t_end=self.PIR[dataset]['time'][i],
+            _, _, _mu, _sigma = self.get_noise_distribution(data_key=data_key,
+                                                             t_start= self.PIR[data_key]['time'][i]-dt_w,
+                                                             t_end=self.PIR[data_key]['time'][i],
                                                              p_outlier=p_outlier,stop_thres=stop_thres,
                                                              pixels=[pixel], suppress_output=True)
             # see from the center of the window
-            times.append(self.PIR[dataset]['time'][i] - timedelta(seconds=window_s/2.0))
+            times.append(self.PIR[data_key]['time'][i] - timedelta(seconds=window_s/2.0))
             mu.append(_mu[pixel])
             sigma.append(_sigma[pixel])
 
@@ -1298,11 +1405,12 @@ class TrafficData:
         print('mu: {0}~{1}'.format(np.nanmin(mu), np.nanmax(mu)))
         print('Average sigma: {0}'.format(np.nanmean(sigma)))
 
+
         mu = np.asarray(mu)
         sigma = np.asarray(sigma)
 
         # plot the time series
-        ax = self.plot_time_series_for_pixel(dataset=dataset, data_key=data_key, t_start=None, t_end=None, pixels=[pixel])
+        ax = self.plot_time_series_for_pixel(data_key=data_key, t_start=None, t_end=None, pixels=[pixel])
 
         ax.plot(times, mu, color='r', linewidth=2)
         ax.plot(times, mu+sigma, color='r', linestyle='--', linewidth=2)

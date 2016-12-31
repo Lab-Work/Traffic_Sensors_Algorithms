@@ -22,7 +22,7 @@ This class is used for online vehicle detection.
 """
 
 
-class VehDet:
+class TrafficSensorAlg:
     """
     This class contains all the functions needed for detecting vehicles using streaming data.
     """
