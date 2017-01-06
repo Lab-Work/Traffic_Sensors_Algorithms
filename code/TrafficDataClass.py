@@ -23,6 +23,7 @@ import bisect
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import matplotlib.dates as mdates
+import matplotlib.patches as patches
 from datetime import datetime
 from datetime import timedelta
 from os.path import exists
@@ -131,6 +132,7 @@ class TrafficData:
 
                     # convert string to list
                     val = [float(i) for i in item[1].split(',')]
+
                     self.PIR[data_key]['data'].append( np.array(val).reshape((4,32)) )
 
             self.PIR[data_key]['time'] = np.asarray(self.PIR[data_key]['time'])
@@ -731,6 +733,29 @@ class TrafficData:
             plt.clf()
             plt.close()
 
+        # plot the histogram of the sampling time
+        fig = plt.figure(figsize=(16,8), dpi=100)
+        ax = fig.add_subplot(111)
+        num_bins = 200
+
+        # remove outliers
+        dt = np.asarray(dt)
+        dt[dt>=1] = 1
+
+        print(max(dt))
+        n, bins, patches = plt.hist(dt, num_bins, normed=1, facecolor='green', alpha=0.75)
+        ax.set_title('The sampling timing distribution for dataset {0}'.format(data_key), fontsize=20)
+        ax.set_xlabel('dt (seconds)', fontsize=16)
+        ax.set_ylabel('Density', fontsize=16)
+
+        if save_name is None:
+            plt.draw()
+        else:
+            plt.savefig('../figs/{0}.png'.format(save_name+'_hist'), bbox_inches='tight')
+            plt.clf()
+            plt.close()
+
+
 
     def plot_time_series_for_pixel(self, data_key=None,
                                    t_start=None, t_end=None, pixels=list()):
@@ -834,11 +859,229 @@ class TrafficData:
             _save_name = None
 
         self.cus_imshow(data_to_plot=map, cbar_limit=cbar_limit, title='{0} to {1}'.format(t_start, t_end),
-                        annotate=False, plot=plot, save_name=_save_name)
+                        annotate=False, patch=False,
+                        plot=plot, save_name=_save_name)
 
         if save_npy is True:
             t_start_str = self.file_time_to_string(t_start)
             np.save(folder+'{0}_{1}.npy'.format(t_start_str, int(np.sum(map))), map)
+
+    def plot_detected_veh_in_period(self, data_key=None, t_start=None, t_end=None,
+                                cbar_limit=None, option='vec', nan_thres_p=None, det_thres=20,
+                                plot=False, folder=None, save_img=False, save_npy=False):
+        """
+        Visualization:
+        This function plots the heat map from t_start to t_end with each vec(frame)
+        :param data_key: the data identifier, 'raw', 'cleaned'...
+        :param t_start: datetime type
+        :param t_end: datetime type
+        :param cbar_limit: the min and max value for the plot
+        :param option: options for stack each column: 'vec', 'mean', 'max', 'tworow'
+        :param nan_thres_p: replace the data that within nan_thres_p probability by nan to highlight vehicles
+        :return: a figure with 16 x n color map for n frame
+        """
+
+        # find the data in the time interval
+        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_key]['time'],
+                                                          t_start=t_start, t_end=t_end)
+
+        print('\nPlotting heat map for {0}, index {1} ~{2}'.format(data_key, index_start, index_end))
+
+        # reshape the data by vec(frame)
+        num_frames, num_rows, num_cols = self.PIR[data_key]['data'].shape
+
+        print('{0}x{1}x{2}'.format(num_frames, num_rows, num_cols))
+
+        map = []
+        if option == 'vec':
+            for t in range(index_start, index_end):
+                map.append( self.PIR[data_key]['data'][t].T.reshape(1, num_rows*num_cols).squeeze() )
+        elif option == 'tworow':
+            for t in range(index_start, index_end):
+                map.append( self.PIR[data_key]['data'][t][1:3,:].T.reshape(1, num_rows*num_cols/2).squeeze() )
+        elif option == 'max':
+            for t in range(index_start, index_end):
+                map.append( np.max(self.PIR[data_key]['data'][t], 0) )
+        elif option == 'mean':
+            for t in range(index_start, index_end):
+                map.append( np.mean(self.PIR[data_key]['data'][t], 0) )
+
+        map = np.array(map).T
+
+        # vehicle detection and plot
+        vehs = self.det_veh_in_period(data_key=data_key, t_start=t_start, t_end=t_end, option='vec',
+                                   det_thres=det_thres)
+
+        print('detected vehs: {0}'.format(vehs))
+
+        if nan_thres_p is not None:
+            # Pr{ v \in [-v_thres, v_thres] } = nan_thres_p
+            print('Warning: assuming dataset {0} is normalized.'.format(data_key))
+            v_thres = stats.norm.ppf(1-(1-nan_thres_p)/2.0)
+            map[ map <= v_thres ] = np.nan
+
+        # save the entire heat map
+        if save_img is True:
+            t_start_str = self.file_time_to_string(t_start)
+            _save_name = folder+'{0}_heatmap'.format(t_start_str)
+        else:
+            _save_name = None
+
+        self.cus_imshow(data_to_plot=map, cbar_limit=cbar_limit, title='{0} to {1}'.format(t_start, t_end),
+                        annotate=False, patch=True, patch_intervals=vehs,
+                        plot=plot, save_name=_save_name)
+
+        # save the heatmap for each vehicle
+        if save_npy is True:
+            for veh in vehs:
+                # save at least one second clip
+                if veh[1] - veh[0] < 64:
+                    dt = 64 - (veh[1]-veh[0])
+                    veh = (np.max([0, veh[0]-int(dt/2)]),
+                           np.min([map.shape[1], veh[1]+int(dt/2)]) )
+
+                # save the clip
+                t_start_str = self.file_time_to_string(self.PIR[data_key]['time'][veh[0]])
+                veh_data = {}
+                veh_data['time'] = self.PIR[data_key]['time'][veh[0]:veh[1]]
+                veh_data['data'] = map[:,veh[0]:veh[1]]
+                np.save(folder+'{0}.npy'.format(t_start_str), veh_data)
+
+                if save_img is True:
+                    # save the image
+                    self.cus_imshow(data_to_plot=map[:, veh[0]:veh[1]], cbar_limit=cbar_limit,
+                                    title='{0} to {1}'.format(self.PIR[data_key]['time'][veh[0]],
+                                                              self.PIR[data_key]['time'][veh[1]]),
+                        annotate=False, patch=False, patch_intervals=None,
+                        plot=False, save_name=folder+'{0}.png'.format(t_start_str))
+
+
+    def det_veh_in_period(self, data_key=None, t_start=None, t_end=None, option='vec', det_thres=20):
+        """
+        This function detects the vehicles for data_key during time t_start to t_end
+        :param data_key:
+        :param t_start:
+        :param t_end:
+        :param option:
+        :return:
+        """
+        # find the data in the time interval
+        index_start, index_end = self.get_index_in_period(timestamps=self.PIR[data_key]['time'],
+                                                          t_start=t_start, t_end=t_end)
+
+        print('\nPlotting heat map for {0}, index {1} ~{2}'.format(data_key, index_start, index_end))
+
+        # reshape the data by vec(frame)
+        num_frames, num_rows, num_cols = self.PIR[data_key]['data'].shape
+
+        print('{0}x{1}x{2}'.format(num_frames, num_rows, num_cols))
+
+        map = []
+        if option == 'vec':
+            for t in range(index_start, index_end):
+                map.append( self.PIR[data_key]['data'][t].T.reshape(1, num_rows*num_cols).squeeze() )
+        elif option == 'tworow':
+            for t in range(index_start, index_end):
+                map.append( self.PIR[data_key]['data'][t][1:3,:].T.reshape(1, num_rows*num_cols/2).squeeze() )
+        elif option == 'max':
+            for t in range(index_start, index_end):
+                map.append( np.max(self.PIR[data_key]['data'][t], 0) )
+        elif option == 'mean':
+            for t in range(index_start, index_end):
+                map.append( np.mean(self.PIR[data_key]['data'][t], 0) )
+
+        map = np.array(map).T
+
+        # ----------------------------------------------------
+        # TRY 1:
+        #   - Use a 1 s hanning window (64 points) to smooth the entropy over time.
+        #   - Apply a threshold in the smoothed entropy signal and determine the vehicle
+
+        entropy = np.sum(map, 0)
+        print('entropy mean: {0}'.format(np.mean(entropy)))
+        # smooth the entropy
+        window_len = 32
+        hanning_w = np.hanning(window_len)
+        rectangle_w = np.ones(window_len)/window_len
+        entropy_smoothed = np.convolve(entropy, rectangle_w, 'valid')
+        print('smoothed entropy mean: {0}'.format(np.mean(entropy_smoothed)))
+        # pad zero to both side
+        entropy_smoothed = np.concatenate((np.zeros(int(window_len/2)), entropy_smoothed, np.zeros(int(window_len/2))))
+
+        # plot entropy
+        print('Imshow map dimension:{0}'.format(map.shape))
+        fig, ax = plt.subplots(figsize=(18, 8))
+        ax.plot(entropy, linewidth=2, color='b')
+        ax.plot(entropy_smoothed, linewidth=2, color='r')
+        ax.set_xlabel('Time', fontsize=18)
+        ax.set_ylabel('Entropy', fontsize=18)
+
+        # use threshold to determine the pass of each vehicle
+        flag = False    # detected
+        vehs = []
+        for head in range(0, len(entropy_smoothed)):
+            if flag is False:
+                if entropy_smoothed[head] >= det_thres:
+                    tail = head
+                    flag = True
+            else:
+                if entropy_smoothed[head] < det_thres:
+                    # TODO: found one interval, to apply a simple filter
+                    # - if head-pre_tail <= 20 (0.3s headway), combine
+                    # - if total still <= 0.5 s, discard
+                    vehs.append((tail, head))
+                    flag = False
+                    ax.plot([tail, head], [det_thres, det_thres], linewidth=2, color='g')
+
+        plt.draw()
+
+        return vehs
+
+
+
+    def nonlinear_transform(self, data, ratio=6.0):
+        """
+        This function applies a nonlinear transform to the data and save in image
+        :param data: a dict; 'time': datetime timestamps, 'data': 128xnum_frames
+        :param ratio: the space time ratio
+        :return:
+        """
+        # 120 degree field of view
+        _dup = data['data'].shape[0]/32
+        d_theta = (60.0/16)*np.pi/180.0
+        spaces = []
+        for i in range(-16, 16):
+            for d in range(0, _dup):
+                # duplicate the nonlinear operator for vec
+                spaces.append( np.tan(d_theta/2 + i*d_theta) )
+        spaces = -np.asarray(spaces)/ratio
+
+        # plot the original
+        fig, ax = plt.subplots(figsize=(10, 10))
+        im = ax.imshow(data['data'], cmap=plt.get_cmap('jet'),
+                        interpolation='nearest', aspect='auto',
+                        vmin=2.0, vmax=6.0)
+        ax.set_title('Original', fontsize=20)
+        ax.set_xlabel('Time')
+        ax.set_ylabel('space')
+        cax = fig.add_axes([0.95, 0.15, 0.01, 0.65])
+        fig.colorbar(im, cax=cax, orientation='vertical')
+
+        plt.draw()
+
+        fig, ax = plt.subplots(figsize=(10, 10))
+        _dt = data['time'] - data['time'][0]
+        dt = np.asarray([i.total_seconds() for i in _dt])
+        X, Y = np.meshgrid(dt, spaces)
+        sc = ax.scatter(X, Y, c=data['data'], vmin=2.0, vmax=6.0, cmap=plt.get_cmap('jet'))
+        ax.set_title('Nonlinear transform', fontsize=20)
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('space')
+        ax.set_xlim([np.min(dt), np.max(dt)])
+        ax.set_ylim([np.min(spaces), np.max(spaces)])
+        cax = fig.add_axes([0.95, 0.15, 0.01, 0.65])
+        plt.colorbar(sc, cax=cax, orientation='vertical')
+        plt.draw()
 
 
     # deprecated
@@ -1039,7 +1282,9 @@ class TrafficData:
         # return map
 
 
-    def cus_imshow(self, data_to_plot=None, cbar_limit=None, title=None, annotate=False, plot=False, save_name=None):
+    def cus_imshow(self, data_to_plot=None, cbar_limit=None, title=None, annotate=False,
+                   patch=False, patch_intervals=None,
+                   plot=False, save_name=None):
         """
         Visualization:
         This function is a universal function for plotting a 2d color map.
@@ -1091,6 +1336,13 @@ class TrafficData:
                     label = round(label,1)
 
                 ax.text(i,j,label,ha='center',va='center')
+
+        # patch semi-opaque boxes to img
+        if patch is True:
+            for interval in patch_intervals:
+                rect = patches.Rectangle((interval[0], 0), interval[1]-interval[0], 128, linewidth=1, edgecolor='r',
+                                         facecolor=(1,0,0,0.5))
+                ax.add_patch(rect)
 
         plt.title('{0}'.format(title))
         cax = fig.add_axes([0.95, 0.15, 0.01, 0.65])

@@ -20,29 +20,96 @@ __author__ = 'Yanning Li'
 # --------------------------------------------------
 folder = '../datasets/1013_2016/'
 # dataset = '1310-205905'   # initial 10 second
-# dataset = '1310-213154'   # freeflow part 1
+dataset = '1310-213154'   # freeflow part 1
 # dataset='1310-210300'     # freeflow part 2
-dataset='1310-221543'       # stop and go
-
+# dataset='1310-221543'       # stop and go
 fps = 64
-
 data_key = 'raw_data'
+
+# --------------------------------------------------
+# dataset 1027:
+# - Neil street. Two PIR sensors
+# - One PIR sensor array 4x32, at 64 Hz
+# --------------------------------------------------
+# folder = '../datasets/1027_2016/senspi1/'
+# dataset = '2710-192614'   # 7 seconds
+# dataset = '2710-205846'     # 45 min
+
+# folder = '../datasets/1027_2016/senspi2/'
+# dataset = '2710-210055'   # 45 min
+
+# fps = 64
+# data_key = 'raw_data'
+
+
+# --------------------------------------------------
+# dataset 1103:
+# - Neil street. Three PIR sensor arraies
+# - One PIR sensor array 4x32, at 64 Hz
+# --------------------------------------------------
+# folder = '../datasets/1103_2016/s1/'
+# dataset = '0311-191717'
+
+# folder = '../datasets/1103_2016/s2/'
+# dataset = '0311-192414'
+
+# folder = '../datasets/1103_2016/s3/'
+# dataset = '0311-193053'
+#
+# fps = 64
+# data_key = 'raw_data'
+
+
+# --------------------------------------------------
+# dataset 1116:
+# - Neil street. Three PIR sensor arraies
+# - One PIR sensor array 4x32, at 64 Hz
+# --------------------------------------------------
+# folder = '../datasets/1116_2016/s1/'
+# dataset = '1611-061706'
+
+# folder = '../datasets/1116_2016/s2/'
+# dataset = '0711-211706'
+
+# folder = '../datasets/1116_2016/s3/'
+# dataset = '1611-151742'
+#
+# fps = 64
+# data_key = 'raw_data'
+
+
+# --------------------------------------------------
+# dataset 1118:
+# - Neil street. Three PIR sensor arraies
+# - One PIR sensor array 4x32, at 64 Hz
+# --------------------------------------------------
+# folder = '../datasets/1118_2016/s1/'
+# dataset = '1611-171706'
+
+# folder = '../datasets/1118_2016/s2/'
+# dataset = '1811-144926'
+
+# folder = '../datasets/1118_2016/s3/'
+# dataset = '1611-171707'
+
+# fps = 64
+# data_key = 'raw_data'
+
 
 # ================================================================================
 temp_data_file = folder + '{0}.txt'.format(dataset)
 
 data = TrafficData()
-# dt = timedelta(seconds=3)
 
-periods = data.get_txt_data_periods(folder+'*.txt', update=True)
+periods = data.get_txt_data_periods(folder+'*.txt', update=False)
 
-data.load_txt_data(file_name_str=temp_data_file, dataset=dataset, data_key=data_key)
+# data.load_txt_data(file_name_str=temp_data_file, dataset=dataset, data_key=data_key)
 
 
 # ================================================================================
 # Check sampling frequency
 # ================================================================================
-# data.plot_sample_timing(dataset=dataset)
+# data.plot_sample_timing(data_key=data_key)
 
 
 # ================================================================================
@@ -105,17 +172,18 @@ data.load_txt_data(file_name_str=temp_data_file, dataset=dataset, data_key=data_
 # ================================================================================
 # Normalize the data and visualize in heat maps
 # ================================================================================
-data.normalize_data(data_key=data_key, norm_data_key=None,
-                    t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.1, 0.01),
-                    window_s=5, step_s=1, fps=64)
+# data.normalize_data(data_key=data_key, norm_data_key=None,
+#                     t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.1, 0.01),
+#                     window_s=5, step_s=1, fps=64)
 
-data.plot_heat_map_in_period(data_key='norm_'+data_key,
-                             t_start= periods[dataset][0],
-                             t_end=periods[dataset][1],
-                             cbar_limit=(2,6), option='vec', nan_thres_p=0.98,
-                             plot=True, folder=None, save_img=False, save_npy=False)
+# data.plot_detected_veh_in_period(data_key='norm_'+data_key,
+#                              t_start= periods[dataset][0],
+#                              t_end=periods[dataset][1],
+#                              cbar_limit=(2,6), option='vec', nan_thres_p=0.95, det_thres=20,
+#                              plot=True, folder='../workspace/', save_img=True, save_npy=True)
 
-
+# data.det_veh_in_img(data_key='norm_'+data_key, t_start=periods[dataset][0], t_end=periods[dataset][1],
+#                     option='vec')
 
 # img = data.get_heat_img_in_period(dataset=dataset, data_key='norm_'+data_key,
 #                                 t_start=periods[dataset][0]+timedelta(seconds=35),
@@ -123,6 +191,14 @@ data.plot_heat_map_in_period(data_key='norm_'+data_key,
 #                                 cbar_limit=[0, 5], option='vec',
 #                                 nan_thres=None, plot=False,
 #                                   dur=1, folder='../figs/hough_realdata/')
+
+
+# ================================================================================
+# Check nonlinear transformation
+# ================================================================================
+sample_veh = np.load('../workspace/20161013_213301_405012.npy')
+data.nonlinear_transform(sample_veh[()], ratio=6)
+
 
 
 # ================================================================================
