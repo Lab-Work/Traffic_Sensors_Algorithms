@@ -1,7 +1,8 @@
 import cv2
-import sys
-import time
-import glob
+print('Imported OpenCV version {0}'.format(cv2.__version__))
+import sys, os
+from contextlib import contextmanager
+import time, glob
 from copy import deepcopy
 from os.path import exists
 from collections import OrderedDict
@@ -57,7 +58,15 @@ def print_loop_status(msg, i, total_iter):
     sys.stdout.write('{0} {1}/{2}'.format(msg, i, total_iter))
     sys.stdout.flush()
 
-
+@contextmanager
+def suppress_stdout():
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
 # ==================================================================================================================
 # ==================================================================================================================
 """
@@ -445,7 +454,6 @@ class SensorData:
         if save_df is True:
             data.ix[_t_start:_t_end, columns].to_csv(save_dir+'heatmap__{0}__{1}.csv'.format(time2str_file(_t_start),
                                                                                            time2str(_t_end)))
-
         heatmap = data.ix[_t_start:_t_end, columns].values.T
 
         # change all background white noise into nan
@@ -591,14 +599,14 @@ class VideoData:
 
         cap = cv2.VideoCapture(input_video)
 
-        fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
-        total_frames = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
-        res = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        res = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
         # print out information
         print('Loaded video {0}:'.format(input_video))
-        print('    Current timestamp: {0}'.format(cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC)))
-        print('    Current index: {0}'.format(cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)))
+        print('    Current timestamp: {0}'.format(cap.get(cv2.CAP_PROP_POS_MSEC)))
+        print('    Current index: {0}'.format(cap.get(cv2.CAP_PROP_POS_FRAMES)))
         print('    Resolution: {0} x {1}'.format(res[0], res[1]))
         print('    FPS: {0}'.format(fps))
         print('    Frame count: {0}'.format(total_frames))
@@ -611,29 +619,29 @@ class VideoData:
 
         # --------------------------------------------------------------
         # define the output video
-        # fourcc = cv2.cv.CV_FOURCC('m','p','4','v')
-        # fourcc = cv2.cv.CV_FOURCC(*'XVID')
-        # fourcc = cv2.cv.CV_FOURCC('D','I','V','X')
-        fourcc = cv2.cv.CV_FOURCC('M','P','E','G')
+        # fourcc = cv2.cv.CV_FOURCC('m','p','4','v')    # for opencv 2
+        fourcc = cv2.VideoWriter_fourcc('D','I','V','X')
         out = cv2.VideoWriter(output_video, fourcc, fps,
                               (x_coord[1]-x_coord[0],y_coord[1]-y_coord[0]))
 
         # --------------------------------------------------------------
         # crop video
         for i in range(frame_lim[0], frame_lim[1]):
-            ret, frame = cap.read()
 
-            if ret is True:
-                out.write(frame[y_coord[0]:y_coord[1], x_coord[0]:x_coord[1], :])
-                sys.stdout.write('\r')
-                sys.stdout.write('Status: filtering step {0}/{1}'.format(i, int(frame_lim[1])))
-                sys.stdout.flush()
-            else:
-                raise Exception('fail to read frame')
+            with suppress_stdout():
+                ret, frame = cap.read()
+                if ret is True:
+                    out.write(frame[y_coord[0]:y_coord[1], x_coord[0]:x_coord[1], :])
+                else:
+                    raise Exception('fail to read frame')
 
+            print_loop_status('Status: saving frame: ', i, int(frame_lim[1]))
+
+        print('\nFinished saving cropped video.')
         cap.release()
         out.release()
 
+    # TODO: untested
     @staticmethod
     def trim_video(input_video, output_video, offset=None, trim_period=None):
         """
@@ -651,17 +659,17 @@ class VideoData:
 
         cap = cv2.VideoCapture(input_video)
 
-        fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
-        total_frames = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
-        res = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        res = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
         # get the timestamp
         print('Loaded video {0}:'.format(input_video))
         print('    Resolution: {0} x {1}'.format(res[0], res[1]))
         print('    FPS: {0}'.format(fps))
         print('    Frame count: {0}'.format(total_frames))
-        print('    Current timestamp: {0}'.format(cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC)))
-        print('    Current index: {0}'.format(cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)))
+        print('    Current timestamp: {0}'.format(cap.get(cv2.CAP_PROP_POS_MSEC)))
+        print('    Current index: {0}'.format(cap.get(cv2.CAP_PROP_POS_FRAMES)))
 
         # --------------------------------------------------------------
         # compute the index of frames to trim
@@ -672,10 +680,9 @@ class VideoData:
         print('Trimming video...')
         # --------------------------------------------------------------
         # set the current frame
-        cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES, index_start)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, index_start)
         # create writerCV
-        fourcc = cv2.cv.CV_FOURCC('m','p','4','v')
-        # fourcc = cv2.cv.CV_FOURCC('a', 'v', 'c', '1')   # use H.264 compression
+        fourcc = cv2.VideoWriter_fourcc('D','I','V','X')
         out = cv2.VideoWriter(output_video, fourcc, fps, res)
 
         for i in range(0, num_frames):
@@ -699,7 +706,7 @@ class VideoData:
         # cv2.destroyAllWindows()
 
     @staticmethod
-    def play_video(input_video):
+    def play_video(input_video, x_coord=None, y_coord=None):
         """
         This function plays the video. Press q to quit
         :param input_video: input video file
@@ -708,41 +715,110 @@ class VideoData:
 
         cap = cv2.VideoCapture(input_video)
 
-        fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
-        total_frames = cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
-        res = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        res = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
         # print out information
         print('Loaded video {0}:'.format(input_video))
-        print('    Current timestamp: {0}'.format(cap.get(cv2.cv.CV_CAP_PROP_POS_MSEC)))
-        print('    Current index: {0}'.format(cap.get(cv2.cv.CV_CAP_PROP_POS_FRAMES)))
         print('    Resolution: {0} x {1}'.format(res[0], res[1]))
         print('    FPS: {0}'.format(fps))
         print('    Frame count: {0}'.format(total_frames))
+        print('    Current timestamp: {0}'.format(cap.get(cv2.CAP_PROP_POS_MSEC)))
+        print('    Current index: {0}'.format(cap.get(cv2.CAP_PROP_POS_FRAMES)))
 
         # --------------------------------------------------------------
+        if x_coord is None: x_coord = (0, res[0])
+        if y_coord is None: y_coord = (0, res[1])
         for i in range(0, int(total_frames)):
             ret, frame = cap.read()
 
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # play in gray
+            # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # # draw a line to find out the lane bound
+            # cv2.line(gray, (0,0), res, (255,255,255), 5)
+            # cv2.imshow('{0}'.format(input_video),gray)
 
-            cv2.imshow('frame',gray)
+            # play in color
+            cv2.line(frame, (x_coord[0], y_coord[0]), (x_coord[1], y_coord[0]), (0,255,0), 1)
+            cv2.line(frame, (x_coord[0], y_coord[1]), (x_coord[1], y_coord[1]), (0,255,0), 1)
+            cv2.imshow('{0}'.format(input_video), frame)
+
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
+    def generate_heatmap(self, input_video, save_npy=None):
 
+        # ----------------------------------------------------------------------------------------
+        # Load video
+        cap = cv2.VideoCapture(input_video)
 
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        res = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
+        # print out information
+        print('Loaded video {0}:'.format(input_video))
+        print('    Resolution: {0} x {1}'.format(res[0], res[1]))
+        print('    FPS: {0}'.format(fps))
+        print('    Frame count: {0}'.format(total_frames))
+        print('    Current timestamp: {0}'.format(cap.get(cv2.CAP_PROP_POS_MSEC)))
+        print('    Current index: {0}'.format(cap.get(cv2.CAP_PROP_POS_FRAMES)))
 
+        # ----------------------------------------------------------------------------------------
+        # load the image in grayscale
+        fgbg = cv2.bgsegm.createBackgroundSubtractorMOG()
 
+        # ----------------------------------------------------------------------------------------
+        heatmap = []
+        for i in range(0, int(total_frames)):
+            ret, frame = cap.read()
+            fgmask = fgbg.apply(frame)
 
+            # ------------------------------------------------------------------------------
+            # plot if necessary
+            # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # stack_img = np.vstack([gray, fgmask])
+            # cv2.imshow('subtracted background', stack_img)
+            # if cv2.waitKey(1) & 0xFF == ord('q'):
+            #     break
 
+            # ------------------------------------------------------------------------------
+            # sum up each column and normalize to [0,1]
+            heatmap.append(np.sum(fgmask, 0)/(255.0*res[1]))
+            print_loop_status('Status: vectorizing ', i, total_frames)
 
+        heatmap = np.asarray(heatmap).T
 
+        if save_npy is not None:
+            np.save(save_npy, heatmap)
 
+        return heatmap
 
+    def plot_heatmap(self, heatmap, figsize=(18,8), plot=False, save_img=None, title=''):
 
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set_aspect('auto')
+        im = ax.imshow(heatmap, cmap=plt.get_cmap('jet'), interpolation='nearest', aspect='auto',
+                        vmin=0, vmax=1)
+        cax = fig.add_axes([0.95, 0.15, 0.01, 0.65])
+        fig.colorbar(im, cax=cax, orientation='vertical')
 
+        ax.set_title('{0}'.format(title), fontsize=18)
+        x_ticks = ax.get_xticks().tolist()
+        ax.set_xticklabels( np.round(np.array(x_ticks)/60.0).astype(int) )
+        ax.set_xlabel('Time (seconds)', fontsize=16)
+        ax.set_ylabel('Frame pixels', fontsize=16)
 
+        if save_img is not None:
+            plt.savefig('{0}'.format(save_img), bbox_inches='tight')
+
+        if plot is True:
+            plt.draw()
+        else:
+            plt.clf()
+            plt.close()
+
+        return heatmap
 
 
