@@ -453,7 +453,7 @@ class SensorData:
         # save the dataframe
         if save_df is True:
             data.ix[_t_start:_t_end, columns].to_csv(save_dir+'heatmap__{0}__{1}.csv'.format(time2str_file(_t_start),
-                                                                                           time2str(_t_end)))
+                                                                                           time2str_file(_t_end)))
         heatmap = data.ix[_t_start:_t_end, columns].values.T
 
         # change all background white noise into nan
@@ -806,7 +806,7 @@ class VideoData:
 
         ax.set_title('{0}'.format(title), fontsize=18)
         x_ticks = ax.get_xticks().tolist()
-        ax.set_xticklabels( np.round(np.array(x_ticks)/60.0).astype(int) )
+        # ax.set_xticklabels( np.round(np.array(x_ticks)/60.0).astype(int) )
         ax.set_xlabel('Time (seconds)', fontsize=16)
         ax.set_ylabel('Frame pixels', fontsize=16)
 
