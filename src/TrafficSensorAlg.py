@@ -21,6 +21,7 @@ from sklearn import linear_model
 from sklearn.ensemble import IsolationForest
 from scipy.spatial import ConvexHull
 import pandas as pd
+import imutils
 
 
 
@@ -272,6 +273,7 @@ class SensorData:
 
         return norm_data
 
+
     def _get_noise_distribution(self, raw_data, t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.1,0.01),
                                 pixels=None):
         """
@@ -490,7 +492,8 @@ class SensorData:
 
         return fig, ax
 
-    def plot_noise_evolution(self, data, p_outlier=0.01, stop_thres=(0.5,0.1), pixel=None, window_s=120, step_s=30):
+    def plot_noise_evolution(self, data, t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.01,0.1),
+                             pixel=None, window_s=120, step_s=30):
         """
         Plot the evolution of the time series noise distribution for pixel
         :param data: pandas dataframe
@@ -501,6 +504,13 @@ class SensorData:
         :param step_s: seconds, the step for sliding the window
         :return: returns the axis handle
         """
+
+        if t_start is None: t_start = data.index[0]
+        if t_end is None: t_end = data.index[-1]
+
+        # t_start and t_end may not be in the index, hence replace by _t_start >= t_start and _t_end <= t_end
+        _t_start = data.index[np.where(data.index>=t_start)[0][0]]
+        _t_end = data.index[np.where(data.index<=t_end)[0][-1]]
 
         dw = timedelta(seconds=window_s)
         dt = timedelta(seconds=step_s)
@@ -568,7 +578,7 @@ class SensorData:
         for pixel in pixels:
 
             plt.plot(data_to_plot.index, data_to_plot.ix[:,'pir_{0}x{1}'.format(pixel[0], pixel[1])],
-                     label='pixel {1}'.format(pixel))
+                     label='pixel {0}'.format(pixel))
 
         ax.xaxis.set_major_locator(mdates.MinuteLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
@@ -589,13 +599,11 @@ class SensorData:
 # ==================================================================================================================
 class VideoData:
 
-    def __init__(self,  save_dir='', fps=60, offset=0):
-        self.save_dir = save_dir
-        self.fps = fps
-        self.offset = offset
+    def __init__(self):
+        pass
 
     @staticmethod
-    def crop_video(input_video, output_video, x_coord=None, y_coord=None, frame_lim=None):
+    def crop_video(input_video, output_video, rotation=None, x_coord=None, y_coord=None, frame_lim=None):
 
         cap = cv2.VideoCapture(input_video)
 
@@ -631,6 +639,10 @@ class VideoData:
             with suppress_stdout():
                 ret, frame = cap.read()
                 if ret is True:
+
+                    if rotation is not None:
+                        frame = imutils.rotate(frame, rotation)
+
                     out.write(frame[y_coord[0]:y_coord[1], x_coord[0]:x_coord[1], :])
                 else:
                     raise Exception('fail to read frame')
@@ -706,7 +718,7 @@ class VideoData:
         # cv2.destroyAllWindows()
 
     @staticmethod
-    def play_video(input_video, x_coord=None, y_coord=None):
+    def play_video(input_video, rotation=None, x_coord=None, y_coord=None):
         """
         This function plays the video. Press q to quit
         :param input_video: input video file
@@ -733,6 +745,9 @@ class VideoData:
         for i in range(0, int(total_frames)):
             ret, frame = cap.read()
 
+            if rotation is not None:
+                frame = imutils.rotate(frame, rotation)
+
             # play in gray
             # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             # # draw a line to find out the lane bound
@@ -745,9 +760,11 @@ class VideoData:
             cv2.imshow('{0}'.format(input_video), frame)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
+                cap.release()
                 break
 
-    def generate_heatmap(self, input_video, save_npy=None):
+    @staticmethod
+    def generate_heatmap(input_video, save_npy=None):
 
         # ----------------------------------------------------------------------------------------
         # Load video
@@ -766,7 +783,6 @@ class VideoData:
         print('    Current index: {0}'.format(cap.get(cv2.CAP_PROP_POS_FRAMES)))
 
         # ----------------------------------------------------------------------------------------
-        # load the image in grayscale
         fgbg = cv2.bgsegm.createBackgroundSubtractorMOG()
 
         # ----------------------------------------------------------------------------------------
@@ -793,9 +809,12 @@ class VideoData:
         if save_npy is not None:
             np.save(save_npy, heatmap)
 
+        cap.release()
+
         return heatmap
 
-    def plot_heatmap(self, heatmap, figsize=(18,8), plot=False, save_img=None, title=''):
+    @staticmethod
+    def plot_heatmap(heatmap, figsize=(18,8), plot=False, save_img=None, title=''):
 
         fig, ax = plt.subplots(figsize=figsize)
         ax.set_aspect('auto')
@@ -821,4 +840,67 @@ class VideoData:
 
         return heatmap
 
+    @staticmethod
+    def generate_1d_signal(input_video, rotation=None, x_coord=None, y_coord=None):
+        """
+        This function plays the video. Press q to quit
+        :param input_video: input video file
+        :return:
+        """
 
+        cap = cv2.VideoCapture(input_video)
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        res = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+
+        # print out information
+        print('Loaded video {0}:'.format(input_video))
+        print('    Resolution: {0} x {1}'.format(res[0], res[1]))
+        print('    FPS: {0}'.format(fps))
+        print('    Frame count: {0}'.format(total_frames))
+        print('    Current timestamp: {0}'.format(cap.get(cv2.CAP_PROP_POS_MSEC)))
+        print('    Current index: {0}'.format(cap.get(cv2.CAP_PROP_POS_FRAMES)))
+
+        if x_coord is None: x_coord = (0, res[0])
+        if y_coord is None: y_coord = (0, res[1])
+
+        # --------------------------------------------------------------
+        # define the output video
+        # fourcc = cv2.cv.CV_FOURCC('m','p','4','v')    # for opencv 2
+        fourcc = cv2.VideoWriter_fourcc('D','I','V','X')
+        output_video = input_video.replace('.mp4', '_cropped.mp4')
+        out = cv2.VideoWriter(output_video, fourcc, fps,
+                              (x_coord[1]-x_coord[0],y_coord[1]-y_coord[0]))
+
+        # --------------------------------------------------------------
+        fgbg = cv2.bgsegm.createBackgroundSubtractorMOG()
+        signal = []
+        for i in range(0, int(total_frames)):
+            ret, frame = cap.read()
+
+            if rotation is not None:
+                frame = imutils.rotate(frame, rotation)
+
+            out.write(frame[y_coord[0]:y_coord[1], x_coord[0]:x_coord[1], :])
+
+            # subtract background
+            fgmask = fgbg.apply(frame)
+
+            # play in gray
+            # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # # draw a line to find out the lane bound
+            # cv2.line(gray, (0,0), res, (255,255,255), 5)
+            # cv2.imshow('{0}'.format(input_video),gray)
+
+            # summarize the energy within x_coord and y_coord and normalize to [0,1]
+            energy = np.sum( fgmask[y_coord[0]:y_coord[1], x_coord[0]:x_coord[1]] )/\
+                     (255*(x_coord[1]-x_coord[0])*(y_coord[1]-y_coord[0]))
+            signal.append(energy)
+
+            print_loop_status('Status: processing frame  ', i, total_frames)
+
+        cap.release()
+        out.release()
+
+        return signal

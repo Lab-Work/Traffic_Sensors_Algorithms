@@ -1,0 +1,106 @@
+#################################################################################
+This folder contains the five datasets collected (four on rural Neil street and one one Urban) in 2016. 
+Inside each folder contains subfolders that correspond to each of the sensors.
+
+Data Format for the Sensors is as follows:
+Timestamp | PIR Data (by row) | Ultrasonic | Ambient 1 | Ambient 2
+#################################################################################
+High level:
+  - All timestamps are UTC time. 
+  - Ultrasonic sensor has too many false positives and false negatives (to check)
+  - 1013: one sensor set with clean PIR data, but poor ultrasonic sensor data.
+  - 1027: 
+  - 1103: no video data available
+  - 1116: the PIR sensor was noisy (right half of frame consistantly hotter than left half). 
+  - 1118: ultrasonic sensor data is poor and the test was for stop-and-go traffic.
+#################################################################################
+
+
+
+##################################################################
+1013: 
+- One sensor set (4x32 pixels) 
+- Two tests: free flow and stop-and-go; locations figures in the folder.
+- The ultrasonic sensor was not performing well (too many false positive and false negatives.)
+- Video data available (60 FPS), but timestamps not correct. 
+      |
+      |- v1_1: y_corrd = (335, 395)
+          - timestamp: 2016-10-13 20:57:29.263628   fps: 60.154
+      |- v1_2 y_corrd = (305, 350)
+          - timestamp: 2016-10-13 20:57:29.463628   fps: 60.154
+- Sensor datasets:
+      |
+      |- senspi1:
+          - 1310-210300 (freeflow) :::: 10-13 21:03:05 -> 10-13 21:15:16 (12 min)
+          - 1310-213154 (freeflow) :::: 10-13 21:32:03 -> 10-13 21:40:35 (8 min)
+          - 1310-221543 (stop-and-go):: 10-13 22:15:49 -> 10-13 22:28:27 (13 min)
+
+
+##################################################################
+1027:
+- Two sensor sets (each 4x32 pixels)
+- Placement on rural Neil street at the freeflow location:
+      - senspi1 and senspi2 were placed on the same side of road right next to each other.
+      - valipi1_1 and valipi3_2 were placed on the same side as the senspi right next to each other; valipi3_1 was placed on the opposite side. 
+- Ultrasonic sensor data was not checked yet. 
+- Video data avaliable at (60 FPS); timestamps not checked yet.
+- Sensor datasets:
+      |
+      |- senspi1: 2710-205846 :::: 10-27 20:59:34 —> 10-27 21:45:50 (45 min)
+      |- senspi2: 2710-210055 :::: 10-27 21:01:05 —> 10-27 21:45:48 (44 min)
+
+##################################################################
+1103
+- First attempt at a test with all 9 sensors, with wireless capability
+- At rural Neil street at freeflow location
+- No video data available.
+- Sensor datasets:
+      |
+      |- s1: 0311-191717 :::: 11-03 19:34:04 —> 11-03 20:15:53 (40 min)
+      |- s2: 0311-192414 :::: 11-03 19:34:02 —> 11-03 20:15:26 (40 min)
+      |- s3: 0311-193053 :::: 11-03 19:34:00 —> 11-03 20:24:49 (50 min)
+
+
+##################################################################
+1116
+- All 9 sensors (3 senspi and 6 valpi).
+- Located south side of the Walmart traffic light on Neil for collecting freeflow data.
+- Due to the orientation of sensors (may facing the sun), the right side of each frame is consistantly hotter than the left side. Consequently, the PIR sensors data is much noiser.
+- The ultrasonic sensor data had too many false positives and false negatives. 
+- Video data available (90 FPS) flipped upside down (output.mp4 corrected the orientation from out.mp4). The timestamp (video file name) marks the starting time of the video within seconds error. All following y_coords are based on the un-corrected orientation video out.mp4:
+      |
+      |- v1_1 (1611-162243): y_corrd = (60, 125)                               55:45 min   3.0GB
+      |- v1_2 (1611-162243): y_corrd = (25, 115)                               55:53 min   2.2GB
+      |- v2_1 (1611-162244): y_corrd = (0, 100)                                55:53 min   2.1GB
+      |- v2_2 (1611-162243): rotation -2.7 degrees, y_corrd = (80, 155)        55:53 min   3.6GB
+      |- v3_1 (1611-162244): rotation -4.0 degrees, y_corrd = (60, 145)        55:53 min   3.1GB
+      |- v3_2 (1611-162244): rotation 1.0 degrees, y_corrd = (30, 130)         55:38 min   5.2GB
+
+- Sensor datasets:
+      |
+      |- s1: 1611-061706 :::: 11-16 16:22:44 —> 11-16 16:54:38 (32 min)
+      |- s2: 0711-211706 :::: 11-16 16:22:43 —> 11-16 17:13:08 (50 min)
+      |- s3: 1611-151742 :::: 11-16 16:23:11 —> 11-16 16:58:48 (35 min)
+
+##################################################################
+1118
+- All 9 sensors for testing congested traffic
+- Located in downtown Champaign (map in folder)
+- Video data is available (90 FPS) flipped upside down (output.mp4 corrected the orientation from out.mp4). he timestamp (video file name) marks the starting time of the video within seconds error. v1_1 tiemstamp (file name) is wrong which should be corrected from other videos. All following y_coords are based on the un-corrected orientation video out.mp4:
+      |
+      |- v1_1 (1611-174118): rotation = -1.0, y_corrd = (0, 300)                1:01:37   6.3GB     
+          - timestamp:         fps:       
+      |- v1_2 (1811-145508): y_corrd = (0, 170)                                 1:00:27   6.3GB
+      |- v2_1 (1811-145551): y_corrd = (0, 270)                                   58:08   6.4GB
+      |- v2_2 (1811-145509): rotation = -2.0 degrees, y_corrd = (0, 270)          59:00   7.0GB
+      |- v3_1 (1811-145508): rotation = -2.0 degrees, y_corrd = (0. 320)          56:57   6.6GB     
+      |- v3_2 (1811-145508): rotation = 5.0 degrees, y_corrd =  (0, 220)          58:27   6.4GB    
+
+- Sensor datasets:
+      |
+      |- s1: 1611-171706 :::: 11-18 14:55:09 —> 11-18 15:31:10 (36 min)
+      |- s2: 1811-144926 :::: 11-18 14:55:09 —> 11-18 15:32:18 (37 min)
+      |- s3: 1611-171707 :::: 11-18 14:55:09 -> 11-18 15:25:31 (30 min)
+
+
+
