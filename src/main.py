@@ -2,9 +2,9 @@ from TrafficSensorAlg import *
 
 def main():
 
-    # data_analysis()
+    data_analysis()
     # video_analysis()
-    sync_data()
+    # sync_data()
 
 def data_analysis():
     # --------------------------------------------------
@@ -37,21 +37,21 @@ def data_analysis():
     # - Neil street. Three PIR sensor arrays, for stop and go data.
     # - One PIR sensor array 4x32, at 64 Hz
     # --------------------------------------------------
-    # folder = '../datasets/1118_2016/s1/'
-    # dataset = '1611-171706'
+    folder = '../datasets/1118_2016/s1/'
+    dataset = '1611-171706'
 
     # folder = '../datasets/1118_2016/s2/'
     # dataset = '1811-144926'
 
-    folder = '../datasets/1118_2016/s3/'
-    dataset = '1611-171707'
+    # folder = '../datasets/1118_2016/s3/'
+    # dataset = '1611-171707'
 
     # ===============================================================================================
     # Configuration
     save_dir = '../workspace/1118/'
     data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
-    periods = data.get_data_periods(folder, update=True, f_type='txt')
-    df = data.load_txt_data(folder+'{0}.txt'.format(dataset))
+    periods = data.get_data_periods(folder, update=False, f_type='txt')
+    # df = data.load_txt_data(folder+'{0}.txt'.format(dataset))
 
     # ===============================================================================================
     # plot and normalize
@@ -59,22 +59,29 @@ def data_analysis():
     #                             t_end=periods[dataset][0]+timedelta(seconds=300), cbar=(20,40), option='vec',
     #                             nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False, save_df=False,
     #                             figsize=(18,8))
-    norm_df = data.batch_normalization(df, t_start=periods[dataset][0],
-                                       t_end=periods[dataset][1], p_outlier=0.01,
-                                       stop_thres=(0.01,0.1), window_s=5, step_s=1)
+    # norm_df = data.batch_normalization(df, t_start=periods[dataset][0],
+    #                                    t_end=periods[dataset][1], p_outlier=0.01,
+    #                                    stop_thres=(0.01,0.1), window_s=5, step_s=1)
+    #
+    # norm_df.to_csv(save_dir + 's3_2d_{0}.csv'.format(time2str_file(periods[dataset][0])))
 
-    norm_df.to_csv(save_dir + 's3_2d_{0}.csv'.format(time2str_file(periods[dataset][0])))
+    # ===============================================================================================
+    # Use MAP and FSM to normalize
+    # norm_df = data.subtract_background(df, t_start=periods[dataset][0],
+    #                                    t_end=periods[dataset][0]+timedelta(seconds=300), init_s=3,
+    #                                    veh_pt_thres=8, noise_pt_thres=5, prob_int=0.8, pixels=None)
+    # norm_df.to_csv(save_dir + 's1_2d_MAP_{0}.csv'.format(time2str_file(periods[dataset][0])))
 
 
     # ===============================================================================================
     # plot saved heatmap
     # load norm_df
-    # norm_df = pd.read_csv(save_dir+'s1_norm_df.csv', index_col=0)
-    # norm_df.index = norm_df.index.to_datetime()
-    # fig, ax = data.plot_heatmap_in_period(norm_df, t_start=periods[dataset][0],
-    #                                       t_end=periods[dataset][0]+timedelta(seconds=300), cbar=(0,4),
-    #                                       option='vec', nan_thres_p=0.9, plot=True, save_dir=save_dir, save_img=False,
-    #                                       save_df=False, figsize=(18,8))
+    norm_df = pd.read_csv(save_dir+'s1_2d_MAP_{0}.csv'.format(time2str_file(periods[dataset][0])), index_col=0)
+    norm_df.index = norm_df.index.to_datetime()
+    fig, ax = data.plot_heatmap_in_period(norm_df, t_start=periods[dataset][0],
+                                          t_end=periods[dataset][0]+timedelta(seconds=300), cbar=(20,40),
+                                          option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
+                                          save_df=False, figsize=(18,8))
 
     # ===============================================================================================
     # plot the noise evolution

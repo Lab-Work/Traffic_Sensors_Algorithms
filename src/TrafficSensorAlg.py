@@ -59,6 +59,13 @@ def print_loop_status(msg, i, total_iter):
     sys.stdout.write('{0} {1}/{2}'.format(msg, i, total_iter))
     sys.stdout.flush()
 
+def in_conf_intrvl(data, prob, mu, sigma):
+    v_thres_u = stats.norm.ppf(1-(1-prob)/2.0, mu, sigma)
+    v_thres_l = mu - (v_thres_u - mu)
+
+    return (data>=v_thres_l) & (data<=v_thres_u)
+
+
 @contextmanager
 def suppress_stdout():
     with open(os.devnull, "w") as devnull:
@@ -272,6 +279,122 @@ class SensorData:
             print('\n')
 
         return norm_data
+
+
+    def subtract_background(self, raw_data, t_start=None, t_end=None, init_s=300, veh_pt_thres=5, noise_pt_thres=5,
+                            prob_int=0.9, pixels=None):
+
+        # only normalize those period of data
+        if t_start is None: t_start = raw_data.index[0]
+        if t_end is None: t_end = raw_data.index[-1]
+
+        # save the batch normalized data
+        frames = raw_data.index[ (raw_data.index >= t_start) & (raw_data.index <= t_end) ]
+        norm_data = raw_data.loc[frames,:]
+        # set the data to be all 0
+        veh_data = deepcopy(norm_data)
+        veh_data.values[:, 0:self.tot_pix] = 0.0
+
+        if pixels is None:
+            _row, _col = np.meshgrid( np.arange(0, self.pir_res[0]), np.arange(0, self.pir_res[1]) )
+            pixels = zip(_row.flatten(), _col.flatten())
+
+        # ------------------------------------------------------------------------
+        # Initialize the background noise distribution.
+        t_init_end = t_start + timedelta(seconds=init_s)
+        _, _, noise_means, noise_stds = self._get_noise_distribution(norm_data, t_start=t_start,
+                                                                     t_end=t_init_end, p_outlier=0.01,
+                                                                     stop_thres=(0.1, 0.01), pixels=None)
+
+        # ------------------------------------------------------------------------
+        # the current noise distribution
+        n_mu = noise_means.T.reshape(self.tot_pix)
+        n_sigma = noise_stds.T.reshape(self.tot_pix)
+
+        # assuming the prior of the noise mean distribution is N(mu, sig), where mu noise_means and sig is noise_std*3
+        prior_n_mu = deepcopy(n_mu)
+        prior_n_sigma = deepcopy(n_sigma)*3.0
+
+        # ------------------------------------------------------------------------
+        # Now iterate through each frame
+        _t_init_end = raw_data.index[np.where(raw_data.index>t_init_end)[0][0]]
+        _t_end = raw_data.index[np.where(raw_data.index<=t_end)[0][-1]]
+        idxs = norm_data.ix[_t_init_end:_t_end].index
+        num_frames = len(idxs)
+
+        # State definition:
+        # 0: noise;
+        # positive: number of positive consecutive vehicle pts;
+        # negative: number of consecutive noise points from a vehicle state
+        state = np.zeros(self.tot_pix)
+        buf_is_veh = np.zeros(self.tot_pix)
+        buf = {}
+        for pix in range(0, self.tot_pix):
+            buf[pix] = []
+
+        for i, cur_t in enumerate(idxs):
+
+            # check if current point is noise
+            is_noise = in_conf_intrvl(norm_data.ix[cur_t, 0:self.tot_pix], prob_int, n_mu, n_sigma)
+
+            for pix in range(0, self.tot_pix):
+                # for each pixel, run the state machine
+                if state[pix] == 0:
+                    if is_noise[pix]:
+                        # update noise distribution using buffer noise
+                        self._MAP_update([norm_data.ix[cur_t, pix]], (n_mu[pix], n_sigma[pix]),
+                                                 (prior_n_mu[pix], prior_n_sigma[pix]))
+                    else:
+                        buf[pix].append(cur_t)
+                        state[pix] = 1
+
+                elif state[pix] > 0:
+                    buf[pix].append(cur_t)
+                    if is_noise[pix]:
+                        state[pix] = -1
+                    else:
+                        state[pix] += 1
+                        if state[pix] >= veh_pt_thres:
+                            buf_is_veh[pix] = 1
+
+                elif state[pix] < 0:
+                    buf[pix].append(cur_t)
+                    if is_noise[pix]:
+                        state[pix] -= 1
+                        if np.abs(state[pix]) >= noise_pt_thres:
+                            # to dump the buffer
+                            if buf_is_veh[pix] > 0:
+                                # mark buffer as one vehicle point
+                                veh_data.ix[buf[pix], pix] = norm_data.ix[buf[pix], pix].values
+                            else:
+                                # update noise distribution using buffer noise
+                                self._MAP_update(norm_data.ix[buf[pix],pix].values, (n_mu[pix], n_sigma[pix]),
+                                                 (prior_n_mu[pix], prior_n_sigma[pix]))
+
+                            # reset the buffer and state
+                            buf[pix] = []
+                            state[pix] = 0
+                            buf_is_veh[pix] = 0
+                    else:
+                        state[pix] = 1
+
+            print_loop_status('Processing frame: ', i, num_frames)
+
+        return veh_data
+
+
+    def _MAP_update(self, data, paras, prior):
+        mu, sig = paras
+        prior_mu, prior_sig = prior
+        if type(data) is int or type(data) is float:
+            len_data = 1
+        else:
+            len_data = len(data)
+
+        post_var = np.sqrt(1.0/(1.0/prior_sig**2 + len_data/sig**2))
+        post_mu = post_var*(np.sum(data)/sig**2 + prior_mu/prior_sig**2)
+
+        return post_mu, np.sqrt( sig**2 +  post_var)
 
 
     def _get_noise_distribution(self, raw_data, t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.1,0.01),
