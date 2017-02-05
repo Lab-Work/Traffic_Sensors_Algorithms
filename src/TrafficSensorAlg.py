@@ -65,6 +65,8 @@ def in_conf_intrvl(data, prob, mu, sigma):
 
     return (data>=v_thres_l) & (data<=v_thres_u)
 
+def in_2sigma(data, mu, sigma):
+    return (data>=mu-2.0*sigma) & (data<=mu+2.0*sigma)
 
 @contextmanager
 def suppress_stdout():
@@ -280,9 +282,13 @@ class SensorData:
 
         return norm_data
 
-
+    @profile
     def subtract_background(self, raw_data, t_start=None, t_end=None, init_s=300, veh_pt_thres=5, noise_pt_thres=5,
                             prob_int=0.9, pixels=None):
+
+        _debug = False
+        if _debug:
+            _debug_mu = []
 
         # only normalize those period of data
         if t_start is None: t_start = raw_data.index[0]
@@ -304,12 +310,15 @@ class SensorData:
         t_init_end = t_start + timedelta(seconds=init_s)
         _, _, noise_means, noise_stds = self._get_noise_distribution(norm_data, t_start=t_start,
                                                                      t_end=t_init_end, p_outlier=0.01,
-                                                                     stop_thres=(0.1, 0.01), pixels=None)
+                                                                     stop_thres=(0.001, 0.0001), pixels=None)
 
         # ------------------------------------------------------------------------
         # the current noise distribution
         n_mu = noise_means.T.reshape(self.tot_pix)
         n_sigma = noise_stds.T.reshape(self.tot_pix)
+
+        if _debug:
+            print('initial mu and sigma: {0:.05f}, {1:.05f}'.format(n_mu[98], n_sigma[98]))
 
         # assuming the prior of the noise mean distribution is N(mu, sig), where mu noise_means and sig is noise_std*3
         prior_n_mu = deepcopy(n_mu)
@@ -334,23 +343,52 @@ class SensorData:
 
         for i, cur_t in enumerate(idxs):
 
-            # check if current point is noise
-            is_noise = in_conf_intrvl(norm_data.ix[cur_t, 0:self.tot_pix], prob_int, n_mu, n_sigma)
-
             for pix in range(0, self.tot_pix):
+
+                # check if current point is noise
+                # is_noise = in_conf_intrvl(norm_data.ix[cur_t,pix], prob_int, n_mu[pix], n_sigma[pix])
+                # is_noise = in_2sigma(norm_data.ix[cur_t,pix], n_mu[pix], n_sigma[pix])
+
+                v = norm_data.ix[cur_t,pix]
+                is_noise = (v>=n_mu[pix]-2.0*n_sigma[pix]) & (v>=n_mu[pix]+2.0*n_sigma[pix])
+
+                if _debug and pix==88:
+                    print('is noise: {0}'.format(is_noise))
+
                 # for each pixel, run the state machine
                 if state[pix] == 0:
-                    if is_noise[pix]:
-                        # update noise distribution using buffer noise
-                        self._MAP_update([norm_data.ix[cur_t, pix]], (n_mu[pix], n_sigma[pix]),
-                                                 (prior_n_mu[pix], prior_n_sigma[pix]))
+                    if is_noise:
+                        buf[pix].append(cur_t)
                     else:
+                        # update noise distribution using buffer noise
+                        (_n_mu, _n_sig), (_prior_mu, _prior_sig) = self._MAP_update(norm_data.ix[buf[pix], pix],
+                                                                                    (n_mu[pix], n_sigma[pix]),
+                                                 (prior_n_mu[pix], prior_n_sigma[pix]))
+                        if _debug and pix== 98:
+                            _debug_mu.append([cur_t, _n_mu])
+                            print('1st updating MAP:')
+                            print('       last mu, sig: {0:.05f}, {1:.05f}'.format(n_mu[pix], n_sigma[pix]))
+                            print('       prior mu, sig: {0:.05f}, {1:.05f}'.format(prior_n_mu[pix], prior_n_sigma[pix]))
+                            print('       updated mu, sig: {0:.05f}, {1:.05f}'.format(_n_mu, _n_sig))
+                            print('       updated prior mu, sig: {0:.05f}, {1:.05f}'.format(_prior_mu, _prior_sig))
+                            print('       data: {0}'.format(norm_data.ix[buf[pix], pix].values))
+
+                        # update the noise distribution
+                        n_mu[pix] = _n_mu
+                        n_sigma[pix] = _n_sig
+
+                        # update the prior distribution of the background noise
+                        prior_n_mu[pix] = _prior_mu
+                        prior_n_sigma[pix] = _prior_sig
+
+                        # clear buffer
+                        buf[pix] = []
                         buf[pix].append(cur_t)
                         state[pix] = 1
 
                 elif state[pix] > 0:
                     buf[pix].append(cur_t)
-                    if is_noise[pix]:
+                    if is_noise:
                         state[pix] = -1
                     else:
                         state[pix] += 1
@@ -359,17 +397,34 @@ class SensorData:
 
                 elif state[pix] < 0:
                     buf[pix].append(cur_t)
-                    if is_noise[pix]:
+                    if is_noise:
                         state[pix] -= 1
                         if np.abs(state[pix]) >= noise_pt_thres:
                             # to dump the buffer
                             if buf_is_veh[pix] > 0:
-                                # mark buffer as one vehicle point
-                                veh_data.ix[buf[pix], pix] = norm_data.ix[buf[pix], pix].values
+                                # mark buffer as one vehicle point, normalize the data
+                                veh_data.ix[buf[pix], pix] = np.abs((norm_data.ix[buf[pix], pix].values - n_mu[pix])/n_sigma[pix])
                             else:
                                 # update noise distribution using buffer noise
-                                self._MAP_update(norm_data.ix[buf[pix],pix].values, (n_mu[pix], n_sigma[pix]),
+                                (_n_mu, _n_sig), (_prior_mu, _prior_sig) = self._MAP_update(norm_data.ix[buf[pix],pix].values,
+                                                                                            (n_mu[pix], n_sigma[pix]),
                                                  (prior_n_mu[pix], prior_n_sigma[pix]))
+                                 # update the noise distribution
+                                n_mu[pix] = _n_mu
+                                n_sigma[pix] = _n_sig
+
+                                # update the prior distribution of the background noise
+                                prior_n_mu[pix] = _prior_mu
+                                prior_n_sigma[pix] = _prior_sig
+
+                                if _debug and pix==98:
+                                    _debug_mu.append([cur_t, _n_mu])
+                                    print('2nd updated mu')
+                                    print('       last mu, sig: {0:.05f}, {1:.05f}'.format(n_mu[pix], n_sigma[pix]))
+                                    print('       prior mu, sig: {0:.05f}, {1:.05f}'.format(prior_n_mu[pix], prior_n_sigma[pix]))
+                                    print('       updated mu, sig: {0:.05f}, {1:.05f}'.format(_n_mu, _n_sig))
+                                    print('       updated prior mu, sig: {0:.05f}, {1:.05f}'.format(_prior_mu, _prior_sig))
+                                    print('       data: {0}'.format(norm_data.ix[buf[pix], pix].values))
 
                             # reset the buffer and state
                             buf[pix] = []
@@ -378,26 +433,37 @@ class SensorData:
                     else:
                         state[pix] = 1
 
-            print_loop_status('Processing frame: ', i, num_frames)
+            print_loop_status('Subtracting background for frame:', i, num_frames)
+
+        if _debug:
+            _debug_mu = np.array(_debug_mu)
+            # plot a single pixel
+            fig, ax = plt.subplots(figsize=(18,5))
+            ax.plot(norm_data.index, norm_data['pir_2x24'], label='pir_2x24 raw')
+            ax.plot(veh_data.index, veh_data['pir_2x24'], label='pir_2x24 raw')
+            ax.plot(_debug_mu[:,0], _debug_mu[:,1], label='_mu')
+            ax.legend()
+            plt.draw()
 
         return veh_data
 
 
     def _MAP_update(self, data, paras, prior):
-        mu, sig = paras
-        prior_mu, prior_sig = prior
+
+        mu, var = paras[0], paras[1]**2
+        prior_mu, prior_var = prior[0], prior[1]**2
         if type(data) is int or type(data) is float:
             len_data = 1
         else:
             len_data = len(data)
 
-        post_var = np.sqrt(1.0/(1.0/prior_sig**2 + len_data/sig**2))
-        post_mu = post_var*(np.sum(data)/sig**2 + prior_mu/prior_sig**2)
+        post_var = 1.0/(1.0/prior_var + len_data/var)
+        post_mu = post_var*(np.sum(data)/var + prior_mu/prior_var)
 
-        return post_mu, np.sqrt( sig**2 +  post_var)
+        return (post_mu, np.sqrt( var +  post_var)), (post_mu, np.sqrt(post_var))
 
 
-    def _get_noise_distribution(self, raw_data, t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.1,0.01),
+    def _get_noise_distribution(self, raw_data, t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.001,0.0001),
                                 pixels=None):
         """
         This function computes the mean and std of noise distribution (normal) by iteratively fitting a normal
@@ -441,7 +507,8 @@ class SensorData:
 
             # converge to the true noise mean
             for i in range(0, 100):
-
+                # if row ==2 and col == 24:
+                #     print('updating noise {0}'.format(i))
                 # =======================================================
                 # throw out the outliers to get a new estimate of mean and std
                 # Pr( x \in [-v_thres, v_thres] ) = 1-p_outlier

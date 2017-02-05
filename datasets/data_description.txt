@@ -4,6 +4,21 @@ Inside each folder contains subfolders that correspond to each of the sensors.
 
 Data Format for the Sensors is as follows:
 Timestamp | PIR Data (by row) | Ultrasonic | Ambient 1 | Ambient 2
+
+To convert the .h264 video data (90 fps), use:
+    ffmpeg -r 90 -i filename.h264 -vcodec copy out.mp4
+Use the following to convert to smaller size (6GB to 400MB)
+    ffmpeg -r 90 -i input_filename.h264 -vcodec:v libx264 -codec:a libvorbis -crf 24 -r 90 output_filename.mp4
+Use the following command to convert to smaller size (6GB to 60MB)
+    ffmpeg -r 90 -i input_filename.h264 -b:v 128k -b:a 32k -vcodec:v libx264 -codec:a libvorbis -r 90 output_filename.mp4
+
+ffmpeg 101:
+    $ '-r 90', place before both input '-i' and output file to specify the frame rate
+    $ '-b:v 128k' specify the video and '-b:a' (audio) bitrate. The lower, the smaller output file size and worse video quality.
+    $ '-crf 24' constant rate factor. Produces the same perceptual image quality in the output. The higher the value (18~24), the smller the output file size. DO NOT WHEN ALSO USE BITRATE. OTHERWISE BITRATE SETTING WILL BE IGNORED.
+    $ '-vcodec:v/a libx264/libvorbis' codec option. Those two produces small file size.
+    
+    
 #################################################################################
 High level:
   - All timestamps are UTC time. 
@@ -89,8 +104,9 @@ High level:
 - Video data is available (90 FPS) flipped upside down (output.mp4 corrected the orientation from out.mp4). he timestamp (video file name) marks the starting time of the video within seconds error. v1_1 tiemstamp (file name) is wrong which should be corrected from other videos. All following y_coords are based on the un-corrected orientation video out.mp4:
       |
       |- v1_1 (1611-174118): rotation = -1.0, y_corrd = (0, 300)                1:01:37   6.3GB     
-          - timestamp:         fps:       
+          - timestamp: 84.0        fps: 90.0       
       |- v1_2 (1811-145508): y_corrd = (0, 170)                                 1:00:27   6.3GB
+          - timestamp: 0.0         fps: 90.0
       |- v2_1 (1811-145551): y_corrd = (0, 270)                                   58:08   6.4GB
       |- v2_2 (1811-145509): rotation = -2.0 degrees, y_corrd = (0, 270)          59:00   7.0GB
       |- v3_1 (1811-145508): rotation = -2.0 degrees, y_corrd = (0. 320)          56:57   6.6GB     
