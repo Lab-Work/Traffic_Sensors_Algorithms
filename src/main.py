@@ -6,7 +6,13 @@ def main():
     # video_analysis()
     # sync_data()
     # veh_det()
-    test_alg()
+    # generate_1d_signal()
+
+    # print update_fps(0.0, -0.526088, 37*60.0+4.838355, 60.12766)
+
+    # test_alg()
+    # generate_video_frames()
+    trim_video()
 
 def data_analysis():
     # --------------------------------------------------
@@ -197,12 +203,12 @@ def test_alg():
     # Configuration
     save_dir = '../workspace/1013/'
 
-    norm_df = pd.read_csv(save_dir + 's1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
-    # norm_df = pd.read_csv(save_dir + 's1_2d_MAP__20161013_213203_763628__20161013_214035_278451_prob95.csv', index_col=0)
+    # norm_df = pd.read_csv(save_dir + 's1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
+    norm_df = pd.read_csv(save_dir + 's1_2d_MAP__20161013_213203_763628__20161013_214035_278451_prob95.csv', index_col=0)
     norm_df.index = norm_df.index.to_datetime()
 
     # data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
-    # fig, ax =data.plot_heatmap_in_period(norm_df, t_start=None, t_end=None, cbar=(0,4),
+    # fig, ax = data.plot_heatmap_in_period(norm_df, t_start=None, t_end=None, cbar=(0,4),
     #                                           option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
     #                                           save_df=False, figsize=(18,8))
 
@@ -211,12 +217,51 @@ def test_alg():
     # run algorithm in batch mode
     alg = TrafficSensorAlg(pir_res=(4,32))
     # alg.batch_run(norm_df, det_thres=600, window_s=2.0, step_s=1.0,
-    #               save_dir='../workspace/1013/figs/speed_est_95_ff1_batch/')
-    alg.vehs = np.load('../workspace/1013/figs/speed_est_95_ff1_batch/detected_vehs.npy')
+    #               save_dir='../workspace/1013/figs/speed_est_95_ff2_batch/')
+    alg.vehs = np.load('../workspace/1013/figs/speed_est_95_ff2_batch/detected_vehs.npy')
     print('Total {0} vehs'.format(len(alg.vehs)))
     alg.plot_detected_vehs(norm_df, ratio_tx=6.0)
 
     plt.show()
+
+
+def generate_video_frames():
+    # ===============================================================================================
+    # generate a video
+    folder = '../datasets/1013_2016/'
+    dataset = '1310-210300'     # freeflow part 1
+    # dataset = '1310-213154'   # freeflow part 2
+    # dataset ='1310-221543'       # stop and go
+
+    # ========================================================
+    # Load the raw PIR data
+    print('Loading raw data...')
+    t1 = datetime.now()
+    raw_df = pd.read_csv(folder+'{0}.csv'.format(dataset), index_col=0)
+    raw_df.index = raw_df.index.to_datetime()
+    t2 = datetime.now()
+    print('Loading raw data csv data took {0} s'.format((t2-t1).total_seconds()))
+
+    # ========================================================
+    # Load the normalized data file
+    print('Loading normalized data...')
+    norm_df = pd.read_csv('../workspace/1013/s1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
+    norm_df.index = norm_df.index.to_datetime()
+
+    # ========================================================
+    # Load the detected vehicles
+    print('Loading detected vehicles...')
+    det_vehs = np.load('../workspace/1013/s1_vehs__20161013_210305_738478__20161013_211516_183544_prob95.npy')
+
+    # ========================================================
+    # Construct algorithm instance
+    print('Generating video frames...')
+    alg = TrafficSensorAlg(pir_res=(4,32))
+    alg.plot_video_frames(video_file='../datasets/1013_2016/1013_v1_1_ff_hq.mp4', video_fps=60.1134421399,
+                          video_start_time=str2time('2016-10-13 20:57:27.5'),
+                          raw_df=raw_df, raw_pir_clim=(20,40),
+                          ratio_tx=6.0, norm_df=norm_df, norm_df_win=5.0, det_vehs=det_vehs,
+                          save_dir='/data_fast/Yanning_sensors/video_1013_ff1/')
 
 
 def veh_det():
@@ -370,92 +415,63 @@ def video_analysis():
     #
     # plt.show()
 
+def trim_video():
+
+    input_video = '../datasets/1013_2016/1013_v1_1_ff_hq.mp4'
+    output_video = '../datasets/1013_2016/1013_v1_1_ff_period2.mp4'
+    video_starttime = str2time('2016-10-13 20:57:27.5')
+    intvl=(str2time('2016-10-13 21:32:03.0'), str2time('2016-10-13 21:40:35.0'))
+
+    vid = VideoData()
+    vid.trim_video(input_video=input_video, output_video=output_video,
+                   video_starttime=video_starttime, trim_period=intvl)
+
+
 
 def sync_data():
 
     plot_video = True
     plot_pir = True
-    plot_ultra = True
-    data_dir = '../datasets/1118_2016/s1/'
-    save_dir = '../workspace/1118/'
+    plot_ultra = False
+    data_dir = '../datasets/1013_2016/'
+    save_dir = '../workspace/1013/'
+
     # ============================================================================================
-    if False:
-        # Load the PIR signal
-        if plot_pir:
-            data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
-            norm_df = pd.read_csv(save_dir+'s1_2d_20161118_145509_610213.csv', index_col=0)
-            norm_df.index = norm_df.index.to_datetime()
+    # Load PIR and ultrasonic sensor data
+    if plot_pir:
+        pir1_df = pd.read_csv(save_dir+'s1_1d__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
+        pir1_df.index = pir1_df.index.to_datetime()
+        pir1_t = pir1_df.index
+        pir1 = pir1_df['pir']
+        ultra1 = pir1_df['ultra']
 
-            columns = [i for i in norm_df.columns if 'pir' in i]
-            pir_heatmap = norm_df.ix[:, columns].values.T
-
-            # remove noise data
-            nan_thres_p = 0.9
-            v_thres = stats.norm.ppf(1-(1-nan_thres_p)/2.0)
-            pir_heatmap[ (pir_heatmap>=-v_thres) & (pir_heatmap<=v_thres) ] = 0
-
-            pir = np.sum(pir_heatmap, 0)
-            pir_t = deepcopy(norm_df.index).tolist()
-
-            print('Loaded PIR data.')
-
-        # ============================================================================================
-        # Load the ultrasonic sensor data
-        if plot_ultra:
-            ultra = (norm_df['ultra'].values)*10.0 + 200.0
-            print('Loaded ultrasonic data')
-
-        # save the 2d data into 1d time series
-        df_1d = pd.DataFrame(zip(pir, ultra), index=norm_df.index, columns=['pir', 'ultra'])
-        df_1d.to_csv(save_dir+'s1_1d_20161118_145509_610213.csv')
-        print('Saved 1d pir+ultra data')
-    else:
-        df_1d = pd.read_csv(save_dir+'s1_1d_20161118_145509_610213.csv', index_col=0)
-        df_1d.index = df_1d.index.to_datetime()
-
-        pir_t = df_1d.index
-        pir = df_1d['pir']
-        ultra = df_1d['ultra']
+        pir2_df = pd.read_csv(save_dir+'s1_1d__20161013_213203_763628__20161013_214035_278451_prob95.csv', index_col=0)
+        pir2_df.index = pir2_df.index.to_datetime()
+        pir2_t = pir2_df.index
+        pir2 = pir2_df['pir']
+        ultra2 = pir2_df['ultra']
 
     # ============================================================================================
     # Load the video signal
     if plot_video:
         vid = VideoData()
-        # t1 = datetime.now()
-        # cam1_heatmap = np.load(save_dir+'1013_2016_freeflow_cam1_heatmap.npy')
-        # cam2_heatmap = np.load(save_dir+'1013_2016_freeflow_cam2_heatmap.npy')
-        # t2 = datetime.now()
-        # print('Loaded video heatmap {0} s'.format((t2-t1).total_seconds()))
 
-        # vid.plot_heatmap(cam1_heatmap,figsize=(18,8), plot=True,
-        #                  save_img='../datasets/1013_2016/1013_2016_freeflow_cam1_heatmap.png',
-        #                  title='2016 Oct 13 freeflow cam 1')
-        # vid.plot_heatmap(cam2_heatmap,figsize=(18,8), plot=True,
-        #                  save_img='../datasets/1013_2016/1013_2016_freeflow_cam2_heatmap.png',
-        #                  title='2016 Oct 13 freeflow cam 2')
-        # t3 = datetime.now()
-        # print('Plotted heatmap {0} s'.format((t3-t2).total_seconds()))
-
-        # summarize each column to get 1d signal
-        # cam1 = np.sum(cam1_heatmap, 0)
-        # cam2 = np.sum(cam2_heatmap, 0)
-
-        cam1 = np.load(data_dir + 'v1_1_signal.npy')*400.0
-        cam2 = np.load(data_dir + 'v1_2_signal.npy')*400.0
+        cam1 = np.load(save_dir+'cam1_1d_ff.npy')*400
+        cam2 = np.load(save_dir+'cam2_1d_ff.npy')*400
 
         # get the timestamps
-        fps_1 = 90.4
-        fps_2 = 90.0
+        fps_1 = 60.1134421399
+        fps_2 = 60.1134421399
         inc_1 = 1.0/fps_1
         inc_2 = 1.0/fps_2
 
         ####
-        offset_cam1 = timedelta(seconds=84.0)
-        offset_cam2 = timedelta(seconds=0.0)
-        t_init = datetime(year=2016, month=11, day=18, hour=0, minute=0, second=0)
+        cam1_t_init = str2time('2016-10-13 20:57:27.5')
+        cam2_t_init = str2time('2016-10-13 20:57:27.7')
+
         ####
-        cam1_t = pd.date_range(t_init+offset_cam1,periods=len(cam1),freq=str(int(inc_1*1e9))+'N')
-        cam2_t = pd.date_range(t_init+offset_cam2,periods=len(cam2),freq=str(int(inc_2*1e9))+'N')
+        cam1_t = pd.date_range(cam1_t_init, periods=len(cam1),freq=str(int(inc_1*1e9))+'N')
+        cam2_t = pd.date_range(cam2_t_init, periods=len(cam2),freq=str(int(inc_2*1e9))+'N')
 
         print('v1_1 timestamp: {0}, num_frames:{1}'.format(time2str(cam1_t[0]), len(cam1)))
         print('v1_2 timestamp: {0}, num_frames:{1}'.format(time2str(cam2_t[0]), len(cam2)))
@@ -463,30 +479,22 @@ def sync_data():
         print('Loaded video data.')
 
     # ============================================================================================
-    # Use pandas correlation to find the shift
-    # video_df = pd.DataFrame(video, index=video_t)
-    # pir_df = pd.DataFrame(pir, index=pir_t)
-    #
-    # y = pd.rolling_corr(video_df, pir_df, 300)
-
-
-    # ============================================================================================
     fig, ax = plt.subplots(figsize=(18,5))
 
     if plot_pir:
         # plot all signals
-        pir_t_s = [(i-pir_t[0]).total_seconds() for i in pir_t]
-        ax.plot(pir_t, pir, label='pir', color='b')
+        ax.plot(pir1_t, pir1, label='pir', color='b')
+        ax.plot(pir2_t, pir2, label='pir', color='b')
         # ax.set_title('pir')
 
     if plot_ultra:
         # fig, ax = plt.subplots(figsize=(18,5))
-        pir_t_s = [(i-pir_t[0]).total_seconds() for i in pir_t]
-        ax.plot(pir_t, ultra, label = 'ultra', color='g')
+        ax.plot(pir1_t, ultra1, label = 'ultra', color='g')
+        ax.plot(pir2_t, ultra2, label = 'ultra', color='g')
         # ax.set_title('ultra')
 
     if plot_video:
-        fig, ax = plt.subplots(figsize=(18,5))
+        # fig, ax = plt.subplots(figsize=(18,5))
         ax.plot(cam1_t, cam1, label='cam1', color='r')
         ax.plot(cam2_t, cam2, label='cam2', color='g')
         # ax.set_title('cam2')
@@ -496,7 +504,66 @@ def sync_data():
     plt.show()
 
 
+def generate_1d_video_signal():
 
+    # ============================================================================================
+    # Load the video signal
+    # video_file = '/data/chris/datasets/1013/valpi1/freeflow/1013_v1_1_ff.mp4'
+    # y_coord = (335, 395)
+
+    video_file = '/data/chris/datasets/1013/valpi2/freeflow/1013_v1_2_ff.mp4'
+    y_coord = (305, 350)
+
+    vid = VideoData()
+    cam = vid.generate_1d_signal(video_file, rotation=None, x_coord=None, y_coord=y_coord)
+    np.save('/data/chris/datasets/1013/valpi2/freeflow/v1_2_1d_ff.npy', cam)
+
+    print('Generated 1d signal.')
+
+
+def generate_1d_pir_signal():
+
+    save_dir = '../workspace/1013/'
+    data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
+    # norm_df = pd.read_csv(save_dir+'s1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
+    norm_df = pd.read_csv(save_dir+'s1_2d_MAP__20161013_213203_763628__20161013_214035_278451_prob95.csv', index_col=0)
+    norm_df.index = norm_df.index.to_datetime()
+
+    columns = [i for i in norm_df.columns if 'pir' in i]
+    pir_heatmap = norm_df.ix[:, columns].values.T
+
+    # remove noise data
+    # nan_thres_p = 0.9
+    # v_thres = stats.norm.ppf(1-(1-nan_thres_p)/2.0)
+    # pir_heatmap[ (pir_heatmap>=-v_thres) & (pir_heatmap<=v_thres) ] = 0
+    pir_heatmap[ np.isnan(pir_heatmap)] = 0.0
+
+    pir = np.sum(pir_heatmap, 0)
+    pir_t = deepcopy(norm_df.index).tolist()
+
+    print('Loaded PIR data.')
+
+    # ============================================================================================
+    # Load the ultrasonic sensor data
+    ultra = (norm_df['ultra'].values)*10.0 + 200.0
+    print('Loaded ultrasonic data')
+
+    # save the 2d data into 1d time series
+    df_1d = pd.DataFrame(zip(pir, ultra), index=norm_df.index, columns=['pir', 'ultra'])
+    df_1d.to_csv(save_dir+'s1_1d__20161013_213203_763628__20161013_214035_278451_prob95.csv')
+    print('Saved 1d pir+ultra data')
+
+
+def update_fps(offset1, offset2, T, fps):
+    """
+    This function updates the fps based on the offsets
+    :param offset1: the offset in seconds regarding to the real time
+    :param offset2: the increased or decreased offset in seconds regarding to the real time after T
+    :param T: the duration for the offset in seconds
+    :param fps: old fps
+    :return: new fps
+    """
+    return fps*(T-offset1+offset2)/T
 
 if __name__ == '__main__':
     main()

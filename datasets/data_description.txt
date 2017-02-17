@@ -40,9 +40,9 @@ High level:
 - Video data available (60 FPS), but timestamps not correct. 
       |
       |- v1_1: y_corrd = (335, 395)
-          - timestamp: 2016-10-13 20:57:29.263628   fps: 60.154
+          - timestamp: 2016-10-13 20:57:27.5   fps: 60.1134421399
       |- v1_2 y_corrd = (305, 350)
-          - timestamp: 2016-10-13 20:57:29.463628   fps: 60.154
+          - timestamp: 2016-10-13 20:57:27.7   fps: 60.1134421399
 - Sensor datasets:
       |
       |- senspi1:

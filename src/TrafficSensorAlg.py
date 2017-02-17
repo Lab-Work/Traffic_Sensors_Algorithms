@@ -8,6 +8,7 @@ from os.path import exists
 from collections import OrderedDict
 import matplotlib
 matplotlib.use('TkAgg')
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import matplotlib.dates as mdates
@@ -262,7 +263,7 @@ class TrafficSensorAlg:
         # --------------------------------------------------------------------
         # scatter the estimated converged models
         colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
-        for i, veh in enumerate(self.vehs):
+        for veh in self.vehs:
 
             # plot the supporting points
             sup_pts = np.array( [[(p[0]-t_start).total_seconds(), p[1]] for p in veh.pts] )
@@ -281,12 +282,13 @@ class TrafficSensorAlg:
         plt.draw()
 
 
-    def nonlinear_trans(self, norm_df, ratio_tx):
+    def nonlinear_trans(self, norm_df, ratio_tx, ref_t=None):
         """
         This function performs the nonlinear transform of norm_df.
         :param norm_df: the dataframe
         :param ratio_tx: the ratio to normalize time and space dimensions. Speed (mph)=2.24*ratio_tx*distantce*slope
-        :return: pts (np array), t_grid, x_grid
+        :param ref_t: the reference time since returned pts times are in seconds.
+        :return: pts (2d np array, s, m), t_grid, x_grid
         """
 
         # ------------------------------------------------------------
@@ -303,9 +305,9 @@ class TrafficSensorAlg:
 
         # ------------------------------------------------------------
         # initialize the time grid in seconds
-        t_start = norm_df.index[0]
-        t_end = norm_df.index[-1]
-        t_grid = [(t-t_start).total_seconds() for t in norm_df.index]
+        if ref_t is None:
+            ref_t = norm_df.index[0]
+        t_grid = [(t-ref_t).total_seconds() for t in norm_df.index]
         t_grid = np.asarray(t_grid)
 
         # ------------------------------------------------------------
@@ -325,16 +327,195 @@ class TrafficSensorAlg:
         return pts, t_grid, x_grid
 
 
-    def plot_video_frames(self, video_file, raw_df, norm_df, det_vehs, save_dir):
+    def plot_video_frames(self, video_file, video_fps, video_start_time,
+                          raw_df, raw_pir_clim, ratio_tx,
+                          norm_df, norm_df_win, det_vehs, save_dir):
         """
-        This function plots the video frames. Use the following command to generate a video
-        :param video_file:
-        :param raw_df:
-        :param norm_df:
-        :param det_vehs:
+        This function plots the video frames. Use the following command to generate a video:
+        "ffmpeg -framerate 12 -pattern_type glob -i '*.png' -vf scale=1480:-2 -vcodec libx264 -pix_fmt yuv420p out.mp4"
+        :param video_file: the video file
+        :param video_fps: the frame rate of the video
+        :param video_start_time: the start timestamp of the video
+        :param raw_df: the raw_df for plotting the PIR data
+        :param raw_pir_clim: (cmin, cmax) for the colorbar
+        :param norm_df: Cleaned data after background subtraction
+        :param norm_df_win: in seconds, how many seconds back to plot
+        :param ratio_tx: the ratio for nonlinear transformation; speed (m/s) = slope*ratio_tx*distance
+        :param det_vehs: the detected vehicles
+        :param save_dir: directory for saving the images
         :return:
         """
-        pass
+
+        # ========================================================================
+        # Process the video
+        cap = cv2.VideoCapture(video_file)
+        total_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        res = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        print('Loaded video {0}:'.format(video_file))
+        print('    Resolution: {0} x {1}'.format(res[0], res[1]))
+        print('    Frame count: {0}'.format(total_video_frames))
+
+        # generating the timestamps for video
+        video_t = []
+        _dt = timedelta(seconds=1.0/video_fps)
+        for i in range(0, total_video_frames):
+            video_t.append( video_start_time + _dt*i)
+        video_t = np.asarray(video_t)
+
+        # get the start and end index of the video frames that corresponds to the data period
+        video_idx_start = np.where(video_t >= raw_df.index[0])[0][0]
+        video_idx_end = np.where(video_t <= raw_df.index[-1])[0][-1]
+
+        print('    Index: ({0}, {1})'.format(video_idx_start, video_idx_end))
+
+        # compute how many zeros to pad when naming files
+        n_digit = len(str(video_idx_end-video_idx_start))
+
+        # set the current frame position
+        cap.set(cv2.CAP_PROP_POS_FRAMES, video_idx_start+349)
+
+        # ========================================================================
+        # plot a figure for each frame
+        for cur_idx in range(video_idx_start+349, video_idx_end):
+
+            print_loop_status('Plotting frame:',cur_idx,video_idx_end)
+
+            cur_t = video_t[cur_idx]
+
+            # ---------------------------------------------------------------------
+            fig = plt.figure(figsize=(18, 10))
+            gs = gridspec.GridSpec(2, 2, height_ratios=[5, 1], width_ratios=[3,2])
+
+            ax_video = plt.subplot(gs[0])
+
+            ax_heatmap = plt.subplot(gs[1])
+            # adjust the ax_heatmap position
+            pos = ax_heatmap.get_position()
+            pos2 = [pos.x0 - 0.03, pos.y0 + 0.017,  pos.width, pos.height*0.944]
+            ax_heatmap.set_position(pos2)
+
+            ax_pir = plt.subplot(gs[2])
+            # pos = ax_pir.get_position()
+            # pos2 = [pos.x0, pos.y0,  pos.width*0.9, pos.height]
+            # ax_pir.set_position(pos2)
+            # ax_text = plt.subplot(gs[3])
+
+            # ---------------------------------------------------------------------
+            # plot 5 s heatmap after nonlinear transform
+            heatmap_start = cur_t - timedelta(seconds=norm_df_win)
+            _idx = norm_df.index[ (norm_df.index>=heatmap_start) & (norm_df.index<=cur_t) ]
+            pir_frames = norm_df.ix[_idx, :]
+            pir_pts, t_grid, x_grid = self.nonlinear_trans(pir_frames, ratio_tx=ratio_tx, ref_t=cur_t)
+
+            if len(pir_pts) <= 1:
+                print('           Skip empty frame at {0}'.format(cur_t))
+                plt.clf()
+                plt.close()
+                continue
+
+            ax_heatmap.scatter(-pir_pts[:,0], pir_pts[:,1], color='0.6')
+
+            # print('Plotting detected vehicles...')
+            # plot the detected vehicle
+            colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
+            cur_vehs=[]
+            for veh in det_vehs:
+
+                # first check if the veh is in the period to be plotted
+                if veh.t_out <= heatmap_start or veh.t_in >= cur_t:
+                    continue
+
+                # plot the supporting points
+                sup_pts = np.array( [[(p[0]-cur_t).total_seconds(), p[1]] for p in veh.pts] )
+
+                ax_heatmap.scatter(-sup_pts[:,0], sup_pts[:,1], color=next(colors), alpha=0.75)
+
+                # plot the fitted line
+                t_in_s = (veh.t_in-cur_t).total_seconds()
+                t_out_s = (veh.t_out-cur_t).total_seconds()
+                ax_heatmap.plot([-t_in_s, -t_out_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k')
+
+                # add currently detected vehicles in list
+                if veh.t_in <= cur_t <= veh.t_out:
+                    cur_vehs.append(veh)
+
+            # add statistics below
+            ax_height = np.abs(x_grid[0] - x_grid[-1])
+            ax_heatmap.text(1, x_grid[-1] - ax_height*0.2, 'Detected: ')
+            if len(cur_vehs) != 0:
+                # detected
+                speeds = [np.abs(veh.slope*ratio_tx*2.24*3.5) for veh in cur_vehs]
+                points = [(len(veh.pts), len(set(veh.pts))) for veh in cur_vehs]
+
+                ax_heatmap.text(2, x_grid[-1] - ax_height*0.2, 'True',
+                                bbox=dict(facecolor='red', edgecolor=None, alpha=1, boxstyle='round'))
+                ax_heatmap.text(1, x_grid[-1] - ax_height*0.25,
+                                'Speed (mph): {0}'.format(','.join(['{0:.02f}'.format(s) for s in speeds])))
+
+                ax_heatmap.text(1, x_grid[-1] - ax_height*0.3,
+                                'Support: {0}'.format(','.join(['{0}/{1}'.format(p[0], p[1]) for p in points])))
+            else:
+                ax_heatmap.text(2, x_grid[-1] - ax_height*0.2, 'False',
+                                bbox=dict(facecolor='gray', edgecolor=None, alpha=0.5, boxstyle='round'))
+                ax_heatmap.text(1, x_grid[-1] - ax_height*0.25, 'Speed: -')
+                ax_heatmap.text(1, x_grid[-1] - ax_height*0.3, 'Support: -')
+
+            # set ticks and labels
+            ax_heatmap.set_xlim([0, norm_df_win])
+            ax_heatmap.set_ylim([x_grid[-1], x_grid[0]])
+            ax_heatmap.set_xticks(np.arange(0, norm_df_win+1))
+            ax_heatmap.set_xticklabels(['0']+[str(-int(i)) for i in np.arange(1, norm_df_win+1)])
+            ax_heatmap.set_xlabel('Time (s)', fontsize=16)
+            ax_heatmap.set_yticks([])
+            ax_heatmap.set_ylabel('Space', fontsize=16)
+            ax_heatmap.set_title('Heat traces', fontsize=18)
+
+            # ---------------------------------------------------------------------
+            # Plot the video
+            # print('Plotting the video frame...')
+            ret, v_frame = cap.read()
+
+            # mark time at the video
+            time_str = time2str( cur_t )
+            cv2.putText(v_frame, time_str, (150, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
+
+            ax_video.imshow(v_frame)
+            ax_video.set_xticks([])
+            ax_video.set_yticks([])
+            ax_video.set_title('Video', fontsize=18)
+
+            # ---------------------------------------------------------------------
+            # plot the last and latest raw PIR frame
+            # print('Plotting the PIR frame...')
+            pir_idx = np.where(raw_df.index <= cur_t)[0][-1]
+            raw_pir = raw_df.ix[pir_idx, [i for i in raw_df.columns if 'pir' in i]].values
+            raw_pir = raw_pir.reshape(self.pir_res[1], self.pir_res[0]).T
+
+            im = ax_pir.imshow(raw_pir, cmap=plt.get_cmap('jet'), interpolation='nearest', aspect='auto',
+                               vmin=raw_pir_clim[0], vmax=raw_pir_clim[1])
+
+            ax_pir.set_xticks([])
+            ax_pir.set_yticks([])
+            ax_pir.set_title('PIR data', fontsize=18)
+            cax = fig.add_axes([0.56, 0.1, 0.01, 0.12])
+            cbar_ticks = [raw_pir_clim[0], int(np.mean(raw_pir_clim)), raw_pir_clim[1]]
+            cbar = fig.colorbar(im, cax=cax, orientation='vertical', ticks=cbar_ticks)
+            cbar.ax.set_yticklabels([str(i) for i in cbar_ticks])
+
+            # ---------------------------------------------------------------------
+            # save the figure
+            # print('Saving the figure...')
+            plt.savefig(save_dir + str(cur_idx-video_idx_start).zfill(n_digit) + '.png', bbox_inches='tight')
+            plt.clf()
+            plt.close()
+
+
+
+        cap.release()
+
+
+
+
 
 # ==================================================================================================================
 # vehicle detection class
@@ -2257,9 +2438,8 @@ class VideoData:
         cap.release()
         out.release()
 
-    # TODO: untested
     @staticmethod
-    def trim_video(input_video, output_video, offset=None, trim_period=None):
+    def trim_video(input_video, output_video, video_starttime=None, trim_period=None):
         """
         This function trims the video
         :param input_video: input video file
@@ -2271,7 +2451,7 @@ class VideoData:
 
         # --------------------------------------------------------------
         # if not specified, assume no time shift
-        if offset is None: offset = timedelta(seconds=0)
+        if video_starttime is None: video_starttime = trim_period[0]
 
         cap = cv2.VideoCapture(input_video)
 
@@ -2289,8 +2469,8 @@ class VideoData:
 
         # --------------------------------------------------------------
         # compute the index of frames to trim
-        index_start = int( (trim_period[0]-offset).total_seconds()*fps )
-        index_end = int( (trim_period[1]-offset).total_seconds()*fps )
+        index_start = int( (trim_period[0]-video_starttime).total_seconds()*fps )
+        index_end = int( (trim_period[1]-video_starttime).total_seconds()*fps )
         num_frames = index_end-index_start
 
         print('Trimming video...')
