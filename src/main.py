@@ -2,18 +2,232 @@ from TrafficSensorAlg import *
 
 def main():
 
-    data_analysis()
+    # data_analysis()
     # video_analysis()
     # sync_data()
+    # veh_det()
+    test_alg()
 
 def data_analysis():
     # --------------------------------------------------
-    # dataset 1003:
+    # dataset 1013:
     # - Neil street. Freeflow and stop-and-to in total 33 min
     # - One PIR sensor array 4x32, at 64 Hz
     # --------------------------------------------------
-    # folder = '../datasets/1013_2016/'
+    folder = '../datasets/1013_2016/'
     # dataset = '1310-210300'     # freeflow part 1
+    dataset = '1310-213154'   # freeflow part 2
+    # dataset ='1310-221543'       # stop and go
+
+
+    # --------------------------------------------------
+    # dataset 1116:
+    # - Neil street. Three PIR sensor arraies
+    # - One PIR sensor array 4x32, at 64 Hz
+    # --------------------------------------------------
+    # folder = '../datasets/1116_2016/s1/'
+    # dataset = '1611-061706'
+
+    # folder = '../datasets/1116_2016/s2/'
+    # dataset = '0711-211706'
+
+    # folder = '../datasets/1116_2016/s3/'
+    # dataset = '1611-151742'
+
+    # --------------------------------------------------
+    # dataset 1118:
+    # - Neil street. Three PIR sensor arrays, for stop and go data.
+    # - One PIR sensor array 4x32, at 64 Hz
+    # --------------------------------------------------
+    # folder = '../datasets/1118_2016/s1/'
+    # dataset = '1611-171706'
+
+    # folder = '../datasets/1118_2016/s2/'
+    # dataset = '1811-144926'
+
+    # folder = '../datasets/1118_2016/s3/'
+    # dataset = '1611-171707'
+
+    # ===============================================================================================
+    # Configuration
+    save_dir = '../workspace/1013/'
+    data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
+    periods = data.get_data_periods(folder, update=False, f_type='txt')
+
+    # either load txt or csv data. csv is faster
+    if False:
+        print('Loading txt data...')
+        t1 = datetime.now()
+        df = data.load_txt_data(folder+'{0}.txt'.format(dataset))
+        t2 = datetime.now()
+        print('Loading data took {0} s'.format((t2-t1).total_seconds()))
+
+        df.to_csv(folder+'{0}.csv'.format(dataset))
+        print('saved df data.')
+
+    if True:
+        t1 = datetime.now()
+        df = pd.read_csv(folder+'{0}.csv'.format(dataset), index_col=0)
+        df.index = df.index.to_datetime()
+        t2 = datetime.now()
+        print('Loading df csv data took {0} s'.format((t2-t1).total_seconds()))
+
+    # ===============================================================================================
+    # plot the original df
+    if False:
+        t_start = periods[dataset][0]
+        t_end = periods[dataset][1]
+        data.plot_heatmap_in_period(df, t_start=t_start, t_end=t_end, cbar=(20,40), option='vec',
+                                    nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False, save_df=False,
+                                    figsize=(18,8))
+
+    # ===============================================================================================
+    # plot and normalize
+    if False:
+        t_start = periods[dataset][0]
+        t_end = periods[dataset][0] + timedelta(seconds=30)
+        t1 = datetime.now()
+        dis_norm_df = data.batch_normalization(df, t_start=t_start, t_end=t_end, p_outlier=0.01,
+                                           stop_thres=(0.001,0.0001), window_s=5, step_s=1)
+        t2 = datetime.now()
+        print('Normalization using iterative distribution took {0} s'.format((t2-t1).total_seconds()))
+
+        # norm_df.to_csv(save_dir + 's3_2d_{0}.csv'.format(time2str_file(periods[dataset][0])))
+        fig, ax = data.plot_heatmap_in_period(dis_norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
+                                              option='vec', nan_thres_p=0.9, plot=True, save_dir=save_dir, save_img=False,
+                                              save_df=False, figsize=(18,8))
+
+    # ===============================================================================================
+    # Version 1 of MAP and FSM
+    if False:
+        t_start = periods[dataset][0]
+        t_end = periods[dataset][0] + timedelta(seconds=30)
+        t1 = datetime.now()
+        map_norm_df = data.subtract_background(df, t_start=t_start, t_end=t_end, init_s=4,
+                                           veh_pt_thres=3, noise_pt_thres=3, prob_int=0.8, pixels=None)
+        t2 = datetime.now()
+        print('Background subtraction took {0} s'.format((t2-t1).total_seconds()))
+
+        # map_norm_df.to_csv(save_dir + 's1_2d_MAP__{0}__{1}.csv'.format(time2str_file(t_start),
+        #                                                         time2str_file(t_end)))
+
+        fig, ax = data.plot_heatmap_in_period(map_norm_df, t_start=t_start, t_end=t_end, cbar=(20,40),
+                                              option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
+                                              save_df=False, figsize=(18,8))
+        fig, ax = data.plot_heatmap_in_period(map_norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
+                                              option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
+                                              save_df=False, figsize=(18,8))
+    # version 2 of MAP and FSM
+    if True:
+        t_start = periods[dataset][0]
+        t_end = periods[dataset][1]
+        t1 = datetime.now()
+        map_norm_df = data.subtract_background_v2(df, t_start=t_start, t_end=t_end, init_s=4,
+                                           veh_pt_thres=3, noise_pt_thres=3, prob_int=0.95, pixels=None)
+        t2 = datetime.now()
+        print('Background subtraction v2 took {0} s'.format((t2-t1).total_seconds()))
+
+        map_norm_df.to_csv(save_dir + 's1_2d_MAP__{0}__{1}_prob95.csv'.format(time2str_file(t_start),
+                                                                time2str_file(t_end)))
+
+        # fig, ax = data.plot_heatmap_in_period(map_norm_df, t_start=t_start, t_end=t_end, cbar=(20,40),
+        #                                       option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
+        #                                       save_df=False, figsize=(18,8))
+        fig, ax = data.plot_heatmap_in_period(map_norm_df, t_start=t_start, t_end=t_end, cbar=(20,40),
+                                              option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
+                                              save_df=False, figsize=(18,8))
+
+    # ===============================================================================================
+    # plot saved heatmap
+    # load norm_df
+    t_start = periods[dataset][0]
+    t_end = periods[dataset][1]
+    norm_df = pd.read_csv(save_dir+'s1_2d_MAP__20161013_213203_763628__20161013_214035_278451_prob80.csv', index_col=0)
+    norm_df.index = norm_df.index.to_datetime()
+    fig, ax = data.plot_heatmap_in_period(norm_df, t_start=t_start, t_end=t_end, cbar=(20,40),
+                                          option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
+                                          save_df=False, figsize=(18,8))
+    # t_start = periods[dataset][0]
+    # t_end = periods[dataset][1]
+    # norm_df = pd.read_csv(save_dir+'s1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob90.csv', index_col=0)
+    # norm_df.index = norm_df.index.to_datetime()
+    # fig, ax = data.plot_heatmap_in_period(norm_df, t_start=t_start, t_end=t_end, cbar=(20,40),
+    #                                       option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
+    #                                       save_df=False, figsize=(18,8))
+    # t_start = periods[dataset][0]
+    # t_end = periods[dataset][1]
+    # norm_df = pd.read_csv(save_dir+'s1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
+    # norm_df.index = norm_df.index.to_datetime()
+    # fig, ax = data.plot_heatmap_in_period(norm_df, t_start=t_start, t_end=t_end, cbar=(20,40),
+    #                                       option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
+    #                                       save_df=False, figsize=(18,8))
+
+
+
+    # ===============================================================================================
+    # plot the noise evolution
+    # data.plot_noise_evolution(df, p_outlier=0.01, t_start=periods[dataset][0],
+    #                           t_end=periods[dataset][1],
+    #                           stop_thres=(0.01, 0.1), pixel=(1, 8), window_s=300, step_s=1)
+    # data.plot_noise_evolution(df, p_outlier=0.01, t_start=periods[dataset][0],
+    #                           t_end=periods[dataset][1],
+    #                           stop_thres=(0.01, 0.1), pixel=(2, 8), window_s=300, step_s=1)
+    # data.plot_noise_evolution(df, p_outlier=0.01, t_start=periods[dataset][0],
+    #                           t_end=periods[dataset][1],
+    #                           stop_thres=(0.01, 0.1), pixel=(1, 24), window_s=300, step_s=1)
+    # data.plot_noise_evolution(df, p_outlier=0.01, t_start=periods[dataset][0],
+    #                           t_end=periods[dataset][1],
+    #                           stop_thres=(0.01, 0.1), pixel=(2, 24), window_s=300, step_s=1)
+
+    plt.show()
+#
+
+def test_alg():
+    # --------------------------------------------------
+    # dataset 1013:
+    # - Neil street. Freeflow and stop-and-to in total 33 min
+    # - One PIR sensor array 4x32, at 64 Hz
+    # --------------------------------------------------
+    folder = '../datasets/1013_2016/'
+    dataset = '1310-210300'     # freeflow part 1
+    # dataset = '1310-213154'   # freeflow part 2
+    # dataset ='1310-221543'       # stop and go
+
+    # ===============================================================================================
+    # Configuration
+    save_dir = '../workspace/1013/'
+
+    norm_df = pd.read_csv(save_dir + 's1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
+    # norm_df = pd.read_csv(save_dir + 's1_2d_MAP__20161013_213203_763628__20161013_214035_278451_prob95.csv', index_col=0)
+    norm_df.index = norm_df.index.to_datetime()
+
+    # data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
+    # fig, ax =data.plot_heatmap_in_period(norm_df, t_start=None, t_end=None, cbar=(0,4),
+    #                                           option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
+    #                                           save_df=False, figsize=(18,8))
+
+
+    # ===============================================================================================
+    # run algorithm in batch mode
+    alg = TrafficSensorAlg(pir_res=(4,32))
+    # alg.batch_run(norm_df, det_thres=600, window_s=2.0, step_s=1.0,
+    #               save_dir='../workspace/1013/figs/speed_est_95_ff1_batch/')
+    alg.vehs = np.load('../workspace/1013/figs/speed_est_95_ff1_batch/detected_vehs.npy')
+    print('Total {0} vehs'.format(len(alg.vehs)))
+    alg.plot_detected_vehs(norm_df, ratio_tx=6.0)
+
+    plt.show()
+
+
+def veh_det():
+
+    # --------------------------------------------------
+    # dataset 1013:
+    # - Neil street. Freeflow and stop-and-to in total 33 min
+    # - One PIR sensor array 4x32, at 64 Hz
+    # --------------------------------------------------
+    folder = '../datasets/1013_2016/'
+    dataset = '1310-210300'     # freeflow part 1
     # dataset = '1310-213154'   # freeflow part 2
     # dataset ='1310-221543'       # stop and go
 
@@ -37,8 +251,8 @@ def data_analysis():
     # - Neil street. Three PIR sensor arrays, for stop and go data.
     # - One PIR sensor array 4x32, at 64 Hz
     # --------------------------------------------------
-    folder = '../datasets/1118_2016/s1/'
-    dataset = '1611-171706'
+    # folder = '../datasets/1118_2016/s1/'
+    # dataset = '1611-171706'
 
     # folder = '../datasets/1118_2016/s2/'
     # dataset = '1811-144926'
@@ -49,83 +263,39 @@ def data_analysis():
     # ===============================================================================================
     # Configuration
     save_dir = '../workspace/1013/'
+
+    norm_df = pd.read_csv(save_dir + 's1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
+    # norm_df = pd.read_csv(save_dir + 's1_2d_MAP__20161013_213203_763628__20161013_214035_278451_prob95.csv', index_col=0)
+    norm_df.index = norm_df.index.to_datetime()
+
     data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
-    periods = data.get_data_periods(folder, update=False, f_type='txt')
-    df = data.load_txt_data(folder+'{0}.txt'.format(dataset))
-
-    # ===============================================================================================
-    # plot the original df
-    if False:
-        t_start = periods[dataset][0]
-        t_end = periods[dataset][0] + timedelta(seconds=60)
-        data.plot_heatmap_in_period(df, t_start=t_start, t_end=t_end, cbar=(20,40), option='vec',
-                                    nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False, save_df=False,
-                                    figsize=(18,8))
-
-    # ===============================================================================================
-    # plot and normalize
-    if False:
-        t_start = periods[dataset][0]
-        t_end = periods[dataset][0] + timedelta(seconds=300)
-        data.plot_heatmap_in_period(df, t_start=t_start, t_end=t_end, cbar=(20,40), option='vec',
-                                    nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False, save_df=False,
-                                    figsize=(18,8))
-        t1 = datetime.now()
-        dis_norm_df = data.batch_normalization(df, t_start=t_start, t_end=t_end, p_outlier=0.01,
-                                           stop_thres=(0.001,0.0001), window_s=5, step_s=1)
-        t2 = datetime.now()
-        print('Normalization using iterative distribution took {0} s'.format((t2-t1).total_seconds()))
-
-        # norm_df.to_csv(save_dir + 's3_2d_{0}.csv'.format(time2str_file(periods[dataset][0])))
-        fig, ax = data.plot_heatmap_in_period(dis_norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
-                                              option='vec', nan_thres_p=0.9, plot=True, save_dir=save_dir, save_img=False,
-                                              save_df=False, figsize=(18,8))
-
-    # ===============================================================================================
-    # Use MAP and FSM to normalize
-    if True:
-        t_start = periods[dataset][0]
-        t_end = periods[dataset][0] + timedelta(seconds=60)
-        t1 = datetime.now()
-        map_norm_df = data.subtract_background(df, t_start=t_start, t_end=t_end, init_s=4,
-                                           veh_pt_thres=5, noise_pt_thres=2, prob_int=0.8, pixels=None)
-        t2 = datetime.now()
-        print('Background subtraction took {0} s'.format((t2-t1).total_seconds()))
-
-        # map_norm_df.to_csv(save_dir + 's1_2d_MAP__{0}__{1}.csv'.format(time2str_file(t_start),
-        #                                                         time2str_file(t_end)))
-
-        fig, ax = data.plot_heatmap_in_period(map_norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
+    fig, ax =data.plot_heatmap_in_period(norm_df, t_start=None, t_end=None, cbar=(0,4),
                                               option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
                                               save_df=False, figsize=(18,8))
 
     # ===============================================================================================
-    # plot saved heatmap
-    # load norm_df
-    # # norm_df = pd.read_csv(save_dir+'s1_2d_MAP_{0}.csv'.format(time2str_file(periods[dataset][0])), index_col=0)
-    # # norm_df.index = norm_df.index.to_datetime()
-    # t_start = periods[dataset][0]
-    # t_end = periods[dataset][1]
-    # fig, ax = data.plot_heatmap_in_period(map_norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
-    #                                       option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
-    #                                       save_df=False, figsize=(18,8))
+    # vehicle detection
+    det = VehDet()
+    vehs = det.detect_veh(norm_df, energy_thres=600, window_s=2.0, step_s=1.0)
 
+    # plot detected vehicles
+    for veh in vehs:
+        # t_start and t_end may not be in the index, hence replace by _t_start >= t_start and _t_end <= t_end
+        _t_start_idx = np.where(norm_df.index>=veh[0])[0][0]
+        _t_end_idx = np.where(norm_df.index<=veh[1])[0][-1]
+        # ax.fill_between(norm_df.index, 0, 127, where=((norm_df.index>=veh[0]) & (norm_df.index<=veh[1])), facecolor='green',alpha=0.5  )
+        rect = patches.Rectangle((_t_start_idx, 0), _t_end_idx-_t_start_idx, 128, linewidth=1, edgecolor='g',
+                                 facecolor=(0,1,0,0.2))
+        ax.add_patch(rect)
 
 
     # ===============================================================================================
-    # plot the noise evolution
-    # data.plot_noise_evolution(df, p_outlier=0.01, t_start=periods[dataset][0],
-    #                           t_end=periods[dataset][1],
-    #                           stop_thres=(0.01, 0.1), pixel=(1, 8), window_s=300, step_s=1)
-    # data.plot_noise_evolution(df, p_outlier=0.01, t_start=periods[dataset][0],
-    #                           t_end=periods[dataset][1],
-    #                           stop_thres=(0.01, 0.1), pixel=(2, 8), window_s=300, step_s=1)
-    # data.plot_noise_evolution(df, p_outlier=0.01, t_start=periods[dataset][0],
-    #                           t_end=periods[dataset][1],
-    #                           stop_thres=(0.01, 0.1), pixel=(1, 24), window_s=300, step_s=1)
-    # data.plot_noise_evolution(df, p_outlier=0.01, t_start=periods[dataset][0],
-    #                           t_end=periods[dataset][1],
-    #                           stop_thres=(0.01, 0.1), pixel=(2, 24), window_s=300, step_s=1)
+    # speed estimation
+    save_dir = '../workspace/1013/figs/speed_est_95_ff1/'
+    # print('Estimating speed for {0} vehs'.format(len(vehs)))
+    for veh in vehs[200:]:
+        est = SpeedEst(norm_df.ix[veh[0]:veh[1]], pir_res=(4,32), plot=False, save_dir=save_dir)
+        est.estimate_speed(stop_tol=(0.002, 0.01), dist=3.5, r2_thres=0.8, min_num_pts=200)
 
     plt.show()
 
