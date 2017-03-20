@@ -20,6 +20,7 @@ import numpy as np
 import scipy
 import itertools
 from scipy import stats
+from scipy import odr
 from scipy.signal import argrelextrema
 from sklearn import mixture
 from sklearn.cluster import DBSCAN
@@ -75,6 +76,15 @@ def in_conf_intrvl(data, prob, mu, sigma):
 
 def in_2sigma(data, mu, sigma):
     return (data>=mu-2.0*sigma) & (data<=mu+2.0*sigma)
+
+def f(B, x):
+    # Linear function y = m*x + b
+    # B is a vector of the parameters.
+    # x is an array of the current x values.
+    # x is in the same format as the x passed to Data or RealData.
+    #
+    # Return an array in the same format as y passed to Data or RealData.
+    return B[0]*x + B[1]
 
 @contextmanager
 def suppress_stdout():
@@ -177,7 +187,7 @@ class TrafficSensorAlg:
 
         # print('Estimating speed for {0} vehs'.format(len(vehs)))
         for win in windows:
-            est = SpeedEst(norm_df.ix[win[0]:win[1]], pir_res=(4,32), plot=False, save_dir=save_dir)
+            est = SpeedEst(norm_df.ix[win[0]:win[1]], pir_res=(4,32), plot=True, save_dir=save_dir)
             vehs_in_win = est.estimate_speed(stop_tol=(0.002, 0.01), dist=3.5, r2_thres=0.8, min_num_pts=200)
 
             for veh in vehs_in_win:
@@ -313,13 +323,20 @@ class TrafficSensorAlg:
         # ------------------------------------------------------------
         # convert the matrix to a list of data point tuples
         pt_time = []
-        pt_space = []
+        pt_space = np.zeros(0)
         i = 0
+        pir_len = self.pir_res[0]*self.pir_res[1]
         for cur_t, row in norm_df.iterrows():
-            for col in range(0, self.pir_res[0]*self.pir_res[1]):
-                if ~np.isnan(row.values[col]):
-                    pt_time.append(t_grid[i])
-                    pt_space.append(x_grid[col])
+            not_nan_idx = np.where(~np.isnan(row.values[0:pir_len]))[0]
+
+            # append the not nan points using the grid
+            pt_time += [t_grid[i]]*int(len(not_nan_idx))
+            pt_space = np.concatenate([pt_space, x_grid[not_nan_idx]])
+
+            # for col in range(0, self.pir_res[0]*self.pir_res[1]):
+            #     if ~np.isnan(row.values[col]):
+            #         pt_time.append(t_grid[i])
+            #         pt_space.append(x_grid[col])
             i += 1
 
         pts = np.array(zip(pt_time, pt_space))
@@ -332,7 +349,7 @@ class TrafficSensorAlg:
                           norm_df, norm_df_win, det_vehs, save_dir):
         """
         This function plots the video frames. Use the following command to generate a video:
-        "ffmpeg -framerate 12 -pattern_type glob -i '*.png' -vf scale=1480:-2 -vcodec libx264 -pix_fmt yuv420p out.mp4"
+        "ffmpeg -framerate 60 -pattern_type glob -i '*.png' -vf scale=1480:-2 -vcodec libx264 -pix_fmt yuv420p out.mp4"
         :param video_file: the video file
         :param video_fps: the frame rate of the video
         :param video_start_time: the start timestamp of the video
@@ -409,7 +426,7 @@ class TrafficSensorAlg:
 
             if len(pir_pts) <= 1:
                 print('           Skip empty frame at {0}'.format(cur_t))
-                plt.clf()
+                # plt.clf()
                 plt.close()
                 continue
 
@@ -450,10 +467,10 @@ class TrafficSensorAlg:
                 ax_heatmap.text(2, x_grid[-1] - ax_height*0.2, 'True',
                                 bbox=dict(facecolor='red', edgecolor=None, alpha=1, boxstyle='round'))
                 ax_heatmap.text(1, x_grid[-1] - ax_height*0.25,
-                                'Speed (mph): {0}'.format(','.join(['{0:.02f}'.format(s) for s in speeds])))
+                                'Speed (mph): {0}'.format(', '.join(['{0:.02f}'.format(s) for s in speeds])))
 
                 ax_heatmap.text(1, x_grid[-1] - ax_height*0.3,
-                                'Support: {0}'.format(','.join(['{0}/{1}'.format(p[0], p[1]) for p in points])))
+                                'Support: {0}'.format(', '.join(['{0}/{1}'.format(p[0], p[1]) for p in points])))
             else:
                 ax_heatmap.text(2, x_grid[-1] - ax_height*0.2, 'False',
                                 bbox=dict(facecolor='gray', edgecolor=None, alpha=0.5, boxstyle='round'))
@@ -479,7 +496,8 @@ class TrafficSensorAlg:
             time_str = time2str( cur_t )
             cv2.putText(v_frame, time_str, (150, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
 
-            ax_video.imshow(v_frame)
+            rbg_frame = cv2.cvtColor(v_frame, cv2.COLOR_BGR2RGB)
+            ax_video.imshow(rbg_frame)
             ax_video.set_xticks([])
             ax_video.set_yticks([])
             ax_video.set_title('Video', fontsize=18)
@@ -505,9 +523,14 @@ class TrafficSensorAlg:
             # ---------------------------------------------------------------------
             # save the figure
             # print('Saving the figure...')
-            plt.savefig(save_dir + str(cur_idx-video_idx_start).zfill(n_digit) + '.png', bbox_inches='tight')
-            plt.clf()
+            f_name = save_dir + str(cur_idx-video_idx_start).zfill(n_digit) + '.png'
+            t1 = datetime.now()
+            plt.savefig(f_name, bbox_inches='tight')
+            # plt.clf()
+            plt.cla()
             plt.close()
+            t2 = datetime.now()
+            print('Saving figure took {0} s'.format((t2-t1).total_seconds()))
 
 
 
@@ -671,14 +694,15 @@ class SpeedEst:
 
             # ================================================================================================
             # plot final estimates
-            print('########################## Finished estimation for frame starting at: {0}\n'.format(time2str_file(self.init_dt)))
+            print('########################## Finished estimation ({0} models) for frame starting at: {1}\n'.format(len(self.all_mdls),
+                                                                                                                    time2str_file(self.init_dt)))
             self.plot_progress(cur_mdl=None, save_name='{0}'.format(time2str_file(self.init_dt)),
                                title='{0}'.format(self.init_dt),
                                sig_ratio=2.0, dist=dist)
 
             # ================================================================================================
             # clean up fitted models by merging models and removing wrong direction
-            cleaned = self.clean_veh(dt_s=0.3,stop_tol=stop_tol)
+            cleaned = self.clean_veh(dt_s=0.3)
             if cleaned:
                 self.plot_progress(cur_mdl=None, save_name='{0}_cleaned'.format(time2str_file(self.init_dt)),
                                title='{0}'.format(self.init_dt),
@@ -693,7 +717,7 @@ class SpeedEst:
             return self.all_vehs
 
 
-    def clean_veh(self, dt_s=0.3, stop_tol=(0.002, 0.01)):
+    def clean_veh(self, dt_s=0.3):
         """
         This function clean the estimated vehicle models.
             - remove those that are at the wrong direction
@@ -726,6 +750,12 @@ class SpeedEst:
                 x_e = (self.x_grid[-1]-mdl['line'][1])/mdl['line'][0]
 
                 mdls.append([x_s, x_e, mdl['line'][0], mdl['inlier_idx'], mdl['sigma'], mdl['r2']])
+
+            # ========================================================================
+            # If none vehicle in the correct direction left, then return []
+            if len(mdls) == 0:
+                self.all_mdls = []
+                return True
 
             # ========================================================================
             # Use DBSCAN to find the models that to be merged
@@ -920,14 +950,30 @@ class SpeedEst:
                 if len(inlier_idx) < 5:
                     return None
 
+                # ==========================================================================================
                 # ---------------------------------------------------------------------
-                # fit a line
+                # fit a line using ordinary linear regression
                 # Reason: at each loc, data is more gaussian; at each time, spaces are nonliearly stretched.
                 _slope, _intercept, _r_value, _p_value, _std_err = scipy.stats.linregress(self.space[inlier_idx],
                                                                                           self.time[inlier_idx])
                 # express in space = coe*time + intercept
                 line = np.array([1 / _slope, -_intercept / _slope])
                 r2 = _r_value ** 2
+
+                # ---------------------------------------------------------------------
+                # TODO: debug
+                # Use orthogonal distance regression
+                linear = odr.Model(f)
+                mydata = odr.Data(self.time[inlier_idx], self.space[inlier_idx])
+                myodr = odr.ODR(mydata, linear, beta0=[1., 2.])
+                myoutput = myodr.run()
+                # myoutput.pprint()
+                _slope, _intercept = myoutput.beta[::-1]
+                # print('y = {0} x + {1}'.format(_slope, _intercept))
+                _r_value = myoutput.res_var
+                r2 = 1-_r_value
+
+                # ==========================================================================================
 
                 if _pre_line is not None and \
                         (np.asarray(line) - np.asarray(_pre_line) <= np.asarray(stop_tol)).all():
@@ -952,7 +998,8 @@ class SpeedEst:
                     sigma_ratio = 2.0
 
                 if self.plot is True:
-                    self.plot_progress((line, sig, inlier_idx, r2), save_name='clus{0}_{1}'.format(counter, i),
+                    mdl={'line':line, 'sigma':sig, 'inlier_idx':inlier_idx, 'r2':r2}
+                    self.plot_progress(cur_mdl=mdl, save_name='clus{0}_{1}'.format(counter, i),
                                        title='Cluster {0} round {1}, converged:{2}'.format(counter, i, converged),
                                        sig_ratio=sigma_ratio, dist=dist)
 
@@ -1140,7 +1187,6 @@ class SpeedEst:
             speeds = np.concatenate([speeds, -np.asarray(candidate_slopes)*(dist*2.24*self.ratio_tx)])
 
         all_groups = []
-        group_sizes = []
 
         print('------ Exploring directions:')
         for i, k in enumerate(slopes):
@@ -1150,7 +1196,6 @@ class SpeedEst:
             print('             At {0} mph: {1} subclusters'.format(speeds[i], len(group)))
 
             all_groups.append(group)
-            group_sizes.append(len(group))
 
         # -------------------------------------------------------------------------------------
         # Determine the most suitable number of clusters by majority vote
@@ -1224,7 +1269,7 @@ class SpeedEst:
         # plt.xlim([-75,60])
         # plt.draw()
 
-        # pick top n in weights and
+        # pick top n by weights (th enumber of points)
 
         top5_w = np.array([i[0] for i in sorted(enumerate(-np.array(_weights)), key=lambda x:x[1])])[0:top_n]
         top5_aic = np.array([i[0] for i in sorted(enumerate(_avg_aic), key=lambda x:x[1])])[0:top_n]
@@ -1240,6 +1285,11 @@ class SpeedEst:
                     possible_speeds.append((speeds[i], len(g)))
                     tot_clus += len(g)
         print('------ Found {0} subclusters at speeds : {1}\n'.format(tot_clus, possible_speeds))
+
+        # sort the possible subclusters across all directions by the _weight.
+        possible_groups = sorted(possible_groups, key=lambda x:x[2])[::-1]
+
+        print('               sorted subclusters:{0}'.format(possible_groups))
 
         return possible_groups
 
@@ -1294,14 +1344,13 @@ class SpeedEst:
         # --------------------------------------------------------------------
         # scatter the estimated cnverged models
         if len(self.all_mdls) != 0:
-            colors = ['b', 'g', 'm', 'c', 'purple', 'teal', 'dogerblue', 'b', 'g', 'm', 'c', 'purple', 'teal',
-                      'dogerblue']
+            colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple'])
             for i, mdl in enumerate(self.all_mdls):
                 line = mdl['line']
                 sig = mdl['sigma']
                 inlier_idx = mdl['inlier_idx']
                 r2 = mdl['r2']
-                ax0.scatter(self.time[inlier_idx], self.space[inlier_idx], color=colors[i], alpha=0.75)
+                ax0.scatter(self.time[inlier_idx], self.space[inlier_idx], color=next(colors), alpha=0.75)
                 y_line = line[0] * x_line + line[1]
                 ax0.plot(x_line, y_line, linewidth=3, color='k')
 
@@ -1375,6 +1424,7 @@ class SpeedEst:
             # plot the final distribution of all clusters
             offset = 0
             y_lim = 0
+            colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple'])
             for i, mdl in enumerate(self.all_mdls):
 
                 line = mdl['line']
@@ -1390,7 +1440,7 @@ class SpeedEst:
 
                 bin_width = 0.005
                 n, bins, patches = ax1.hist(dists, bins=np.arange(offset, 6 * sigma + offset, bin_width),
-                                            normed=1, facecolor=colors[i], alpha=0.75)
+                                            normed=1, facecolor=next(colors), alpha=0.75)
                 # fill the one-sig space.
                 x_fill = np.linspace(2 * sigma + offset, 4 * sigma + offset, 100)
                 # fill the onesigma
@@ -1813,7 +1863,7 @@ class SensorData:
 
     # @profile
     def subtract_background_v2(self, raw_data, t_start=None, t_end=None, init_s=300, veh_pt_thres=5, noise_pt_thres=5,
-                            prob_int=0.9, pixels=None):
+                            prob_int=0.95, pixels=None):
         """
         This function subtracts the background in batch mode using MAP and FSM v1
             - v2 fixes the cold tail problem by using two buffers: one for veh and one for noise
@@ -1830,9 +1880,9 @@ class SensorData:
         :return:
         """
 
-        _debug = False
+        _debug = True
         if _debug:
-            _debug_pix = (0,0)
+            _debug_pix = (1,10)
             _debug_mu = []
 
         # only normalize those period of data
@@ -1847,8 +1897,15 @@ class SensorData:
         veh_data.values[:, 0:self.tot_pix] = np.nan
 
         if pixels is None:
-            _row, _col = np.meshgrid( np.arange(0, self.pir_res[0]), np.arange(0, self.pir_res[1]) )
-            pixels = zip(_row.flatten(), _col.flatten())
+            # all pixels
+            pixels_to_process = np.arange(0, self.tot_pix)
+            # _row, _col = np.meshgrid( np.arange(0, self.pir_res[0]), np.arange(0, self.pir_res[1]) )
+            # pixels = zip(_row.flatten(), _col.flatten())
+        else:
+            pixels_to_process = []
+            for pix_loc in pixels:
+                pixels_to_process.append(pix_loc[1]*4+pix_loc[0])
+
 
         # ------------------------------------------------------------------------
         # Initialize the background noise distribution.
@@ -1861,6 +1918,7 @@ class SensorData:
         # the current noise distribution
         n_mu = noise_means.T.reshape(self.tot_pix)
         n_sigma = noise_stds.T.reshape(self.tot_pix)
+        const_n_sigma = deepcopy(n_sigma)
 
         if _debug:
             print('initial mu and sigma: {0:.05f}, {1:.05f}'.format(n_mu[_debug_pix[1]*4+_debug_pix[0]],
@@ -1901,14 +1959,15 @@ class SensorData:
 
         i = 0
         for cur_t, sample_row in norm_data.iterrows():
-            for pix in range(0, self.tot_pix):
+            for pix in pixels_to_process:
 
                 # check if current point is noise
                 v = sample_row.values[pix]
                 is_noise = (v>=n_mu[pix]-sig_ratio*n_sigma[pix]) & (v<=n_mu[pix]+sig_ratio*n_sigma[pix])
 
                 if _debug and pix==_debug_pix[1]*4+_debug_pix[0]:
-                    print('is noise: {0}'.format(is_noise))
+                    #print('is noise: {0}'.format(is_noise))
+                    pass
 
                 # for each pixel, run the state machine
                 if state[pix] == 0:
@@ -1920,17 +1979,17 @@ class SensorData:
                         # update at most every 0.5 s = 32 data point
                         if len(noise[pix]) >= 1:
                             (_n_mu, _n_sig), (_prior_mu, _prior_sig) = self._MAP_update(norm_data.ix[noise[pix], pix].values,
-                                                                                    (n_mu[pix], n_sigma[pix]),
+                                                                                    (n_mu[pix], const_n_sigma[pix]),
                                                                                 (prior_n_mu[pix], prior_n_sigma[pix]))
                             noise[pix] = []
-                            if _debug and pix== _debug_pix[1]*4+_debug_pix[0]:
+                            if _debug and pix == _debug_pix[1]*4+_debug_pix[0]:
                                 _debug_mu.append([cur_t, _n_mu])
-                                print('1st updating MAP:')
-                                print('       last mu, sig: {0:.05f}, {1:.05f}'.format(n_mu[pix], n_sigma[pix]))
-                                print('       prior mu, sig: {0:.05f}, {1:.05f}'.format(prior_n_mu[pix], prior_n_sigma[pix]))
-                                print('       updated mu, sig: {0:.05f}, {1:.05f}'.format(_n_mu, _n_sig))
-                                print('       updated prior mu, sig: {0:.05f}, {1:.05f}'.format(_prior_mu, _prior_sig))
-                                print('       data: {0}'.format(norm_data.ix[buf_n[pix], pix].values))
+                                print('Updating MAP before entering detection cycle:')
+                                print('       Prior:     noise ~ N({0:.05f}, {1:.05f}^2)'.format(n_mu[pix], n_sigma[pix]))
+                                print('                        where  u  ~ N({0:.05f}, {1:.05f}^2)'.format(prior_n_mu[pix], prior_n_sigma[pix]))
+                                print('       Posterior: noise ~ N({0:.05f}, {1:.05f}^2)'.format(_n_mu, _n_sig))
+                                print('                        where  u  ~ N({0:.05f}, {1:.05f}^2)'.format(_prior_mu, _prior_sig))
+                                print('       Given data: {0}'.format(norm_data.ix[buf_n[pix], pix].values))
 
                             # update the noise distribution
                             n_mu[pix] = _n_mu
@@ -1958,7 +2017,7 @@ class SensorData:
                         v_counter[pix] += 1
 
                 elif state[pix] < 0:
-                    # at detection cycle at noise
+                    # exiting a detection cycle
                     if is_noise:
                         buf_n[pix].append(cur_t)
                         n_counter[pix] += 1
@@ -1981,19 +2040,19 @@ class SensorData:
                                 # update at most every 0.5 s = 32 data point
                                 if len(noise[pix]) >= 1:
                                     (_n_mu, _n_sig), (_prior_mu, _prior_sig) = self._MAP_update(norm_data.ix[noise[pix], pix].values,
-                                                                                            (n_mu[pix], n_sigma[pix]),
+                                                                                            (n_mu[pix], const_n_sigma[pix]),
                                                                                         (prior_n_mu[pix], prior_n_sigma[pix]))
                                     # clear noise data cache
                                     noise[pix] = []
 
                                     if _debug and pix==_debug_pix[1]*4+_debug_pix[0]:
                                         _debug_mu.append([cur_t, _n_mu])
-                                        print('2nd updated mu')
-                                        print('       last mu, sig: {0:.05f}, {1:.05f}'.format(n_mu[pix], n_sigma[pix]))
-                                        print('       prior mu, sig: {0:.05f}, {1:.05f}'.format(prior_n_mu[pix], prior_n_sigma[pix]))
-                                        print('       updated mu, sig: {0:.05f}, {1:.05f}'.format(_n_mu, _n_sig))
-                                        print('       updated prior mu, sig: {0:.05f}, {1:.05f}'.format(_prior_mu, _prior_sig))
-                                        print('       data: {0}'.format(norm_data.ix[buf_n[pix]+buf_v[pix], pix].values))
+                                        print('Updating MAP when exiting a detection cycle:')
+                                        print('       Prior:     noise ~ N({0:.05f}, {1:.05f}^2)'.format(n_mu[pix], n_sigma[pix]))
+                                        print('                        where  u  ~ N({0:.05f}, {1:.05f}^2)'.format(prior_n_mu[pix], prior_n_sigma[pix]))
+                                        print('       Posterior: noise ~ N({0:.05f}, {1:.05f}^2)'.format(_n_mu, _n_sig))
+                                        print('                        where  u  ~ N({0:.05f}, {1:.05f}^2)'.format(_prior_mu, _prior_sig))
+                                        print('       Given data: {0}'.format(norm_data.ix[buf_n[pix], pix].values))
 
                                     # update the noise distribution
                                     n_mu[pix] = _n_mu
@@ -2033,6 +2092,204 @@ class SensorData:
 
         return veh_data
 
+
+    # @profile
+    def subtract_background_KF(self, raw_data, t_start=None, t_end=None, init_s=300, veh_pt_thres=5, noise_pt_thres=5,
+                            prob_int=0.95, pixels=None):
+        """
+        This function models the background noise mean as a random walk process and uses a KF to track the mean.
+        The std of PIR measurement was found to be constant, hence it suffices to just track the mean.
+        :param raw_data: the raw DataFrame data, NOTE: the ultrasonic sensor data is also in there
+        :param t_start: datetime, start time for subtracting background
+        :param t_end: datetime, end time for subtracting background
+        :param init_s: int, seconds, the time used for initializing the background noise distribution
+        :param veh_pt_thres: the minimum number of point to be considered as a vehicle
+        :param noise_pt_thres: the minimum number of noise point to close a detection cycle.
+        :param prob_int: the confidence interval used to determine whether a point is noise or vehicle
+        :param pixels: the list of pixels for performing the background subtraction
+        :return:
+        """
+
+        _debug = True
+        if _debug:
+            _debug_mu = []
+
+        # only normalize those period of data
+        if t_start is None: t_start = raw_data.index[0]
+        if t_end is None: t_end = raw_data.index[-1]
+
+        # save the batch normalized data
+        frames = raw_data.index[ (raw_data.index >= t_start) & (raw_data.index <= t_end) ]
+        _raw_data = raw_data.loc[frames,:]
+        # set the data to be all np.nan
+        veh_data = deepcopy(_raw_data)
+        veh_data.values[:, 0:self.tot_pix] = np.nan
+
+        # Only subtracting background for the specified pixels
+        if pixels is None:
+            # all pixels
+            pixels_to_process = np.arange(0, self.tot_pix)
+            # _row, _col = np.meshgrid( np.arange(0, self.pir_res[0]), np.arange(0, self.pir_res[1]) )
+            # pixels = zip(_row.flatten(), _col.flatten())
+        else:
+            pixels_to_process = []
+            for pix_loc in pixels:
+                pixels_to_process.append(pix_loc[1]*4+pix_loc[0])
+
+        # ------------------------------------------------------------------------
+        # Initialize the background noise distribution.
+        t_init_end = t_start + timedelta(seconds=init_s)
+        _, _, noise_means, noise_stds = self._get_noise_distribution(_raw_data, t_start=t_start,
+                                                                     t_end=t_init_end, p_outlier=0.01,
+                                                                     stop_thres=(0.001, 0.0001), pixels=pixels)
+
+        # ------------------------------------------------------------------------
+        # the current noise distribution
+        n_mu_all = noise_means.T.reshape(self.tot_pix)
+        n_sigma_all = noise_stds.T.reshape(self.tot_pix)
+        sig_ratio = stats.norm.ppf(1-(1-prob_int)/2.0, 0, 1)    # the ratio of determining the veh or noise
+        _t_init_end = _raw_data.index[np.where(_raw_data.index>t_init_end)[0][0]]
+        _t_end = _raw_data.index[np.where(_raw_data.index<=t_end)[0][-1]]
+
+        # Save the reference, which can speed up the code
+        norm_data = _raw_data.ix[_t_init_end:_t_end]
+        num_frames = len(norm_data.index)
+
+        # ------------------------------------------------------------------------
+        # For each pixel, run a FSM to subtract the background
+        for pix in pixels_to_process:
+            mu = n_mu_all[pix]      # mu will be updated using KF
+            sig = 1.5*n_sigma_all[pix]  # sigma will be a constant
+
+            # ------------------------------------------------------------------------
+            # Finite State Machine
+            # state: 0-background; 1:entering a vehicle detection cycle; -1:exiting a detectin cycle
+            # v_buf = []    :vehicle buffer of the time of measurement
+            # n_buf = []    :noise buffer of the time of measurement
+            # v_counter     :the counter of vehicle points in this detection cycle
+            # n_counter     :the counter of noise point in this detection cycle
+            # noise         :a cache to prevent updating too frequently
+            state = 0
+            v_counter = 0
+            n_counter = 0
+            v_buf = []
+            n_buf = []
+            noise = []
+
+            # ------------------------------------------------------------------------
+            # Kalman filter
+            Q = 0.05**2     # model noise
+            kf = KF_1d(1,Q,sig**2)
+            kf.initialize_states(mu,0.001**2)   # initialize state as current mu
+
+            # ------------------------------------------------------------------------
+            # start FSM and KF
+            loop_c = 0
+            for cur_t, sample_row in norm_data.iterrows():
+
+                # check if should update the mean
+                if len(noise) >= 16:
+                    mu = kf.update_state_sequence(norm_data.ix[noise,pix])
+                    noise = []
+
+                # check if current point is noise
+                meas = sample_row.values[pix]
+                is_noise = (meas>=mu-sig_ratio*sig) & (meas<=mu+sig_ratio*sig)
+
+                # --------------------------------------------------------------------
+                # State 0, in background mode
+                if state == 0:
+                    if is_noise:
+                        # update noise distribution with single measurement
+                        # update once per second
+                        noise.append(cur_t)
+                        # mu = kf.update_state(meas)
+                        if _debug: _debug_mu.append([cur_t, mu])
+                    else:
+
+                        # enter the vehicle detection cycle
+                        # put the current measurement in the vehicle buffer
+                        v_buf.append(cur_t)
+                        v_counter = 1
+                        state = 1
+
+                # --------------------------------------------------------------------
+                # State 1, at the detection cycle of a vehicle
+                if state == 1:
+                    if is_noise:
+                        # attempt to exiting a detection cycle
+                        state = -1
+                        n_buf.append(cur_t)
+                        n_counter += 1
+                    else:
+                        # still in detection cycle
+                        v_buf.append(cur_t)
+                        v_counter += 1
+
+                # --------------------------------------------------------------------
+                # state -1, exiting the detection cycle of a vehicle
+                if state == -1:
+                    if is_noise:
+                        # another noise measurement
+                        n_buf.append(cur_t)
+                        n_counter += 1
+
+                        # now determine if should indeed exit the detection cycle
+                        if n_counter >= noise_pt_thres:
+                            # if number of consecutive noise data points is sufficient to close the detection cycle
+                            if v_counter >= veh_pt_thres:
+                                # if the number of points in this cycle indeed support one vehicle
+                                if not _debug:
+                                    # return normalized data
+                                    veh_data.ix[v_buf, pix] = np.abs((norm_data.ix[v_buf, pix].values-mu)/sig)
+                                else:
+                                    veh_data.ix[v_buf, pix] = norm_data.ix[v_buf, pix].values
+
+                            else:
+                                # the veh points detected in this cycle do not support a vehicle, then they are noise
+                                n_buf += v_buf
+
+                            # update the noise distribution
+                            # print('n_buf: {0}'.format(n_buf))
+                            noise += n_buf
+                            # mu = kf.update_state_sequence(norm_data.ix[n_buf,pix].values)
+
+                            if _debug: _debug_mu.append([cur_t, mu])
+
+                            # reset state
+                            n_buf = []
+                            v_buf = []
+                            n_counter = 0
+                            v_counter = 0
+
+                    else:
+                        # return to the vehicle detection cycle
+                        v_buf.append(cur_t)
+                        v_counter += 1
+
+                        # clear the noise buffer, since those measurements are considered part of the vehicle or unidentified
+                        # DO NOT reset the counter, otherwise could never exit the cycle in certain cases
+                        n_buf = []
+                        state = 1
+
+                print_loop_status('Pixel {0}, Subtracting background for frame:'.format(pix), loop_c, num_frames)
+                loop_c+=1
+
+            if _debug:
+                _debug_mu = np.array(_debug_mu)
+                # plot a single pixel
+                fig, ax = plt.subplots(figsize=(18,5))
+                ax.plot(norm_data.index, norm_data['pir_{0}x{1}'.format(int(pix%4), int(pix/4))],
+                        label='raw')
+                ax.plot(veh_data.index, veh_data['pir_{0}x{1}'.format(int(pix%4), int(pix/4))],
+                        label='veh', linewidth=3)
+                ax.scatter(veh_data.index, veh_data['pir_{0}x{1}'.format(int(pix%4), int(pix/4))])
+                ax.plot(_debug_mu[:,0], _debug_mu[:,1], label='noise mu')
+                ax.legend()
+                plt.draw()
+
+        return veh_data
+
     # @profile
     def _MAP_update(self, data, paras, prior):
         """
@@ -2040,10 +2297,10 @@ class SensorData:
         :param data: the noise data point
         :param paras: (mu, sigma) the current noise distribution
         :param prior: (prior_mu, prior_sigma) the prior distribution of mu
-        :return:
+        :return: posterior (mu, sigma), posterior (prior_mu, prior_sigma)
         """
         mu, var = paras[0], paras[1]**2
-        prior_mu, prior_var = prior[0], prior[1]**2
+        prior_mu, prior_var = prior[0], prior[1]**2+var
         if type(data) is int or type(data) is float:
             len_data = 1
         else:
@@ -2688,3 +2945,279 @@ class VideoData:
         out.release()
 
         return signal
+
+    @staticmethod
+    def trim_out_dense_traffic(input_video, input_video_starttime, output_video, trim_starttime, vehs, dt):
+        """
+        This function trims out the dense traffic, i.e, there will be miximum dt seconds of continuous video without veh
+        :param input_video: input video
+        :param input_video_starttime: input video starting time.
+        :param output_video: output video
+        :param vehs: the veh struct
+        :param dt: seconds.
+        :return:
+        """
+
+        cap = cv2.VideoCapture(input_video)
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        res = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+
+        # get the timestamp
+        print('Loaded video {0}:'.format(input_video))
+        print('    Resolution: {0} x {1}'.format(res[0], res[1]))
+        print('    FPS: {0}'.format(fps))
+        print('    Frame count: {0}'.format(total_frames))
+        print('    Current timestamp: {0}'.format(cap.get(cv2.CAP_PROP_POS_MSEC)))
+        print('    Current index: {0}'.format(cap.get(cv2.CAP_PROP_POS_FRAMES)))
+
+        input_video_endtime = input_video_starttime + timedelta(seconds=fps*total_frames)
+
+        # compute the frames that should be trimmed out
+        _times = [] # entrance and exit times
+        for veh in vehs:
+            if trim_starttime <= veh.t_in <= input_video_endtime:
+                _times.append(veh.t_in)
+            if trim_starttime <= veh.t_out <= input_video_endtime:
+                _times.append(veh.t_out)
+        _times = sorted(_times)
+
+        # get the dense traffic intervals
+        dense_periods = []
+        t_s = trim_starttime
+        for i in range(0, len(_times)-1):
+            if (_times[i+1] - _times[i]).total_seconds() > 2.0*dt:
+                t_e = _times[i] + timedelta(seconds=dt)
+                dense_periods.append((t_s, t_e))
+                t_s = _times[i+1] - timedelta(seconds=dt)
+            else:
+                continue
+
+        # get the frames to be added
+        frames = np.zeros(0)
+        for p in dense_periods:
+            idx_s = int( (p[0]-input_video_starttime).total_seconds()*fps )
+            idx_e = int( (p[1]-input_video_starttime).total_seconds()*fps )
+            frames = np.concatenate([frames, np.arange(idx_s, idx_e)])
+
+        print('Trimming video...')
+        # --------------------------------------------------------------
+        # set the current frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frames[0])
+        # create writerCV
+        fourcc = cv2.VideoWriter_fourcc('D','I','V','X')
+        out = cv2.VideoWriter(output_video, fourcc, fps, res)
+
+        for i in range(0, total_frames):
+            ret, frame = cap.read()
+
+            if ret is True and i in frames:
+                out.write(frame)
+
+            print_loop_status('Trimming frames: ', i, total_frames)
+
+        cap.release()
+        out.release()
+
+
+
+
+# ==================================================================================================================
+# Kalman filter class
+# ==================================================================================================================
+class KF:
+    """
+    The system:
+        x(k) = Ix(k-1) + w, where w ~ N(0, Q)
+        z(k) = Ix(k) + v, where v ~ N(0, R)
+    """
+
+    def __init__(self, dim_state, Q, R):
+        """
+        Initialize the kalman filter,
+        :param dim_state: the dimension of the state
+        :param Q: the error covariance matrix of the model noise
+        :param R: the error covariance matrix of the measurement noise
+        :return:
+        """
+        self.dim = dim_state
+        if type(Q) is float:
+            self.Q = Q*np.ones((1,1))
+        else:
+            self.Q = Q
+
+        if type(R) is float:
+            self.R = R*np.ones((1,1))
+        else:
+            self.R = R
+
+        # states. preallocate memory
+        self.x = np.zeros(self.dim)
+        self.P = np.zeros((self.dim, self.dim))
+
+        # the predicted state and error
+        self.x_f = np.zeros(self.dim)
+        self.P_f = np.zeros((self.dim, self.dim))
+
+    def initialize_states(self, x0, P0):
+        """
+        This function initializes the initial state
+        :param x0: the initial state
+        :param P0: the initial error covariance matrix
+        :return: initialized into property
+        """
+        self.x = deepcopy(x0)
+        self.P = deepcopy(P0)
+
+    def update_state(self, z):
+        """
+        This function updates the current state given measurement z
+        :param z: np array
+        :return: the updated system state
+        """
+
+        # forward propagate the state
+        self.x_f = deepcopy(self.x)
+        self.P_f = self.P + self.Q
+
+        # compute the innovation sequence and Kalman gain
+        y = z - self.x_f
+        S = self.P_f + self.R
+
+        K = np.dot(self.P_f, np.linalg.inv(S))
+
+        # update the state
+        self.x = self.x_f + np.dot(K, y)
+        self.P = np.dot(np.diag(np.ones(self.dim))-K ,self.P_f)
+
+        return self.x
+
+    def update_state_sequence(self, zs):
+        """
+        This function updates the current state given a sequence of measurements zs
+        :param zs: a sequence of measurement z, num_meas x dim
+        :return: the current state
+        """
+
+        for z in zs:
+            self.update_state(z)
+
+        return self.x
+
+
+
+
+class KF_1d:
+    """
+    The system is a one-dimentional KF:
+        x(k) = Ix(k-1) + w, where w ~ N(0, Q)
+        z(k) = Ix(k) + v, where v ~ N(0, R)
+    """
+
+    def __init__(self, dim_state, Q, R):
+        """
+        Initialize the kalman filter,
+        :param dim_state: the dimension of the state
+        :param Q: the error covariance matrix of the model noise
+        :param R: the error covariance matrix of the measurement noise
+        :return:
+        """
+        self.dim = dim_state
+        self.Q = Q
+        self.R = R
+
+        # states. preallocate memory
+        self.x = 0.0
+        self.P = 0.0
+
+    def initialize_states(self, x0, P0):
+        """
+        This function initializes the initial state
+        :param x0: the initial state
+        :param P0: the initial error covariance matrix
+        :return: initialized into property
+        """
+        self.x = x0
+        self.P = P0
+
+    # @profile
+    def update_state(self, z):
+        """
+        This function updates the current state given measurement z
+        :param z: np array
+        :return: the updated system state
+        """
+
+        # forward propagate the state
+        P_f = self.P + self.Q
+
+        # compute the innovation sequence and Kalman gain
+        y = z - self.x  # x_f = x
+        S = P_f + self.R
+        K = P_f/S
+
+        # update the state
+        self.x += K*y
+        self.P = (1-K)*P_f
+
+        return self.x
+
+
+    # def update_state_sequence(self, zs):
+    #     """
+    #     This function updates the current state given a sequence of measurements zs
+    #     :param zs: a sequence of measurement z, num_meas x dim
+    #     :return: the current state
+    #     """
+    #
+    #     # update only uses the mean
+    #     # the system changes as
+    #     # x(k) = x(k-1) + wn    ; wn ~ N(0, n**2*Q)
+    #     # z(k) = Ix(k) + vn     ; vn ~ N(0, n*R)    if z(k) is now mean(zs)
+    #
+    #     for z in zs:
+    #         self.update_state(z)
+    #
+    #     return self.x
+
+
+    # @profile
+    def update_state_sequence(self, zs):
+        """
+        This function updates the current state given a sequence of measurements zs
+        :param zs: a sequence of measurement z, num_meas x dim
+        :return: the current state
+        """
+
+        # update only uses the mean
+        # the system changes as
+        # x(k) = x(k-1) + wn    ; wn ~ N(0, n**2*Q)
+        # z(k) = Ix(k) + vn     ; vn ~ N(0, n*R)    if z(k) is now mean(zs)
+
+        n = len(zs)
+        # print('update mean with {0} pts'.format(n))
+        Q = n**2*self.Q
+        R = n*self.R
+
+        avg_z = np.mean(zs)
+
+        # forward propagate the state
+        P_f = self.P +  Q
+
+        # compute the innovation sequence and Kalman gain
+        y = avg_z - self.x
+        S = P_f + R
+        K = P_f/S
+
+        # update the state
+        self.x += K*y
+        self.P = (1-K)*P_f
+
+        return self.x
+
+
+
+
+
+
