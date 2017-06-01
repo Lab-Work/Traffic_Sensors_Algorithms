@@ -121,8 +121,24 @@ class TrafficSensorAlg:
         Initialize the function with the data source and output options
         :return:
         """
+
+        # -------------------------------------------------------------------
+        # Some parameters that may influence the performance, but should be robust
+        # -------------------------------------------------------------------
+        # acceptance threshold of R2 metric, accepted fitting must have higher r2
+        self.r2_thres = 0.70
+        # acceptance threshold of number of supporting points
+        self.min_pts = 150
+        # the stop criteria for determining the convergence of a model, the change of slope and intercept
+        # 0.002 corresponds to 0.2 mph in further lane and 0.1 mph in closer lane
+        self.stop_thres = (0.002, 0.01)
+        # default distance
+        self.d_default = 8.0
+        # -------------------------------------------------------------------
+
         self.vehs = []
         self.pir_res=pir_res
+
 
     #TODO: to finish the online version
     def run(self, norm_data, buffer_s=1.5, step_s=0.5, t_start=None, t_end=None):
@@ -187,8 +203,9 @@ class TrafficSensorAlg:
 
         # print('Estimating speed for {0} vehs'.format(len(vehs)))
         for win in windows:
-            est = SpeedEst(norm_df.ix[win[0]:win[1]], pir_res=(4,32), plot=True, save_dir=save_dir)
-            vehs_in_win = est.estimate_speed(stop_tol=(0.002, 0.01), dist=3.5, r2_thres=0.8, min_num_pts=200)
+            est = SpeedEst(norm_df.ix[win[0]:win[1]], pir_res=(4,32), plot=False, save_dir=save_dir)
+            vehs_in_win = est.estimate_speed(stop_tol=self.stop_thres, dist=self.d_default, r2_thres=self.r2_thres,
+                                             min_num_pts=self.min_pts)
 
             for veh in vehs_in_win:
                 # register the vehicle to self.veh list
@@ -197,7 +214,20 @@ class TrafficSensorAlg:
         # --------------------------------------------------------------------
         # save the final result in form
         np.save(save_dir+'detected_vehs.npy',self.vehs)
+        self.save_det_vehs_txt(save_dir,'detected_vehs.txt')
 
+
+    def save_det_vehs_txt(self, save_dir, file_name):
+        """
+        This function saves the detected vehicles and the speeds in plain txt folder.
+        For each row:
+            t_in (datetime), t_out (datetime), dist (m), speed (mph), est_dist (bool)
+        :return: save in file save_dir + file_name
+        """
+        with open(save_dir+file_name, 'w+') as f:
+            f.write('t_in, t_out, dist (m), speed (mph), estimated_dist\n')
+            for veh in self.vehs:
+                f.write('{0},{1},{2},{3},{4}\n'.format(veh.t_in, veh.t_out, veh.dist, veh.speed, veh.est_dist))
 
     def register_veh(self, veh):
         """
@@ -592,10 +622,33 @@ class VehDet:
 # ==================================================================================================================
 class Veh:
     """
-    This class defines the basic attributes for each vehicle. Additional functions may be added.
+    This class defines the basic attributes for each vehicle.
+    a model dict:
+                mdl['line'] = (k,c)
+                mdl['sigma'] = sig
+                mdl['inlier_idx'] = the final converged inlier index
+                mdl['r2'] = the r2 score of the fitting de linear regression
+    a veh object:
+                properties: slope,
+                t_in, t_out:  datetime time
+                pts: a list of [times, locations] supporting this vehicle
+                r2: the R2 measure
+                sigma: the final tolerance threshold
+                frame_loc:
+                    'full', all pts associated with this vehicle are in the time window
+                    'head' (only first half of vehicle appears in the window)
+                    'tail' only second half of the vehicle appears in the window
+                    'body' only the center part of the vehicle appears in the window
+                det_perc: the percentage of the trace of the vehicle captured in this time window
+                det_window: (start_t, end_t) in datetime
+
+                dist: meters, the distance of the vehicle to the sensor
+                est_dist: bool, if the value dist is estimated from the average
+                speed: mph, the estimated speed
+                tx_ratio; the ratio of the pts and slope. speed (mph) = 2.24*tx_ratio*slope*dist
     """
     def __init__(self, slope=None, t_in=None, t_out=None, pts=None, r2=None, sigma=None, frame_loc=None,
-                 det_perc=None, det_window=None):
+                 det_perc=None, det_window=None, dist=6.5, est_dist=True, tx_ratio=6.0):
 
         self.slope = slope
         self.t_in = t_in
@@ -607,6 +660,11 @@ class Veh:
         self.det_perc = det_perc
         self.det_window = det_window
 
+        # the distance and the speed
+        self.dist = dist
+        self.est_dist = est_dist
+        self.speed = -slope*self.dist*2.24*tx_ratio
+
 
 
 # ==================================================================================================================
@@ -614,6 +672,36 @@ class Veh:
 # ==================================================================================================================
 class SpeedEst:
     def __init__(self, data_df, pir_res=(4,32), plot=False, save_dir=''):
+
+        # ------------------------------------------------------------
+        # Some parameters that may influence the performance, but should be robust
+        # ------------------------------------------------------------
+        # acceptance threshold of R2 metric, accepted fitting must have higher r2
+        self.r2_thres = 0.70
+        # ratio multiplied by sigma is the new tolerance, 3.0 normally leads to expansion from bad fitting
+        self.expansion_ratio = 3.0
+        # ratio multiplied by sigma is the new tolerance, 2.0 normally leads to contraction from bad fitting
+        self.contraction_ratio = 2.0
+        # the new tolerance is set as sigma_ratio*sig + self.boundary_buf, which takes care of the quantization issue.
+        self.boundary_buf = 1/60.0
+
+        # The default distance to the sensor if no reading from ultrasonic sensor. Occurs when car on further lane
+        self.d_default = 8.0
+        # if distance data is greater then no_ultra_thres, then there is no ultrasonic sensor reading
+        self.no_ultra_thres = 10.0
+
+        # the in and out space boundary of ultrasonic sensor fov in the time-space domain
+        self.ultra_fov_in = 0.04
+        self.ultra_fov_out = -0.16
+
+        # maximum number of iterations for fitting a model
+        self.max_iter = 100
+        # minimum number of inliers to perform linear fitting
+        self.min_inliers = 5
+
+        # maximum added new point to stop the iteration, i.e., do NOT stop if there is more new pts added even if the
+        # new model has negligible change from the old model
+        self.new_pts_thres = 16
 
         # ------------------------------------------------------------
         # initialize the space grid with nonlinear transformation
@@ -637,7 +725,7 @@ class SpeedEst:
         self.t_grid = t_grid
 
         # ------------------------------------------------------------
-        # convert the matrix to a list of data point tuples
+        # convert the PIR matrix to a list of data point tuples
         self.time = []
         self.space = []
         i = 0
@@ -651,6 +739,10 @@ class SpeedEst:
         self.space = np.asarray(self.space)
 
         # ------------------------------------------------------------
+        # extract the ultrasonic sensor data
+        self.ultra = data_df['ultra']
+
+        # ------------------------------------------------------------
         # other properties
         self.plot = plot
         self.save_dir = save_dir
@@ -662,6 +754,9 @@ class SpeedEst:
 
     def estimate_speed(self, stop_tol=(0.002, 0.01), dist=3.5, r2_thres=0.85, min_num_pts=150,
                        speed_range=(0,50)):
+
+        # update r2 threshold
+        self.r2_thres = r2_thres
 
         # first use RANSAC to get the clusters
         clusters = self.get_clusters(db_radius=0.05, db_min_size=30, min_num_pts=min_num_pts)
@@ -711,7 +806,31 @@ class SpeedEst:
             # ================================================================================================
             # convert to class
             for mdl in self.all_mdls:
-                veh = self.mdl2veh(mdl)
+
+                # ================================================================================================
+                # Estimate the vehicle speed using the ultrasonic sensor distance measurement
+                # compute the in and out time to the FOV of ultrasonic sensor
+                in_x = self.ultra_fov_in
+                out_x = self.ultra_fov_out
+                in_sec = (in_x-mdl['line'][1])/mdl['line'][0]
+                out_sec = (out_x-mdl['line'][1])/mdl['line'][0]
+                t_in = self.init_dt + timedelta(seconds=in_sec)
+                t_out = self.init_dt + timedelta(seconds=out_sec)
+
+                idx = (self.ultra.index >= t_in) & (self.ultra.index <= t_out)
+                if len(self.ultra[idx].values) == 0:
+                    d = self.d_default
+                    est_d = True
+                else:
+                    d = np.min(self.ultra[idx].values)
+                    est_d = False
+
+                if d >= self.no_ultra_thres:
+                    # FN from ultrasonic sensor, replace by average distance 6.5
+                    d = self.d_default
+                    est_d = True
+
+                veh = self.mdl2veh(mdl, d, est_d)
                 self.all_vehs.append(veh)
 
             return self.all_vehs
@@ -811,13 +930,15 @@ class SpeedEst:
         return flag
 
 
-    def mdl2veh(self, mdl):
+    def mdl2veh(self, mdl, dist, est_dist):
         """
         This function converts the mdl dictionary to standard veh class
         :param mdl: dict
+        :param dist: distance in meters (data from ultrasonics sensor
+        :param est_dist: bool. If there is a FN, then the dist is estimated distance
         :return: veh class object
         """
-         # compute the enter and exit time.
+        # compute the enter and exit time.
         in_s = (self.x_grid[0]-mdl['line'][1])/mdl['line'][0]
         out_s = (self.x_grid[-1]-mdl['line'][1])/mdl['line'][0]
 
@@ -837,7 +958,7 @@ class SpeedEst:
             frame_loc = 'head'
             det_perc = (self.t_grid[-1]-in_s)/(out_s-in_s)
         elif in_s <0 and out_s <= self.t_grid[-1]:
-            frame_loc = 'head'
+            frame_loc = 'tail'
             det_perc = (out_s-self.t_grid[0])/(out_s-in_s)
         elif in_s <0 and out_s > self.t_grid[-1]:
             frame_loc = 'body'
@@ -845,7 +966,7 @@ class SpeedEst:
 
         veh = Veh(slope=mdl['line'][0], t_in=t_in, t_out=t_out, pts=zip(pts_t, self.space[mdl['inlier_idx']]),
                   r2=mdl['r2'], sigma=mdl['sigma'], frame_loc=frame_loc, det_perc=det_perc,
-                  det_window=(self.init_dt, self.end_dt))
+                  det_window=(self.init_dt, self.end_dt), dist=dist, est_dist=est_dist, tx_ratio=self.ratio_tx)
 
         return veh
 
@@ -933,51 +1054,65 @@ class SpeedEst:
                 mdl['r2'] = the r2 score of the fitting de linear regression
         """
 
-        if len(inlier_idx) < 5:
+        if len(inlier_idx) < self.min_inliers:
             return None
 
         try:
 
             _pre_line = None
             converged = False
+            last_pts = len(inlier_idx)
+            added_pts = len(inlier_idx)
             print('---------- Fitting a line, iterations: ')
-            for i in range(0, 100):
+            for i in range(0, self.max_iter):
                 # sys.stdout.write('\r')
                 # sys.stdout.write('..... {0},'.format(i))
                 # sys.stdout.flush()
                 print('               # {0}: {1} pts'.format(i, len(inlier_idx)))
 
-                if len(inlier_idx) < 5:
+                if len(inlier_idx) < self.min_inliers:
                     return None
 
                 # ==========================================================================================
                 # ---------------------------------------------------------------------
-                # fit a line using ordinary linear regression
+                # fit a line using linear regression
                 # Reason: at each loc, data is more gaussian; at each time, spaces are nonliearly stretched.
+                # _r_value is in fact the correlation coefficient
                 _slope, _intercept, _r_value, _p_value, _std_err = scipy.stats.linregress(self.space[inlier_idx],
                                                                                           self.time[inlier_idx])
                 # express in space = coe*time + intercept
                 line = np.array([1 / _slope, -_intercept / _slope])
+
+                # In linear regression, R2 can also be computed as the square fo the correlation coefficient
                 r2 = _r_value ** 2
 
                 # ---------------------------------------------------------------------
-                # TODO: debug
-                # Use orthogonal distance regression
-                linear = odr.Model(f)
-                mydata = odr.Data(self.time[inlier_idx], self.space[inlier_idx])
-                myodr = odr.ODR(mydata, linear, beta0=[1., 2.])
-                myoutput = myodr.run()
-                # myoutput.pprint()
-                _slope, _intercept = myoutput.beta[::-1]
-                # print('y = {0} x + {1}'.format(_slope, _intercept))
-                _r_value = myoutput.res_var
-                r2 = 1-_r_value
+                # Euclidean distance does not work in time-space domain. Hence ODR is not valid in this problem
+                # Try orthogonal distance regression
+                # linear = odr.Model(f)
+                # mydata = odr.Data(self.time[inlier_idx], self.space[inlier_idx])
+                # myodr = odr.ODR(mydata, linear, beta0=[1., 2.])
+                # myoutput = myodr.run()
+                # # # myoutput.pprint()
+                # _slope, _intercept = myoutput.beta
+                # # # print('y = {0} x + {1}'.format(_slope, _intercept))
+                # # line = np.array([1 / _slope, -_intercept / _slope])
+                # line = np.array([_slope, _intercept])
+                # # compute the correlation coefficient to indicate the independence
+                # sig_t = np.std(self.time[inlier_idx])
+                # sig_s = np.std(self.space[inlier_idx])
+                # cov_ts = np.mean(self.time[inlier_idx]*self.space[inlier_idx]) - \
+                #          np.mean(self.time[inlier_idx])*np.mean(self.space[inlier_idx])
+                # r2 = (cov_ts/(sig_t*sig_s))**2
 
                 # ==========================================================================================
 
                 if _pre_line is not None and \
-                        (np.asarray(line) - np.asarray(_pre_line) <= np.asarray(stop_tol)).all():
-                    # # converged
+                        (np.asarray(line) - np.asarray(_pre_line) <= np.asarray(stop_tol)).all() and \
+                        added_pts < self.new_pts_thres:
+                    # # converged by conditions:
+                    #   - no significant change of lines
+                    #   - no significant increase of points
                     # if stop_tol[0] == np.inf:
                     #     print('---------- #################################### inf stop_tol #######')
                     print('---------- Converged: y = {0:.03f}x + {1:.03f}, Speed {2:.01f} mph assuming dist={3:.01f} m'.format(line[0], line[1],
@@ -990,12 +1125,13 @@ class SpeedEst:
                 sig, dists = self.get_sigma(line, pt_idx=inlier_idx)
 
                 # determine whether to expand or contract
-                if r2 <= 0.8:
+                if r2 <= self.r2_thres:
                     # bad fit, then expand
-                    sigma_ratio = 3.0
+                    sigma_ratio = self.expansion_ratio
                 else:
                     # contract to a good fit
-                    sigma_ratio = 2.0
+                    # the value 2.0~2.2 all provide good results
+                    sigma_ratio = self.contraction_ratio
 
                 if self.plot is True:
                     mdl={'line':line, 'sigma':sig, 'inlier_idx':inlier_idx, 'r2':r2}
@@ -1005,7 +1141,9 @@ class SpeedEst:
 
                 if not converged:
                     # update cluster
-                    inlier_idx = self.update_inliers(line, tol=sigma_ratio * sig)
+                    inlier_idx = self.update_inliers(line, tol=sigma_ratio * sig + self.boundary_buf)
+                    added_pts = len(inlier_idx) - last_pts
+                    last_pts = len(inlier_idx)
                     _pre_line = deepcopy(line)
                 else:
                     mdl={'line':line, 'sigma':sig, 'inlier_idx':inlier_idx, 'r2':r2}
@@ -1024,6 +1162,10 @@ class SpeedEst:
         clusters = []
 
         samples = np.vstack([self.time, self.space]).T
+
+        if len(samples) == 0:
+            return []
+
         y_pre = DBSCAN(eps=db_radius, min_samples=db_min_size).fit_predict(samples)
         num_clusters = len(set(y_pre)) - (1 if -1 in y_pre else 0)
         y_pre = np.asarray(y_pre)
@@ -1063,7 +1205,12 @@ class SpeedEst:
         return clusters
 
     def get_sigma(self, line, pt_idx=None):
-
+        """
+        This function computes the sigma tolerance in the projected 1-d domain.
+        :param line: (k, b)
+        :param pt_idx: index of points supporting this line
+        :return:
+        """
 
         if pt_idx is None:
             # if not specified, project all points
@@ -1085,8 +1232,11 @@ class SpeedEst:
         pts_s = self.space[pt_idx]
         k, c = line
 
-        # compute the distance of those points to the line
-        dists = self.compute_dist(pts_t, pts_s, (k, c))
+        # compute the orthogonal distance of those points to the line
+        # dists = self.compute_dist(pts_t, pts_s, (k, c))
+
+        # Use time residual instead of the orthogonal distance
+        dists = self.compute_residual(pts_t, pts_s, (k, c))
 
         # fit GMM and update sigma
         gmm = GaussianMixture()
@@ -1098,6 +1248,20 @@ class SpeedEst:
         #     sigma = sigma*np.sqrt(s_max**2+line[0]**2*t_max**2)/np.sqrt(1+line[0]**2)
 
         return sigma, dists
+
+
+    def compute_residual(self, pts_t, pts_s, line):
+        """
+        This function computes the residual of the regression
+            line = k, c: s = kt+c  => t = f(s) = (s-c)/k
+            residual: pts_t - f(pts_s)
+        :param pts_t: a list of time
+        :param pts_s: a list of space
+        :param line: k, c
+        :return: distance (+/- values) to the line, same dimension as pts_t
+        """
+        k, c = line
+        return pts_t - (pts_s-c)/k
 
 
     def split_cluster(self, line, pt_idx=None, min_num_pts=100, counter='0'):
@@ -1289,7 +1453,7 @@ class SpeedEst:
         # sort the possible subclusters across all directions by the _weight.
         possible_groups = sorted(possible_groups, key=lambda x:x[2])[::-1]
 
-        print('               sorted subclusters:{0}'.format(possible_groups))
+        # print('               sorted subclusters:{0}'.format(possible_groups))
 
         return possible_groups
 
@@ -1304,7 +1468,11 @@ class SpeedEst:
         k = line[0]
         c = line[1]
 
-        dist = np.abs(self.time * k - self.space + c) / np.sqrt(1 + k ** 2)
+        # orthogonal distance
+        # dist = np.abs(self.time * k - self.space + c) / np.sqrt(1 + k ** 2)
+
+        # the residual of t_data - f(s), where t = f(s) = (s-c)/k
+        dist = np.abs( self.time - (self.space-c)/k )
 
         idx = (dist <= tol)
 
@@ -1329,12 +1497,15 @@ class SpeedEst:
     def plot_progress(self, cur_mdl, save_name=None, title=None, sig_ratio=2.0, dist=3.5):
 
         # plot the initial figure
-        fig = plt.figure(figsize=(10, 13))
-        gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1])
+        fig = plt.figure(figsize=(10, 15))
+        gs = gridspec.GridSpec(3, 1, height_ratios=[4, 1, 1])
 
-        # Axis 1 will be used to plot the analysis of the fitting
+        # Axis 0 will be used to plot the scatter plot of data and the fitted line
+        # Axis 1 will be used to plot the ultrasonic sensor data
+        # Axis 2 will be used to plot the analysis of the fitting
         ax0 = plt.subplot(gs[0])
         ax1 = plt.subplot(gs[1])
+        ax2 = plt.subplot(gs[2])
 
         # ===========================================================================
         # plot ax0: the fitting
@@ -1342,7 +1513,8 @@ class SpeedEst:
         ax0.scatter(self.time, self.space, color='0.6')
 
         # --------------------------------------------------------------------
-        # scatter the estimated cnverged models
+        # scatter the previously estimated converged models
+        all_mdls_dists = []
         if len(self.all_mdls) != 0:
             colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple'])
             for i, mdl in enumerate(self.all_mdls):
@@ -1354,6 +1526,32 @@ class SpeedEst:
                 y_line = line[0] * x_line + line[1]
                 ax0.plot(x_line, y_line, linewidth=3, color='k')
 
+                # --------------------------------------------------------
+                # compute the enter and exit time.
+                # t_enter = (self.x_grid[0]-line[1])/line[0]
+                # t_exit = (self.x_grid[-1]-line[1])/line[0]
+                t_enter = (self.ultra_fov_in-line[1])/line[0]
+                t_exit = (self.ultra_fov_out-line[1])/line[0]
+
+                ax0.axvline(x=t_enter, linestyle='--')
+                ax0.axvline(x=t_exit, linestyle='--')
+
+                # Get the maximum distance within this time interval
+                ax1.axvline(x=t_enter, linestyle='--')
+                ax1.axvline(x=t_exit, linestyle='--')
+                t_index = (self.ultra.index >= self.ultra.index[0] + timedelta(seconds=t_enter)) & \
+                          (self.ultra.index <= self.ultra.index[0] + timedelta(seconds=t_exit))
+
+                if len(self.ultra[t_index].values) != 0:
+                    d = np.min(self.ultra[t_index].values)
+                else:
+                    d = self.d_default
+                if d >= self.no_ultra_thres:
+                    # False negative from ultrasonic sensor
+                    d = self.d_default
+                all_mdls_dists.append(d)
+
+                # --------------------------------------------------------
                 # # plot the tolerance
                 # if line[0] != 0:
                 #     c1 = line[1] + np.sqrt((sig_ratio * sig) ** 2 + (sig_ratio * sig * line[0]) ** 2)
@@ -1380,11 +1578,15 @@ class SpeedEst:
 
             # plot the tolerance
             if line[0] != 0:
-                c1 = line[1] + np.sqrt((sig_ratio * sig) ** 2 + (sig_ratio * sig * line[0]) ** 2)
-                c2 = line[1] - np.sqrt((sig_ratio * sig) ** 2 + (sig_ratio * sig * line[0]) ** 2)
+                # if using orthogonal distance
+                # c1 = line[1] + np.sqrt((sig_ratio * sig) ** 2 + (sig_ratio * sig * line[0]) ** 2)
+                # c2 = line[1] - np.sqrt((sig_ratio * sig) ** 2 + (sig_ratio * sig * line[0]) ** 2)
+                # if using time residual
+                c1 = line[1] + ((sig_ratio * sig + self.boundary_buf) * line[0])
+                c2 = line[1] - ((sig_ratio * sig + self.boundary_buf) * line[0])
             else:
-                c1 = line[1] + sig_ratio * sig
-                c2 = line[1] - sig_ratio * sig
+                c1 = line[1] + (sig_ratio * sig + self.boundary_buf)
+                c2 = line[1] - (sig_ratio * sig + self.boundary_buf)
 
             y_line_1 = line[0] * x_line + c1
             ax0.plot(x_line, y_line_1, linewidth=2, color='r', linestyle='--')
@@ -1398,7 +1600,18 @@ class SpeedEst:
         ax0.set_ylim([self.x_grid[-1], self.x_grid[0]])
 
         # ===========================================================================
-        # plot ax1: the analysis of the current model
+        # plot ax1: the ultrasonic sensor data
+        tmp_t = self.ultra.index - self.ultra.index[0]
+        rel_t = [i.total_seconds() for i in tmp_t]
+        ax1.plot(rel_t, self.ultra.values, linewidth=2)
+        ax1.set_title('Ultrasonic data', fontsize=16)
+        ax1.set_ylabel('Distance (m)', fontsize=14)
+        ax1.set_xlabel('Time (s)', fontsize=14)
+        ax1.set_ylim([0,12])
+        ax1.set_xlim([self.t_grid[0], self.t_grid[-1]])
+
+        # ===========================================================================
+        # plot ax2: the analysis of the current model
         # - the distribution of the distance of points to the line
         # - the measures: r^2, num_old_inliers, num_new_inliers, total num_points, slope
         # plot histogram
@@ -1408,17 +1621,18 @@ class SpeedEst:
 
             sig = cur_mdl['sigma']
             bin_width = 0.005
-            n, bins, patches = ax1.hist(dists, bins=np.arange(-3 * sig, 3 * sig, bin_width),
+            n, bins, patches = ax2.hist(dists, bins=np.arange(-3 * sig, 3 * sig, bin_width),
                                         normed=1, facecolor='green', alpha=0.75)
-            # fill the one-sig space.
-            x_fill = np.linspace(-sig, sig, 100)
-            ax1.fill_between(x_fill, 0, mlab.normpdf(x_fill, 0, sig), facecolor='r', alpha=0.65)
-            ax1.plot(bins, mlab.normpdf(bins, 0, sig), linewidth=2, c='r')
-            text = ' R2: {0:.4f}; Speed: {1:.2f} mph'.format(cur_mdl['r2'],
-                                                             -cur_mdl['line'][0] * dist * self.ratio_tx*2.24)
-            ax1.annotate(text, xy=(0.05, 0.65), xycoords='axes fraction', fontsize=14)
-            ax1.set_ylim([0, np.max(n) * 1.5])
-            ax1.set_title('Analyzing current model', fontsize=16)
+            # fill the sig_ratio*sig space.
+            x_fill = np.linspace(-(sig*sig_ratio+self.boundary_buf), (sig*sig_ratio+self.boundary_buf), 100)
+            ax2.fill_between(x_fill, 0, mlab.normpdf(x_fill, 0, sig), facecolor='r', alpha=0.65)
+            ax2.plot(bins, mlab.normpdf(bins, 0, sig), linewidth=2, c='r')
+            text = ' R2: {0:.4f};\n # pts: {2}\n Speed: {1:.2f} mph'.format(cur_mdl['r2'],
+                                                             -cur_mdl['line'][0] * dist * self.ratio_tx*2.24,
+                                                                          len(inlier_idx))
+            ax2.annotate(text, xy=(0.05, 0.65), xycoords='axes fraction', fontsize=12)
+            ax2.set_ylim([0, np.max(n) * 1.5])
+            ax2.set_title('Analyzing current model', fontsize=16)
 
         elif len(self.all_mdls) != 0:
             # plot the final distribution of all clusters
@@ -1439,24 +1653,25 @@ class SpeedEst:
                 dists += 3 * sigma + offset
 
                 bin_width = 0.005
-                n, bins, patches = ax1.hist(dists, bins=np.arange(offset, 6 * sigma + offset, bin_width),
+                n, bins, patches = ax2.hist(dists, bins=np.arange(offset, 6 * sigma + offset, bin_width),
                                             normed=1, facecolor=next(colors), alpha=0.75)
                 # fill the one-sig space.
                 x_fill = np.linspace(2 * sigma + offset, 4 * sigma + offset, 100)
-                # fill the onesigma
-                ax1.fill_between(x_fill, 0, mlab.normpdf(x_fill, offset + 3 * sigma, sigma), facecolor='r', alpha=0.65)
+                # fill the sig_ratio*sigma
+                ax2.fill_between(x_fill, 0, mlab.normpdf(x_fill, offset + 3 * sigma, sigma), facecolor='r', alpha=0.65)
                 # the gaussian line
-                ax1.plot(bins, mlab.normpdf(bins, offset + 3 * sigma, sigma), linewidth=2, c='r')
+                ax2.plot(bins, mlab.normpdf(bins, offset + 3 * sigma, sigma), linewidth=2, c='r')
 
-                text = ' R2: {0:.4f}\n {1:.2f} mph\n #:{2}'.format(r2, -line[0] * dist*2.24*self.ratio_tx,
-                                                                   len(inlier_idx))
-                ax1.annotate(text, xy=(offset + sigma, np.max(n) * 1.3), fontsize=10)
-                ax1.set_title('All converged models', fontsize=16)
+                text = ' R2: {0:.4f}\n #:{1}\n dist: {2:.1f} m\n {3:.2f} mph'.format(r2, len(inlier_idx),
+                                                                                 all_mdls_dists[i],
+                                                                                 -line[0]*all_mdls_dists[i]*2.24*self.ratio_tx)
+                ax2.annotate(text, xy=(offset + sigma, np.max(n) * 1.3), fontsize=10)
+                ax2.set_title('All converged models', fontsize=16)
                 y_lim = np.max([np.max(n), y_lim])
                 # update offset to the right 3sigma of this distribution
                 offset += 6 * sigma
-            ax1.set_ylim([0, y_lim * 1.8])
-            ax1.set_xlim([0, offset])
+            ax2.set_ylim([0, y_lim * 1.8])
+            ax2.set_xlim([0, offset])
 
         if save_name is not None:
             plt.savefig(self.save_dir + '{0}.png'.format(save_name), bbox_inches='tight')
@@ -1600,7 +1815,19 @@ class SensorData:
                     # get the pir sensor data
                     # # the pir sensor data 4x32 was saved row by row
                     val = [float(i) for i in item[1].split(',')]
-                    pir_data = list(np.array(val).reshape(self.pir_res).T.reshape(self.pir_res[0]*self.pir_res[1]))
+
+                    # NOTE: verified sensor s2 has two pir arrays misconnected, hence need to swap first 64 values with
+                    # last 64 values.
+                    tmp_pir_data = np.array(val).reshape(self.pir_res).T.reshape(self.pir_res[0]*self.pir_res[1])
+
+                    # ----------------------------------------------------
+                    # ONLY for sensor s1 which has two arrays misconnected.
+                    tmp = deepcopy(tmp_pir_data[0:64])
+                    tmp_pir_data[0:64] = tmp_pir_data[64:]
+                    tmp_pir_data[64:] = tmp
+                    # ----------------------------------------------------
+
+                    pir_data = list(tmp_pir_data)
 
                     # get the ultrasonic sensor data
                     ultra_data = float(item[2])
@@ -2110,7 +2337,7 @@ class SensorData:
         :return:
         """
 
-        _debug = True
+        _debug = False
         if _debug:
             _debug_mu = []
 
@@ -2159,7 +2386,7 @@ class SensorData:
         # For each pixel, run a FSM to subtract the background
         for pix in pixels_to_process:
             mu = n_mu_all[pix]      # mu will be updated using KF
-            sig = 1.5*n_sigma_all[pix]  # sigma will be a constant
+            sig = 1.0*n_sigma_all[pix]  # sigma will be a constant
 
             # ------------------------------------------------------------------------
             # Finite State Machine
@@ -2284,7 +2511,7 @@ class SensorData:
                 ax.plot(veh_data.index, veh_data['pir_{0}x{1}'.format(int(pix%4), int(pix/4))],
                         label='veh', linewidth=3)
                 ax.scatter(veh_data.index, veh_data['pir_{0}x{1}'.format(int(pix%4), int(pix/4))])
-                ax.plot(_debug_mu[:,0], _debug_mu[:,1], label='noise mu')
+                ax.plot(_debug_mu[:,0], _debug_mu[:,1], label='noise mu', linewidth=2)
                 ax.legend()
                 plt.draw()
 
@@ -2320,13 +2547,13 @@ class SensorData:
         """
         This function computes the mean and std of noise distribution (normal) by iteratively fitting a normal
             distribution and throwing away points outsize of (1-p_outlier) confidence interval
-        :param raw_data: the raw data, (as reference)
+        :param raw_data: the raw data, df, (as reference)
         :param t_start: datetime, start time of the period for getting the mean and std
         :param t_end: datetime
         :param p_outlier: the confidence interval is (1-p_outlier),
         :param stop_thres: (d_mean, d_std), stop iteration if the change from last distribution < stop_thres
         :param pixels: list of tuples, which pixel to compute
-        :return:
+        :return: means, stds, noise_means, noise_stds; each is 4x32 array
         """
         if t_start is None: t_start = raw_data.index[0]
         if t_end is None: t_end = raw_data.index[-1]
@@ -2554,18 +2781,20 @@ class SensorData:
         _t_start = data.index[np.where(data.index>=t_start)[0][0]]
         _t_end = data.index[np.where(data.index<=t_end)[0][-1]]
 
+        data_to_analyze = data[_t_start:_t_end]
+
         dw = timedelta(seconds=window_s)
         dt = timedelta(seconds=step_s)
-        len_data = len(data)
+        len_data = len(data_to_analyze)
 
         timestamps = []
         mus = []
         sigmas = []
 
-        last_update_t = data.index[0]
-        for i, cur_t in enumerate(data.index):
+        last_update_t = data_to_analyze.index[0]
+        for i, cur_t in enumerate(data_to_analyze.index):
             if cur_t - last_update_t >= dt:
-                _, _, _mu, _sigma = self._get_noise_distribution(data, t_start=cur_t-dw, t_end=cur_t, p_outlier=p_outlier,
+                _, _, _mu, _sigma = self._get_noise_distribution(data_to_analyze, t_start=cur_t-dw, t_end=cur_t, p_outlier=p_outlier,
                                                                  stop_thres=stop_thres, pixels=[pixel])
 
                 timestamps.append(cur_t)
@@ -2583,7 +2812,7 @@ class SensorData:
         sigmas = np.asarray(sigmas)
 
         # ------------------------------------------------------------------
-        ax = self.plot_time_series_for_pixel(data, t_start=None, t_end=None, pixels=[pixel])
+        ax = self.plot_time_series_for_pixel(data_to_analyze, t_start=None, t_end=None, pixels=[pixel])
         # plot the noise mean and std
         ax.plot(timestamps, mus, color='r', linewidth=2)
         ax.plot(timestamps, mus+sigmas, color='r', linestyle='--', linewidth=2)
@@ -2634,6 +2863,66 @@ class SensorData:
         plt.draw()
 
         return ax
+
+
+    def plot_histogram_for_pixel(self, raw_data, pixels=list(),
+                                 t_start=None, t_end=None, p_outlier=0.01, stop_thres=(0.001,0.0001)):
+        """
+        Statistic Analysis:
+        This function plots the histogram of the raw data for a selected pixel, to better understand the noise
+        :param raw_data: df, the raw data
+        :param pixels: list of tuples, [(2,20),()]
+        :param t_start: datetime type
+        :param t_end: datetime type
+        :param p_outlier: the confidence interval is (1-p_outlier)
+        :param stop_thres: (d_mean, d_std), stop iteration if the change from last distribution < stop_thres
+        :return: one figure for each pixel
+        """
+
+        if t_start is None: t_start = raw_data.index[0]
+        if t_end is None: t_end = raw_data.index[-1]
+
+        # t_start and t_end may not be in the index, hence replace by _t_start >= t_start and _t_end <= t_end
+        _t_start = raw_data.index[np.where(raw_data.index>=t_start)[0][0]]
+        _t_end = raw_data.index[np.where(raw_data.index<=t_end)[0][-1]]
+
+
+        # compute the mean and std
+        mu, sigma, noise_mu, noise_sigma = self._get_noise_distribution(raw_data,
+                                                                       t_start=_t_start, t_end=_t_end,
+                                                                       p_outlier=p_outlier, stop_thres=stop_thres)
+
+        for row, col in pixels:
+
+            # get the time series in window
+            time_series = raw_data.loc[_t_start:_t_end, 'pir_{0}x{1}'.format(row, col)].values
+
+            # the histogram of the data
+            num_bins = 200
+            fig = plt.figure(figsize=(8,5), dpi=100)
+            n, bins, patches = plt.hist(time_series, num_bins,
+                                        normed=1, facecolor='green', alpha=0.75)
+
+            # add a 'best fit' line
+            norm_fit_line = mlab.normpdf(bins, noise_mu[row, col],
+                                               noise_sigma[row, col])
+            l = plt.plot(bins, norm_fit_line, 'r--', linewidth=1.5, label='Background noise')
+
+            print('PIR pixel {0} x {1}:'.format(row, col))
+            print('    All: ({0}, {1})'.format(mu[row, col], sigma[row, col]))
+            print('    Noise: ({0}, {1})'.format(noise_mu[row, col], noise_sigma[row, col]))
+
+            # norm_fit_line = mlab.normpdf(bins, mu[row, col],
+            #                                    sigma[row, col])
+            # l = plt.plot(bins, norm_fit_line, 'b--', linewidth=1.5, label='all')
+
+            plt.legend()
+            plt.xlabel('Temperature ($^{\circ}C$)')
+            plt.ylabel('Probability density')
+            plt.title('Distribution of data from pixel {0} x {1}'.format(row, col))
+            # plt.grid(True)
+
+        plt.draw()
 
 
 # ==================================================================================================================

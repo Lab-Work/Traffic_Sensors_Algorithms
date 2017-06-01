@@ -10,7 +10,7 @@ To convert the .h264 video data (90 fps), use:
 Use the following to convert to smaller size (6GB to 400MB)
     ffmpeg -r 90 -i input_filename.h264 -vcodec:v libx264 -codec:a libvorbis -crf 24 -r 90 output_filename.mp4
 Use the following command to convert to smaller size (6GB to 60MB)
-    ffmpeg -r 90 -i input_filename.h264 -b:v 128k -b:a 32k -vcodec:v libx264 -codec:a libvorbis -r 90 output_filename.mp4
+    ffmpeg -r 60 -i input_filename.h264 -b:v 128k -b:a 32k -vcodec:v libx264 -codec:a libvorbis -r 60 output_filename.mp4
 
 ffmpeg 101:
     $ '-r 90', place before both input '-i' and output file to specify the frame rate
@@ -28,6 +28,29 @@ High level:
   - 1103: no video data available
   - 1116: the PIR sensor was noisy (right half of frame consistantly hotter than left half). 
   - 1118: ultrasonic sensor data is poor and the test was for stop-and-go traffic.
+
+  - 0316_2017: 
+        |- Downtown slow and stop traffic
+        |- s1 has 32 minutes with fairly consistent PIR and ultrasonic sensor detectiosn. Usable.
+        |- s2 has 45 minutes of data. Some pixels of PIR seems to be malfunctioning (consistently hot for long time). Not usable.
+
+  - 0324_2017
+        |- Savoy Neil street. S1 for stopped traffic. S2 for freeflow near Walmart.
+        |- s1 has 1 hr data, but very noisy. Not usable.
+        |- s2 has 37 min data. Fairly usable. Car temperatures are lower than background. 
+
+  - 0404_2017
+        |- Savoy Neil street. S2 for free flow near Walmart.
+        |- Sunny and Cloudy. Large variation in background temperature.
+        |- Very noisy data, not  quite clear traces.
+
+  - 0509_2017
+        |- Savoy Neil street. S1 (the one with electric tapes) for free flow traffic.
+        |- Sunny and Clouday. There were periodic ambient temperature changes
+        |- 2 hrs usable data. First 3 minutes (180s) are setting up time.
+        |- Several trains passing through during test. May need extra work.   
+        |- There are still planty of false negatives in Ultrasonic sensor data. To further investigate.
+        |- around 50% FN rate of the ultrasonic sensor
 #################################################################################
 
 
@@ -101,7 +124,7 @@ High level:
 1118
 - All 9 sensors for testing congested traffic
 - Located in downtown Champaign (map in folder)
-- Video data is available (90 FPS) flipped upside down (output.mp4 corrected the orientation from out.mp4). he timestamp (video file name) marks the starting time of the video within seconds error. v1_1 tiemstamp (file name) is wrong which should be corrected from other videos. All following y_coords are based on the un-corrected orientation video out.mp4:
+- Video data is available (90 FPS) flipped upside down (output.mp4 corrected the orientation from out.mp4). the timestamp (video file name) marks the starting time of the video within seconds error. v1_1 tiemstamp (file name) is wrong which should be corrected from other videos. All following y_coords are based on the un-corrected orientation video out.mp4:
       |
       |- v1_1 (1611-174118): rotation = -1.0, y_corrd = (0, 300)                1:01:37   6.3GB     
           - timestamp: 84.0        fps: 90.0       
@@ -117,6 +140,106 @@ High level:
       |- s1: 1611-171706 :::: 11-18 14:55:09 —> 11-18 15:31:10 (36 min)
       |- s2: 1811-144926 :::: 11-18 14:55:09 —> 11-18 15:32:18 (37 min)
       |- s3: 1611-171707 :::: 11-18 14:55:09 -> 11-18 15:25:31 (30 min)
+
+
+##################################################################
+All new year data has the time stamp for every frame of the video
+##################################################################
+0316_2017
+- Two sensors and four validation cameras 
+- On downtown Neil street for slow and stopped traffic
+- Video data is 60 FPS. Timestamps are saved in txt files. 
+      |
+      |- v1_1: 2017-03-16 18:40:21.587009 to 2017-03-16 19:45:07.707585       1:05:00
+      |- v1_2: 2017-03-16 18:40:21.583706 to 2017-03-16 19:45:10.504154       1:05:00
+      |- v2_1: 2017-03-16 18:40:21.793236 to 2017-03-16 19:45:10.716674       1:05:00
+      |- v2_2: 2017-03-16 18:40:21.773613 to 2017-03-16 19:45:10.668739       1:05:00
+
+- Sensor datasets:
+      |- s1: 1603-175649 :::: 2017-03-16 18:40:21.173046 to 2017-03-16 19:12:39.656578         0:32:00 
+      |- s2: 1603-175645 :::: 2017-03-16 18:40:21.459390 to 2017-03-16 19:25:16.729651         0:45:00          
+
+High-level
+- S1 PIR data quality is usable.
+- S1 PIR and ultrasonic sensor detections match fairly well.
+- S2 PIR data quality is not usable. Some pixels were consistently hotter than others after KF. Need to inspect.
+
+
+##################################################################
+0324_2017
+- Two sensors and four validation cameras
+- S1 (v1_1 and v1_2) were at the traffic light beside walmart on Savoy Neil street
+- S2 (v2_1 and v2_2) were at the free flow traffic south of Savoy Walmart on Neil street.
+- Video data is 60 FPS, Timestamps are saved in txt files
+      |- v1_1: 2017-03-24 18:12:27.729395 to 2017-03-24 19:18:31.634919     1:06:00 
+      |- v1_2: 2017-03-24 18:04:03.047547 to 2017-03-24 19:18:46.106342     1:14:00
+      |- v2_1: 2017-03-24 18:22:23.249517 to 2017-03-24 19:23:55.101579     1:01:00
+      |- v2_2: 2017-03-24 18:22:12.376581 to 2017-03-24 19:24:27.853652     1:02:00
+
+- Sensor datasets:
+      |- s1: 2403-171706 :::: 2017-03-24 18:12:32.947766 to 2017-03-24 19:17:57.927978   1:05:00
+      |- s2: 2303-171707 :::: 2017-03-24 18:22:31.313388 to 2017-03-24 18:59:41.998019   0:37:00
+
+High-level:
+- It was a sunny and windy day, hence the car temperature was lower than ambient temperature
+- S1 PIR data quality was very bad. Hard to visually see the pass of cars.
+- S2 PIR data is fairly good. Car temperatures are lower but visuable from the background. 
+
+
+##################################################################
+0404_2017
+- One sensor (S2) and two validation cameras (v1_1, v2_1)
+- Deployed at 
+- Video data is 60 FPS. Timestamps are saved in txt files
+      |- v1_1: 2017-04-04 16:22:06.039126 to 2017-04-04 17:20:51.814904       0:58:00
+      |- v2_1: 2017-04-04 16:22:27.344988 to 2017-04-04 17:20:25.127008       0:58:00
+
+- Sensor dataset:
+      |- s2: 2403-191707 :::: 2017-04-04 16:22:38.073133 to 2017-04-04 17:20:21.074926   0:58:00
+
+High-level:
+- It was a sunny and cloudy day. Hence large variation in the background temperature.
+- Usable, but may have some difficulty with KF background subtraction.
+
+##################################################################
+0509_2017
+- One sensor + two validation cameras. 
+- On Savoy Neil street in free flow traffic
+- Video data is 60 FPS, timestamps saved
+      |
+      |- v1_1: 2017-05-09 19:53:08.682801 to 2017-05-09 23:03:20.856057       3:10:00
+      |- v1_2: 2017-05-09 19:49:19.347172 to 2017-05-09 22:59:33.061078       3:10:00
+
+- Sensor dataset:
+      |- s1: 2017-05-09 19:44:24.799628 to 2017-05-09 22:05:19.688275         2:20:00
+
+High-level:
+- Good data quality with periodic ambient temperature changes. 
+- There were two or three trains passing through. 
+
+##################################################################
+0525_2017
+- Two sensors + four validation cameras 
+- All deployed on Savoy Neil street in free flow traffic on both side of road, separated by 10 m
+- Video data is 60 FPS, time stamps saved
+- In total three full hours of data collection
+
+High-level
+- The PIR sensor data quality are low. See figures in workspace/0525_2017. Not quite usable. 
+- Ultrasonic sensor was performing strangely. It outputs a lot measurements around 2 meters. 
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

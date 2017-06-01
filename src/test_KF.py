@@ -40,40 +40,43 @@ This script tests the KF which will be used for estimating the background noise 
 
 def main():
 
+    num_meas = 100
+
     # one dimensional
     # a sin wave
-    t_a = np.sin(np.linspace(0,3.14*4,10000))
+    t_a = np.sin(np.linspace(0,3.14,num_meas))
+    t_a = np.linspace(0, 1,num_meas)
     # t_a = np.random.normal(0.0,2.0,10000)
 
     # noise data
-    _mu, n_sigma = 0.0, 0.5
-    t_n = np.random.normal(_mu, n_sigma, 10000)
+    _mu, n_sigma = 0.0, 0.05
+    t_n = np.random.normal(_mu, n_sigma, num_meas)
 
     # temperature data
     t = t_a + t_n
 
     # =================================================
     # use Kalman filter to track the mean
-    kf = KF(1, 0.01**2, 0.5**2)
-    kf.initialize_states(0.0, 0.2**2)
+    # kf = KF(1, 0.01**2, 0.5**2)
+    # kf.initialize_states(0.0, 0.2**2)
 
-    all_mu = []
-    t1 = datetime.now()
-    for i in range(0, 10000):
-        mu = kf.update_state(t[i])
-        # print mu.squeeze()
-        all_mu.append(mu)
-    t2 = datetime.now()
-    print('KF time: {0} s'.format((t2-t1).total_seconds()))
+    # all_mu = []
+    # t1 = datetime.now()
+    # for i in range(0, 10000):
+    #     mu = kf.update_state(t[i])
+    #     # print mu.squeeze()
+    #     all_mu.append(mu)
+    # t2 = datetime.now()
+    # print('KF time: {0} s'.format((t2-t1).total_seconds()))
 
     # =================================================
     # use 1d Kalman filter to track the mean
-    kf = KF_1d(1, 0.01**2, 0.5**2)
-    kf.initialize_states(0.0, 0.2**2)
+    kf = KF_1d(1, 0.005**2, 0.05**2)
+    kf.initialize_states(0.0, 0.01**2)
 
     all_mu = []
     t1 = datetime.now()
-    for i in range(0, 10000):
+    for i in range(0, num_meas):
         mu = kf.update_state(t[i])
         # print mu.squeeze()
         all_mu.append(mu)
@@ -82,8 +85,12 @@ def main():
 
     # plot the result
     all_mu = np.array(all_mu).squeeze()
-    plt.plot(t, 'b')
-    plt.plot(all_mu, color='g',linewidth=2)
+    plt.plot(t, color = 'b', linestyle='-', linewidth=2, label='measurement')
+    plt.plot(t_a, color = 'r', linewidth=2, label='true')
+    plt.plot(all_mu, color='g',linewidth=2, label='estimates')
+    plt.legend(loc=2, fontsize=18)
+    plt.ylabel('End of queue', fontsize=18)
+    plt.xlabel('Time steps', fontsize=18)
     plt.show()
     #
     # # two dimensional
@@ -222,6 +229,10 @@ class KF_1d:
     The system is a one-dimentional KF:
         x(k) = Ix(k-1) + w, where w ~ N(0, Q)
         z(k) = Ix(k) + v, where v ~ N(0, R)
+    Update:
+    The system is a one-dimentional KF:
+        x(k) = x(k-1) + 1.1 + w, where w ~ N(0, Q)
+        z(k) = x(k) + v, where v ~ N(0, R)
     """
 
     def __init__(self, dim_state, Q, R):
@@ -262,7 +273,7 @@ class KF_1d:
         """
 
         # forward propagate the state
-        self.x_f = self.x
+        self.x_f = self.x + 0.011
         self.P_f = self.P + self.Q
 
         # compute the innovation sequence and Kalman gain
