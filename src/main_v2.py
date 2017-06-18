@@ -1,4 +1,4 @@
-from TrafficSensorAlg import *
+from TrafficSensorAlg_V2 import *
 
 def main():
 
@@ -6,7 +6,7 @@ def main():
     # generate_1d_pir_signal()
     # sync_data()
 
-    trim_video()
+    # trim_video()
     # video_analysis()
     # generate_video_frames()
     # trim_out_dense_traffic_videos()
@@ -14,125 +14,21 @@ def main():
     # veh_det()
     # test_alg()
 
-    # visualize_results()
+    evaluate_results()
 
-    # plt.show()
+    plt.show()
 
 def data_analysis():
-    # --------------------------------------------------
-    # dataset 1013:
-    # - Neil street. Freeflow and stop-and-to in total 33 min
-    # - One PIR sensor array 4x32, at 64 Hz
-    # --------------------------------------------------
-    # folder = '../datasets/1013_2016/'
-    # dataset = '1310-210300'     # freeflow part 1
-    # dataset = '1310-213154'   # freeflow part 2
-    # dataset ='1310-221543'       # stop and go
-
-    # --------------------------------------------------
-    # dataset 1116:
-    # - Neil street. Three PIR sensor arraies
-    # - One PIR sensor array 4x32, at 64 Hz
-    # --------------------------------------------------
-    # folder = '../datasets/1116_2016/s1/'
-    # dataset = '1611-061706'
-
-    # folder = '../datasets/1116_2016/s2/'
-    # dataset = '0711-211706'
-
-    # folder = '../datasets/1116_2016/s3/'
-    # dataset = '1611-151742'
-
-    # --------------------------------------------------
-    # dataset 1118:
-    # - Neil street. Three PIR sensor arrays, for stop and go data.
-    # - One PIR sensor array 4x32, at 64 Hz
-    # --------------------------------------------------
-    # folder = '../datasets/1118_2016/s1/'
-    # dataset = '1611-171706'
-
-    # folder = '../datasets/1118_2016/s2/'
-    # dataset = '1811-144926'
-
-    # folder = '../datasets/1118_2016/s3/'
-    # dataset = '1611-171707'
-
-    # --------------------------------------------------
-    # dataset 0316, 2017:
-    # on downtown Neil street before stop, two locations along the street
-    # folder = '0316_2017'
-    # data_dir = '../datasets/{0}/s2/'.format(folder)
-    # dataset = '1603-175649'
-    # dataset = '1603-175645'
-
-    # --------------------------------------------------
-    # dataset 0324, 2017:
-    # on Neil street before stop near Savoy Walmart
-    # folder = '0324_2017'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '2403-171706'
-    # on Neil street free flow near Savoy walmart
-    # data_dir = '../datasets/{0}/s2/'.format(folder)
-    # dataset = '2303-171707'
-
-    # --------------------------------------------------
-    # dataset 0404, 2017
-    # freeflow on Neil in Savoy
-    # folder = '0404_2017'
-    # data_dir = '../datasets/{0}/s2/'.format(folder)
-    # dataset = '2403-191707'
-
-    # --------------------------------------------------
-    # dataset 0509, 2017
-    # one sensor + two validation cameras
-    # freeflow on Neil in Savoy
-    # folder = '0509_2017'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '0404-171706'
-
-    # --------------------------------------------------
-    # data set 0525, 2017
-    # Two sensors on both sides of road at the same location.
-    # Freeflow on Neil in Savoy
-    # Data too noisy, not usable
-    # folder  = '0525_2017'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '2505-161522_small'
-
     # --------------------------------------------------
     # data set 0530, 2017
     # Two sensors on both sides of road at the same location.
     # Freeflow on Neil in Savoy
     # data set is good to use
-    # folder = '0530_2017'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '3005-205500_s1'
+    folder = '0530_2017'
+    data_dir = '../datasets/{0}/s1/'.format(folder)
+    dataset = '3005-205500_s1'
     # data_dir = '../datasets/{0}/s2/'.format(folder)
     # dataset = '3005-203625_s2'
-
-    # --------------------------------------------------
-    # data set 0531, 2017 on Springfield ave
-    # two-way and one-lane each way, slow traffic (20mph) with parking lot
-    # data set is good to use
-    # folder = '0531_2017_springfield'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '3105-161624_s1'
-
-    # --------------------------------------------------
-    # data set 0531, 2017 on 6th street
-    # one-way single-lane traffic. slow traffic with vehicles from parking lot
-    # Video dat not usable
-    # folder = '0531_2017_6th'
-    # data_dir = '../datasets/{0}/s2/'.format(folder)
-    # dataset = '3105-215725'
-
-    # --------------------------------------------------
-    # data set 0601, 2017 on 6th street, 2 hrs from 15:25~17:30
-    # one-way single-lane traffic. slow traffic with vehicles from parking lot
-    # Video data not usable
-    # folder = '0601_2017_6th'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = 'Jun01_201259_2017_s1_small'
 
     # --------------------------------------------------
     # dataset Jun 08, 2017 on 6th street down near the parking lot.
@@ -147,11 +43,7 @@ def data_analysis():
     # data_dir = '../datasets/{0}/s1/'.format(folder)
     # dataset = '0906-190351_s1'
 
-    # --------------------------------------------------
-    # data set in Jun 16 in office to test the FOV of PIR
-    folder = 'Jun16_2017_FOV'
-    data_dir = '../datasets/{0}/'.format(folder)
-    dataset = '1606-171750'
+
 
     # ===============================================================================================
     # Configuration
@@ -181,16 +73,16 @@ def data_analysis():
 
     # ===============================================================================================
     # plot the original df
-    if True:
+    if False:
         t_start = periods[dataset][0] #+ timedelta(seconds=180)
         t_end = periods[dataset][1] # + timedelta(seconds=780)
-        data.plot_heatmap_in_period(df, t_start=t_start, t_end=t_end, cbar=(10,30), option='vec',
+        data.plot_heatmap_in_period(df, t_start=t_start, t_end=t_end, cbar=(40,60), option='vec',
                                     nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False, save_df=False,
                                     figsize=(18,8))
 
         # plot ultrasonic sensor
-        # plt.figure(figsize=(15,8))
-        # plt.plot(df.index, df['ultra'])
+        plt.figure(figsize=(15,8))
+        plt.plot(df.index, df['ultra'])
 
         plt.draw()
 
@@ -207,13 +99,22 @@ def data_analysis():
 
     # ===============================================================================================
     # analyze and debug KF background subtraction
-    if False:
-        t_start = periods[dataset][0] # + timedelta(seconds=180)
-        t_end = periods[dataset][1] # + timedelta(seconds=780)
+    if True:
+        t_start = periods[dataset][0] # + timedelta(seconds=200)
+        t_end = periods[dataset][1] #+ timedelta(seconds=400)
         t1 = datetime.now()
         kf_norm_df = data.subtract_background_KF(df, t_start=t_start, t_end=t_end, init_s=30,
                                            veh_pt_thres=3, noise_pt_thres=3, prob_int=0.95,
                                                  pixels=None, debug=False)
+        # kf_norm_df = data.subtract_background_KF(df, t_start=t_start, t_end=t_end, init_s=30,
+        #                                    veh_pt_thres=3, noise_pt_thres=3, prob_int=0.95,
+        #                                          pixels=[(1, 5)], debug=True)
+        # kf_norm_df = data.subtract_background_KF(df, t_start=t_start, t_end=t_end, init_s=30,
+        #                                    veh_pt_thres=3, noise_pt_thres=3, prob_int=0.95,
+        #                                          pixels=[(2, 5)], debug=True)
+        # kf_norm_df = data.subtract_background_KF(df, t_start=t_start, t_end=t_end, init_s=30,
+        #                                    veh_pt_thres=3, noise_pt_thres=3, prob_int=0.95,
+        #                                          pixels=[(3, 5)], debug=True)
         t2 = datetime.now()
         print('\nNormalization sequential KF took {0} s'.format((t2-t1).total_seconds()))
 
@@ -242,9 +143,9 @@ def data_analysis():
     # plot saved heatmap
     if False:
         # load norm_df
-        t_start = periods[dataset][0] # + timedelta(seconds=180)
-        t_end = periods[dataset][1] # + timedelta(seconds=780)
-        norm_df = pd.read_csv(save_dir+'s1_2d_KF__{0}__{1}_prob95.csv'.format(time2str_file(t_start), time2str_file(t_end)),
+        t_start = periods[dataset][0]  # + timedelta(seconds=200)
+        t_end = periods[dataset][0]  # + timedelta(seconds=400)
+        norm_df = pd.read_csv(save_dir+'s2_2d_KF__{0}__{1}_prob95.csv'.format(time2str_file(t_start), time2str_file(t_end)),
                               index_col=0)
         norm_df.index = norm_df.index.to_datetime()
         fig, ax = data.plot_heatmap_in_period(norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
@@ -320,28 +221,6 @@ def data_analysis():
 
 
 def test_alg():
-    # --------------------------------------------------
-    # dataset 1013:
-    # - Neil street. Freeflow and stop-and-to in total 33 min
-    # - One PIR sensor array 4x32, at 64 Hz
-    # --------------------------------------------------
-    # folder = '1013_2016'
-    # data_dir = '../datasets/{0}/'.format(folder)
-    # dataset = '1310-210300'     # freeflow part 1
-    # dataset = '1310-213154'   # freeflow part 2
-    # dataset ='1310-221543'       # stop and go
-
-    # --------------------------------------------------
-    # dataset 0324, 2017:
-    # on Neil street before stop near Savoy Walmart
-    # folder = '0324_2017'
-
-    # --------------------------------------------------
-    # dataset 0509, 2017
-    # 50% FN rate of ultrasonic sensor
-    # one sensor + two validation cameras
-    # freeflow on Neil in Savoy
-    # folder = '0509_2017'
 
     # --------------------------------------------------
     # data set 0530, 2017
@@ -353,19 +232,6 @@ def test_alg():
     # dataset = '3005-205500_s1'
     # data_dir = '../datasets/{0}/s2/'.format(folder)
     # dataset = '3005-203625_s2'
-
-    # --------------------------------------------------
-    # data set 0531, 2017 on Springfield ave
-    # two-way and one-lane each way, slow traffic (20mph) with parking lot
-    # data set is good to use
-    # folder = '0531_2017_springfield'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '3105-161624_s1'
-
-    # --------------------------------------------------
-    # data set 0601, 2017 on 6th street, 2 hrs from 15:25~17:30
-    # one-way single-lane traffic. slow traffic with vehicles from parking lot
-    # folder = '0601_2017_6th'
 
     # --------------------------------------------------
     # dataset Jun 08, 2017 on 6th street down near the parking lot.
@@ -398,7 +264,7 @@ def test_alg():
 
     # ===============================================================================================
     # run algorithm in batch mode
-    alg = TrafficSensorAlg(pir_res=(4,32))
+    alg = TrafficSensorAlg(r2_thres=0.2, dens_thres=0.4, min_dt=0.2, pir_res=(4,32), sampling_freq=64)
 
     # Define start time and end time to only run the algorithm for this period
     # _ct_s = str2time_file('20161013_221809_310524')
@@ -406,20 +272,19 @@ def test_alg():
     # _idx = (norm_df.index >= _ct_s) & (norm_df.index <= _ct_e)
     # _norm_df = norm_df.ix[_idx, :]
 
-    # alg.batch_run(norm_df, det_thres=600, window_s=5.0, step_s=2.5,
-    #               save_dir='../workspace/{0}/figs/speed_s1/'.format(folder))
+    alg.run(norm_df, TH_det=600, window_s=5.0, step_s=2.5, speed_range=(1,50), plot_final=True, plot_debug=False,
+            save_dir='../workspace/{0}/figs/speed/'.format(folder))
 
-
-    alg.vehs = np.load('../workspace/{0}/figs/speed/detected_vehs.npy'.format(folder))
-    print('Total {0} vehs'.format(len(alg.vehs)))
-    alg.plot_detected_vehs(norm_df, ratio_tx=6.0,
-                           t_start=str2time('2017-06-08 21:39:00.001464'),
-                           t_end=str2time('2017-06-08 21:44:00.001464'))
+    # alg.vehs = np.load('../workspace/{0}/figs/speed/detected_vehs.npy'.format(folder))
+    # print('Total {0} vehs'.format(len(alg.vehs)))
+    # alg.plot_detected_vehs(norm_df, ratio_tx=6.0,
+    #                        t_start=str2time('2017-06-08 21:39:00.001464'),
+    #                        t_end=str2time('2017-06-08 21:44:00.001464'))
 
     plt.draw()
 
 
-def visualize_results():
+def evaluate_results():
     """
     This function visualize the detection results compared to ground truth
     :return:
@@ -438,45 +303,80 @@ def visualize_results():
     # --------------------------------------------------
     # dataset Jun 08, 2017 on 6th street down near the parking lot.
     # Saved data is 21:40 ~ 22:20 UTC
-    folder = 'Jun08_2017'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '0806-201711_s1'
+    if False:
+        folder = 'Jun08_2017'
+
+        # Configuration
+        save_dir = '../workspace/{0}/'.format(folder)
+        norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
+        t_start = str2time('2017-06-08 21:39:00.001464')
+        t_end = str2time('2017-06-08 22:20:37.738293')
+
+        # true vehicles
+        init_t = str2time('2017-06-08 21:32:18.252811')
+        offset = -0.28
+        drift_ratio = 1860.5/1864.0
+        true_file = save_dir + 'data_convexlog_v2_cleaned.npy'
+
+        # estimated vehicles
+        est_vehs_npy = save_dir + 'figs/speed/v2_5/detected_vehs.npy'
+        est_vehs_txt = save_dir + 'figs/speed/v2_5/detected_vehs.txt'
+        paras_file = save_dir + 'figs/speed/v2_5/paras.txt'
 
     # --------------------------------------------------
     # dataset Jun 09, 2017, same setup as Jun 08
-    # folder = 'Jun09_2017'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '0906-190351_s1'
+    if True:
+        folder = 'Jun09_2017'
+
+        # Configuration
+        save_dir = '../workspace/{0}/'.format(folder)
+        norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
+        t_start = str2time('2017-06-09 19:09:00.009011')
+        t_end = str2time('2017-06-09 20:39:30.905936')
+
+        # true vehicles
+        init_t = str2time('2017-06-09 19:09:00.0')
+        offset = -0.66
+        drift_ratio = 1860.5/1864.0
+        true_file = save_dir + 'data_convexlog_v2.npy'
+
+        # estimated vehicles
+        est_vehs_npy = save_dir + 'figs/speed/v2_1/detected_vehs.npy'
+        est_vehs_txt = save_dir + 'figs/speed/v2_1/detected_vehs.txt'
+        paras_file = save_dir + 'figs/speed/v2_1/paras.txt'
 
     # ===============================================================================================
-    # Configuration
-    save_dir = '../workspace/{0}/'.format(folder)
 
-    # read in the data with background subtracted.
-    norm_df = pd.read_csv(save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv', index_col=0)
+
+    # ===============================================================================================
+    eval = EvaluateResult()
+    eval.load_paras(paras_file)
+
+    # load norm df data
+    norm_df = pd.read_csv(norm_df_file, index_col=0)
     norm_df.index = norm_df.index.to_datetime()
 
-    # ===============================================================================================
-    # run algorithm in batch mode
-    alg = TrafficSensorAlg(pir_res=(4,32))
-
-    alg.vehs = np.load('../workspace/{0}/figs/speed/v1/detected_vehs.npy'.format(folder))
-
     # load true vehicles
-    # load true file
-    true_file = '../workspace/{0}/data_convexlog.npy'.format(folder)
-    init_t = str2time('2017-06-08 21:32:18.252811')
-    true_vehs = alg.load_true_results(true_file, init_t)
+    true_vehs = eval.load_true_results(true_file, init_t, offset, drift_ratio)
 
-    # print('Total {0} vehs'.format(len(alg.vehs)))
-    # alg.evaluate_detection_results_all(norm_df, ratio_tx=6.0, true_vehs=true_vehs,
-    #                        t_start=str2time('2017-06-08 21:39:00.001464'),
-    #                        t_end=str2time('2017-06-08 22:20:37.738293'))
-    alg.evaluate_detection_results(norm_df, ratio_tx=6.0, true_vehs=true_vehs,
-                           t_start=str2time('2017-06-08 21:39:00.001464'),
-                           t_end=str2time('2017-06-08 21:54:00.001464'))
+    # load estimated
+    est_vehs = np.load(est_vehs_npy)
 
-    plt.draw()
+    # ===============================================================================================
+    # Visualize the matching
+    if True:
+        eval.visualize_results_all(norm_df, est_vehs, true_vehs=true_vehs, t_start= t_start,t_end=t_end)
+
+        # eval.visualize_results(norm_df, est_vehs, true_vehs=true_vehs,
+        #                    t_start=str2time('2017-06-09 19:09:00.009011'),
+        #                    t_end=str2time('2017-06-09 19:19:00.009011'))
+
+        plt.draw()
+
+    # ===============================================================================================
+    # Compute the statistics
+
+
 
 
 def generate_video_frames():
@@ -683,12 +583,12 @@ def video_analysis():
 
 def trim_video():
 
-    folder = 'Jun09_2017'
+    folder = 'Jun08_2017'
 
-    input_video = '../datasets/{0}/v11/Jun09.mp4'.format(folder)
-    output_video = '../datasets/{0}/v11/20170609_190900_009011__20170609_203930_905936.mp4'.format(folder)
-    video_starttime = str2time('2017-06-09 19:06:02.290904')
-    intvl=(str2time('2017-06-09 19:09:00.009011'), str2time('2017-06-09 20:39:30.905936'))
+    input_video = '../datasets/{0}/v11/Jun08.mp4'.format(folder)
+    output_video = '../datasets/{0}/v11/20170608_213900_001464__20170608_222037_738293.mp4'.format(folder)
+    video_starttime = str2time('2017-06-08 21:32:18.252811')
+    intvl=(str2time('2017-06-08 21:39:00.001464'), str2time('2017-06-08 22:20:37.738293'))
     # intvl=(str2time('2017-06-08 21:39:00.001464'), str2time('2017-06-08 21:44:00.001464'))
 
     vid = VideoData()

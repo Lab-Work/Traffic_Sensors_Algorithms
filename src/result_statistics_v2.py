@@ -18,24 +18,41 @@ start time, end time, speed (m/s), distance (m), image speed (px/frame), image d
 def main():
 
     # ====================================================
-    # Load the detection results
-    folder = 'Jun08_2017'
-    result_file = '../workspace/{0}/figs/speed/v2_2/detected_vehs.txt'.format(folder)
-    vehs = load_det_results(result_file)
+    # Jun 08
+    if False:
+        # Load the detection results
+        folder = 'Jun08_2017'
+        est_file = '../workspace/{0}/figs/speed/v2_6/detected_vehs.txt'.format(folder)
+        true_file = '../workspace/{0}/data_convexlog_v2_cleaned.npy'.format(folder)
 
-    t_start = str2time('2017-06-08 21:39:00.001464')
-    t_end = str2time('2017-06-08 22:20:37.738293')
+        t_start = str2time('2017-06-08 21:39:00.001464')
+        t_end = str2time('2017-06-08 22:20:37.738293')
+        init_t = str2time('2017-06-08 21:32:18.252811')
 
+        offset = -0.28
+        drift_ratio = 1860.5/1864.0
+
+    # Jun 9
+    if True:
+        # Load the detection results
+        folder = 'Jun09_2017'
+        est_file = '../workspace/{0}/figs/speed/v2_3/detected_vehs.txt'.format(folder)
+        true_file = '../workspace/{0}/data_convexlog_v2.npy'.format(folder)
+
+        t_start = str2time('2017-06-09 19:09:00.009011')
+        t_end = str2time('2017-06-09 20:39:30.905936')
+        init_t = str2time('2017-06-09 19:09:00.0')
+
+        offset = -0.66
+        drift_ratio = 1860.5/1864.0
+
+    vehs = load_det_results(est_file)
     compute_ultra_FN_ratio(vehs)
 
     speed_range = (0, 50)
     vehs = clean_det_data(vehs, speed_range)
 
-    # ====================================================
-    # load true file
-    true_file = '../workspace/{0}/data_convexlog_v2.npy'.format(folder)
-    init_t = str2time('2017-06-08 21:32:18.252811')
-    true_vehs = load_true_results(true_file, init_t, t_start, t_end)
+    true_vehs = load_true_results(true_file, init_t, t_start, t_end, offset=offset, drift_ratio=drift_ratio)
 
     true_vehs = clean_true_data(true_vehs)
 
@@ -44,7 +61,7 @@ def main():
     if False:
         _valid_idx = (vehs[:,4]==False)
         # true all VS est all
-        plot_distance_dist([true_vehs[:,3], vehs[:,2]], ['true all', 'est all'], title='Distance: true all vs. est all')
+        # plot_distance_dist([true_vehs[:,3], vehs[:,2]], ['true all', 'est all'], title='Distance: true all vs. est all')
         # # est all VS est valid
         # plot_distance_dist([vehs[:,2], vehs[_valid_idx,2]], ['est all', 'est valid'],
         #                    title='Distance: est all vs. est valid')
@@ -65,7 +82,7 @@ def main():
     # ====================================================
     # match vehicles and compute error
     if True:
-        dt = 0.5
+        dt = 1.0
         matched_vehs, fp_vehs = match_vehs(vehs, true_vehs, dt)
         num_fp = len(fp_vehs)
 
@@ -76,8 +93,7 @@ def main():
         plot_vehs = matched_vehs[_idx, :]
         _valid_idx = (plot_vehs[:,4] == True)
 
-        print('\n\n\n')
-        print('Detection Statistics:')
+        print('\nDetection Statistics:')
         print('     True total: {0}'.format(len(true_vehs)))
         print('      TP     FP      FN')
         print('     {0}     {1}     {2}'.format(len(plot_vehs), num_fp, num_fn ))
@@ -103,8 +119,8 @@ def main():
         # plot_speed_dist([plot_vehs[:,3], plot_vehs[_valid_idx,3]], ['est all', 'est valid'],
         #                 title='Speed: est all vs. est valid')
         # # true valid VS est valid
-        # plot_speed_dist([plot_vehs[_valid_idx,2], plot_vehs[_valid_idx,3]], ['true valid', 'est valid'],
-        #                 title='Speed: true valid vs. est valid')
+        plot_speed_dist([plot_vehs[_valid_idx,2], plot_vehs[_valid_idx,3]], ['true valid', 'est valid'],
+                        title='Speed: true valid vs. est valid')
 
         # est_err = plot_vehs[:,3] - plot_vehs[:,2]
         # plot_speed_dist([est_err], ['Speed error'], title='Error: true all vs. est all')
@@ -146,7 +162,7 @@ def clean_det_data(vehs, speed_range):
     for veh in vehs:
 
         # First, update the speed using historical median distance; and update historical median if reading is available
-        if veh[4] is True or veh[2]>= 8.0:
+        if veh[4] is False or veh[2]>= 8.0:
             veh[3] = veh[3]*mean_dist/veh[2]
             veh[2] = mean_dist
         else:
@@ -156,10 +172,10 @@ def clean_det_data(vehs, speed_range):
         # Second, cap the speed in the range
         if veh[3] < speed_range[0]:
             veh[3] = speed_range[0]
-            veh[4] = True
+            veh[4] = False
         elif veh[3] > speed_range[1]:
             veh[3] = speed_range[1]
-            veh[4] = True
+            veh[4] = False
 
     return vehs
 
@@ -197,7 +213,7 @@ def load_det_results(result_file):
     return vehs
 
 
-def load_true_results(true_file, init_t, t_start=None, t_end=None):
+def load_true_results(true_file, init_t, t_start=None, t_end=None, offset=0.0, drift_ratio=1.0):
     """
     This function loads the true result file (npy)
          start time, end time, speed (m/s), distance (m), image speed (px/frame), image distance (px)
@@ -206,20 +222,13 @@ def load_true_results(true_file, init_t, t_start=None, t_end=None):
     """
     true_vehs = np.load(true_file).tolist()
 
-    print('Cleaning the true vehicles data from {0} vehicles to'.format(len(true_vehs)))
-
     cleaned_true_veh = []
     # convert the first column into datetime and the speed to mph
     for true_v in true_vehs:
-        # the video data is a bit drifting. 14 seconds over 2 hrs
-        # There may be a time drift here
-        # true_v[0] = init_t + timedelta(seconds=true_v[0]*7187.5/7200)
-        # true_v[1] = init_t + timedelta(seconds=true_v[1]*7187.5/7200)
-        drift_cor = 1860.5/1864.0
-        offset = 0.28
-        true_v[0] = init_t + timedelta(seconds=true_v[0]*drift_cor - offset)
-        true_v[1] = init_t + timedelta(seconds=true_v[1]*drift_cor - offset)
-        true_v[2] *= 2.24
+        # fix the drift
+        true_v[0] = init_t + timedelta(seconds=true_v[0]*drift_ratio + offset)
+        true_v[1] = init_t + timedelta(seconds=true_v[1]*drift_ratio + offset)
+        true_v[2] *= 2.23694
 
         # cleaned_true_veh.append(true_v)
         # remove the nan values
@@ -230,8 +239,6 @@ def load_true_results(true_file, init_t, t_start=None, t_end=None):
 
     cleaned_true_veh = np.asarray(cleaned_true_veh)
 
-    print('                           clean {0} vehicles'.format(len(cleaned_true_veh)))
-
     return cleaned_true_veh
 
 
@@ -241,8 +248,8 @@ def compute_ultra_FN_ratio(vehs):
     :param vehs: the vehs ndarray
     :return:
     """
-    fn_ratio = sum(vehs[:,4]==True)/float(len(vehs))
-    print('Total numebr of detected vehicles: {0}'.format(len(vehs)))
+    fn_ratio = sum(vehs[:,4]==False)/float(len(vehs))
+    print('\n\nTotal numebr of detected vehicles: {0}'.format(len(vehs)))
     print('False negative ratio of ultrasonic sensor: {0}'.format(fn_ratio))
 
 
@@ -276,8 +283,7 @@ def match_vehs(vehs, true_vehs, dt):
                     # if the true vehicle has already been matched
                     print('WARNING: Two matches for true vehicle: {0} ~ {1},'.format(t_v[0],t_v[1]) +
                           ' {0:.2f} m ; {1:.2f} mph'.format(t_v[3],t_v[2]))
-                    _i = matched_vehs[i][5]
-                    print('_i: {0}'.format(_i))
+                    _i = int(matched_vehs[i][5])
 
                     print('                            Match one: {0} ~ {1},'.format(vehs[_i][0],vehs[_i][1]) +
                           ' {0:.2f} m ; {1:.2f} mph'.format(vehs[_i][3],vehs[_i][2]))
@@ -288,9 +294,9 @@ def match_vehs(vehs, true_vehs, dt):
                     matched_vehs[i][0], matched_vehs[i][1] = t_v[3], v[2]
                     matched_vehs[i][2], matched_vehs[i][3] = t_v[2], v[3]
                     if v[4] is True:
-                        matched_vehs[i][4] = False
-                    else:
                         matched_vehs[i][4] = True
+                    else:
+                        matched_vehs[i][4] = False
                     matched_vehs[i][5] = v_idx
                     flag = True
                     break
@@ -343,7 +349,8 @@ def plot_distance_dist(l_dists, labels, title='Distance distribution'):
         text.append('{0} mean: {1:.2f}, std: {2:.2f}'.format(labels[i], mu, std))
 
     text_str = '\n'.join(text)
-    plt.text(mu*1.05, np.max(n)*0.7, text_str, fontsize=16)
+    plt.text(mu-2*std, np.max(n)*1.1, text_str, fontsize=16)
+    plt.ylim([0, np.max(n)*1.2])
 
     plt.legend()
     plt.xlabel('Distance (m)', fontsize=16)
@@ -373,8 +380,9 @@ def plot_speed_dist(l_speeds, labels, title='Speed distribution'):
         text.append('{0} mean: {1:.2f}, std: {2:.2f}'.format(labels[i], mu, std))
 
     text_str = '\n'.join(text)
-    plt.text(5, np.max(n)*1.0, text_str, fontsize=16)
+    plt.text(mu-2*std, np.max(n)*1.1, text_str, fontsize=16)
     # plt.text(6, 0.16, text_str, fontsize=16)
+    plt.ylim(0, np.max(n)*1.2)
 
     plt.legend()
     plt.xlabel('Speed (mph)', fontsize=16)
@@ -383,172 +391,6 @@ def plot_speed_dist(l_speeds, labels, title='Speed distribution'):
     plt.draw()
 
 
-
-
-# # ========================================================================
-# # Compute the number of false positives
-# # true_v [6] is (t1_in+t2_out)/2, true_v[7] estimated speed, true_v[8] estimated distance
-# if False:
-#     true_vehs = np.hstack([true_vehs, np.ones((len(true_vehs),3))*np.nan])
-#     for true_v in true_vehs:
-#         true_v[6] = true_v[0] + (true_v[1]-true_v[0])/2
-#
-#     # vehs[5] is (t_in + t_out)/2
-#     fp_vehs = []
-#     vehs = np.hstack([vehs, np.ones((len(vehs), 1))*np.nan])
-#     for v in vehs:
-#         v[5] = v[0] + (v[1]-v[0])/2
-#
-#         if v[4] is False:
-#             # find the true vehs that within 1 s bound
-#             flag = False
-#             for true_v in true_vehs:
-#                 # print (true_v[6]-v[5]).total_seconds()
-#                 if abs((true_v[6]-v[5]).total_seconds()) <=0.5:
-#                     # found the true veh, save the estimated speed
-#                     if np.isnan(true_v[7]):
-#                         true_v[7] = v[3]
-#                         true_v[8] = v[2]
-#                         flag = True
-#                         break
-#
-#             if flag is False:
-#                 fp_vehs.append(v)
-#
-#     num_fp = len(fp_vehs)
-#
-#     # compute the speed estimation errors RMSE
-#     err = []
-#     for true_v in true_vehs:
-#             if not np.isnan(true_v[7]):
-#                 err.append(true_v[7] - true_v[2])
-#
-#     err = np.asarray(err)
-#     # compute rmse
-#     e_rms = np.sqrt(np.mean( err**2 ))
-
-
-# # ========================================================================
-# # plot all detected vehicles on both lanes and the true vehicle on the closer lane
-# if False:
-#     fig = plt.figure(figsize=(15,8))
-#     ax = fig.add_axes([0.1, 0.15, 0.82, 0.75])
-#
-#     # plot the true speed estimation
-#     for true_v in true_vehs:
-#         ax.plot([true_v[0], true_v[1]], [true_v[2], true_v[2]], linewidth=2, linestyle='--', color='g', label='true')
-#         ax.axvspan(true_v[0], true_v[1], facecolor='g', edgecolor='g', alpha=0.5)
-#
-#     # plot the detected vehicle speed in the closer lane and further lane
-#     for est_v in vehs:
-#         if est_v[4] is False:
-#             # with ultrasonic readings
-#             ax.plot([est_v[0], est_v[1]], [est_v[3], est_v[3]], linewidth=2, linestyle='--', color='b', label='closer_est')
-#         else:
-#             # no ultrasonic readings
-#             # ax.plot([est_v[0], est_v[1]], [est_v[3], est_v[3]], linewidth=2, linestyle='--', color='r', label='further_est')
-#             pass
-#
-#     # plot false positives
-#     for fp_v in fp_vehs:
-#         ax.plot([fp_v[0], fp_v[1]], [fp_v[2], fp_v[2]], linewidth=2, linestyle='-', color='r', label='FP')
-#
-#     ax.set_title('Detection results', fontsize=18)
-#     ax.set_xlabel('Time', fontsize=14)
-#     ax.set_ylabel('Speed (mph)', fontsize=14)
-#     # plt.legend()
-#
-#     plt.draw()
-#
-# # ========================================================================
-# # plot the speed esitmation error distribution
-#
-#
-# # ========================================================================
-# # plot the distance distribution
-# if False:
-#     # true distance
-#     true_dist = []
-#     est_dist = []
-#
-#     for true_v in true_vehs:
-#         if not np.isnan(true_v[7]):
-#             true_dist.append(true_v[3])
-#             est_dist.append((true_v[8]))
-#
-#     plt.figure(figsize=(10,10))
-#     n, bins, patches = plt.hist(true_dist, 50, normed=1, facecolor='green', alpha=0.75, label='true')
-#     plt.plot(bins, mlab.normpdf(bins, np.mean(true_dist), np.std(true_dist)), color='g', linestyle='--',
-#              label='true', linewidth=2)
-#
-#     n, bins, patches = plt.hist(est_dist, 50, normed=1, facecolor='blue', alpha=0.75, label='est')
-#     plt.plot(bins, mlab.normpdf(bins, np.mean(est_dist), np.std(est_dist)), color='b', linestyle='--',
-#              label='est', linewidth=2)
-#
-#     plt.text(2, 1.5, 'true mean: {0:.2f}, std: {1:.2f}\nest mean: {2:.2f}, std: {3:.2f}'.format(np.mean(true_dist),
-#                                                                                                 np.std(true_dist),
-#              np.mean(est_dist), np.std(est_dist)))
-#
-#     plt.legend()
-#     plt.xlabel('Distance (m)', fontsize=14)
-#
-# # ========================================================================
-# # plot the distribution of speeds with all valid distance readings from the ultrasonic sensor
-# if True:
-#     valid_idx = (vehs[:,4] == False)
-#     invalid_idx = (vehs[:,4] == True)
-#
-#     plt.figure(figsize=(10,10))
-#     # plot the valid speed distribution
-#     n, bins, patches = plt.hist(vehs[valid_idx, 3], 50, normed=1, facecolor='green', alpha=0.75)
-#     plt.plot(bins, mlab.normpdf(bins, np.mean(vehs[valid_idx, 3]), np.std(vehs[valid_idx, 3])), color='r', linestyle='--',
-#              label='valid ultra', linewidth=2)
-#
-#     # plot the invalid speed distribution
-#     n, bins, patches = plt.hist(vehs[invalid_idx, 3], 50, normed=1, facecolor='blue', alpha=0.75)
-#     plt.plot(bins, mlab.normpdf(bins, np.mean(vehs[invalid_idx, 3]), np.std(vehs[invalid_idx, 3])), color='k', linestyle='--',
-#              label='invalid ultra', linewidth=2)
-#     plt.xlabel('Speed (mph)', fontsize=14)
-#     plt.title('Speed distribution', fontsize=16)
-#     plt.legend()
-#
-#
-# # plot all speed distribution
-# if False:
-#     fig = plt.figure(figsize=(10,10))
-#     ax = fig.add_axes([0.1, 0.15, 0.82, 0.75])
-#     n, bins, patches = plt.hist(vehs[:, 3], 50, normed=1, facecolor='green', alpha=0.75)
-#     # plt.plot(bins, mlab.normpdf(bins, np.mean(vehs[valid_idx, 3]), np.std(vehs[valid_idx, 3])), color='r', linestyle='--',
-#     #          linewidth=2)
-#     plt.title('Distribution of estimated speeds', fontsize=40)
-#     plt.xlabel('Speed (mph)', fontsize=36)
-#     ax.tick_params(axis='both', which='major', labelsize=24)
-#
-#     # plot the speed
-#     fig = plt.figure(figsize=(15,8))
-#     ax = fig.add_axes([0.1, 0.15, 0.82, 0.75])
-#     plt.plot(vehs[:,3], color='g', linewidth=2)
-#     plt.xlabel('Vehicle index', fontsize=36)
-#     plt.ylabel('Speed (mph)', fontsize=36)
-#     plt.title('Speed estiamtion accuracy', fontsize=40)
-#     ax.tick_params(axis='both', which='major', labelsize=24)
-#
-# # ========================================================================
-# # plot the distribution of the distance
-# if True:
-#     plt.figure(figsize=(10,10))
-#     n, bins, patches = plt.hist(vehs[:, 2], 50, normed=1, facecolor='green', alpha=0.75)
-#     plt.plot(bins, mlab.normpdf(bins, np.mean(vehs[valid_idx, 3]), np.std(vehs[valid_idx, 3])), color='r', linestyle='--',
-#              label='distance', linewidth=2)
-#     plt.xlabel('Distance (m)', fontsize=14)
-#     plt.title('Distance distribution', fontsize=16)
-#
-#     plt.show()
-#
-#
-#
-#
-# plt.show()
 
 
 if __name__ == '__main__':

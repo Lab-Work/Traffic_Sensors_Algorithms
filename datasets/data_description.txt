@@ -225,16 +225,64 @@ High-level:
 - In total three full hours of data collection
 
 High-level
-- The PIR sensor data quality are low. See figures in workspace/0525_2017. Not quite usable. 
+- The PIR sensor data quality are low. See figures in workspace/0525_2017. Not usable. 
 - Ultrasonic sensor was performing strangely. It outputs a lot measurements around 2 meters. 
 
 
+##################################################################
+0530_2017
+- Two sensors + four validation cameras deployed on Savoy Neil street in freeflow
+- Goal is to test if we can use two sensors to detect traffic on one-way two-lane road.
+- One sensor deployed on each side of the road
+- Deployment: 
+    - Lane width 12 ft
+    - Right side of traffic: (v22)........(v11)(s1), separated by 29ft3in
+    - Left side of traffic:  (s2)(v21).........(v12), separated by 30ft4in
+    - (s1)(v11) distance to vehicle 13ft9in
+    - (v22) 14 ft 2in
+    - (s2)(v21) 11ft1in
+    - (v12) 11ft8in
+- Started data collection at UTC 20:55 and stopped at 22:30 for all sensors, briefly walked by during
+    - 15:55~15:58
+    - 16:28~16:55
+
+- Video data is 60 FPS, timestamps saved
+
+High-level:
+- Good quality PIR data. 
 
 
+##################################################################
+0531_2017_springfield
+- One sensor + one validtion camera deployed on Springfield ave in front of Grainger Lib. Speed is slow (20 mph)
+- Goal is to test if the sensor works in two-way with one-lane each way traffic
+- Deployment:
+    - (s1)(v12) distance to side lane marker 196 cm
+    - s1 height 68 cm (excluding curb height); v12 80 cm (excluding curb height)
+
+- Started at 11:23 CT, data saved up to 11:56 CT
+
+High-level:
+- Good quality PIR data
+- Can see the queue on the other direction, need to check how it works. 
 
 
+##################################################################
+0531_2017_6th
+- One sensor + one validation camera deployed on 6th street. Speed is slow
+- Goal is to test the simplest case: if the sensor works for one-lane one-way traffic
+- Deployment: 
+    - There were two cracks on the road with 290 cm spacing
+    - (s2)(v21) to the first crack distance 223 cm
+    - (v21)(s2) height 80 cm; spacing 30 cm
 
+- Started at 17:05 CT
+- Adjusted the height of PIR to 70 cm at 17:10 CT
+- Stopped at 17:28 CT, around 20 min data just to check the data quality.
 
+High-level:
+- Good PIR data quality
+- Traffic volume is low
 
 
 

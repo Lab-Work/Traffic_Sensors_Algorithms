@@ -126,14 +126,14 @@ class TrafficSensorAlg:
         # Some parameters that may influence the performance, but should be robust
         # -------------------------------------------------------------------
         # acceptance threshold of R2 metric, accepted fitting must have higher r2
-        self.r2_thres = 0.70
+        self.r2_thres = 0.2   # 0.7 for June 1st on 6th; 0.65 for May 31st, springfield
         # acceptance threshold of number of supporting points
-        self.min_pts = 150
+        self.min_pts = 200    # 1500 for June 1st on 6th; 1000 for May 31st, springfield
         # the stop criteria for determining the convergence of a model, the change of slope and intercept
         # 0.002 corresponds to 0.2 mph in further lane and 0.1 mph in closer lane
         self.stop_thres = (0.002, 0.01)
         # default distance
-        self.d_default = 8.0
+        self.d_default = 4.0
         # -------------------------------------------------------------------
 
         self.vehs = []
@@ -203,9 +203,9 @@ class TrafficSensorAlg:
 
         # print('Estimating speed for {0} vehs'.format(len(vehs)))
         for win in windows:
-            est = SpeedEst(norm_df.ix[win[0]:win[1]], pir_res=(4,32), plot=False, save_dir=save_dir)
+            est = SpeedEst(norm_df.ix[win[0]:win[1]], w_s=window_s, pir_res=(4,32), plot=False, save_dir=save_dir)
             vehs_in_win = est.estimate_speed(stop_tol=self.stop_thres, dist=self.d_default, r2_thres=self.r2_thres,
-                                             min_num_pts=self.min_pts)
+                                             min_num_pts=self.min_pts, speed_range=(0,50), plot_progress=True)
 
             for veh in vehs_in_win:
                 # register the vehicle to self.veh list
@@ -246,17 +246,22 @@ class TrafficSensorAlg:
                     if v.det_perc < veh.det_perc:
                         # update the registered vehicles
                         print('######################## Updated vehicle entering at {0}\n'.format(veh.t_in))
+                        # also combine all data points from two vehicles
+                        veh.pts += v.pts
+
                         self.vehs.remove(v)
                         self.vehs.append(veh)
+
                         return 0
                     else:
                         # duplicated vehicle, but old vehicle has better estimates, then ignore this new estimates
+                        # combine the data points
+                        v.pts += veh.pts
                         print('######################## Discarded duplicated vehicle entering at {0}\n'.format(veh.t_in))
                         return 0
 
             # if not returned yet, meaning no duplicated vehicle, than register.
             self.vehs.append(veh)
-
 
     def are_same_veh(self, v1, v2):
         if v1.t_out <= v2.t_in or v1.t_in >= v2.t_out:
@@ -278,24 +283,37 @@ class TrafficSensorAlg:
         overlapping_perc = float(len(overlapping_pts))/np.min([len(set(v1.pts)), len(set(v2.pts))])
 
         if overlapping_perc >= thres:
-            print('########## Found duplicated vehicles')
-            print('                  v1: ({0}, {1})'.format(v1.t_in, v1.t_out))
-            print('                  v2: ({0}, {1})'.format(v2.t_in, v2.t_out))
+            print('########## Found duplicated vehicles with overlapping {0}'.format(overlapping_perc))
+            print('                 duplicated v1: ({0}, {1})'.format(v1.t_in, v1.t_out))
+            print('                 duplicated v2: ({0}, {1})'.format(v2.t_in, v2.t_out))
             return True
         else:
             return False
 
 
-    def plot_detected_vehs(self, norm_df, ratio_tx=6.0):
+    def plot_detected_vehs(self, norm_df, ratio_tx=6.0, t_start=None, t_end=None):
         # plot the initial figure
         fig, ax = plt.subplots(figsize=(15,8))
         ax.set_aspect('auto')
 
         # ==============================================================================
+        # only plot the data in time interval
+        if t_start is None: t_start = norm_df.index[0]
+        if t_end is None: t_end = norm_df.index[-1]
+
+        print('\n########################## Visualization: ')
+        print('                 Data interval from: {0}'.format(norm_df.index[0]))
+        print('                                 to: {0}'.format(norm_df.index[-1]))
+        print('                 Plotting interval from: {0}'.format(t_start))
+        print('                                     to: {0}'.format(t_end))
+
+        # save the batch normalized data
+        frames = norm_df.index[ (norm_df.index >= t_start) & (norm_df.index <= t_end) ]
+        plot_df = norm_df.loc[frames,:]
+
+        # ==============================================================================
         # plot all the data point, perform nonlinear transform
-        t_start = norm_df.index[0]
-        print('\n########################## Plotting the detected vehicles. t_start = {0}'.format(t_start))
-        pts, t_grid, x_grid = self.nonlinear_trans(norm_df, ratio_tx=ratio_tx)
+        pts, t_grid, x_grid = self.nonlinear_trans(plot_df, ratio_tx=ratio_tx)
         ax.scatter(pts[:,0], pts[:,1], color='0.6')
 
         # ==============================================================================
@@ -305,13 +323,20 @@ class TrafficSensorAlg:
         colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
         for veh in self.vehs:
 
-            # plot the supporting points
-            sup_pts = np.array( [[(p[0]-t_start).total_seconds(), p[1]] for p in veh.pts] )
-            ax.scatter(sup_pts[:,0], sup_pts[:,1], color=next(colors), alpha=0.75)
-
             # plot the fitted line
             t_in_s = (veh.t_in-t_start).total_seconds()
             t_out_s = (veh.t_out-t_start).total_seconds()
+
+            if t_in_s > t_out_s:
+                t_in_s, t_out_s = t_out_s, t_in_s
+
+            # only plot those within the interval
+            if t_out_s <=0 or t_in_s >= (t_end-t_start).total_seconds():
+                continue
+
+            # plot the supporting points
+            sup_pts = np.array( [[(p[0]-t_start).total_seconds(), p[1]] for p in veh.pts] )
+            ax.scatter(sup_pts[:,0], sup_pts[:,1], color=next(colors), alpha=0.75)
             ax.plot([t_in_s, t_out_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k')
 
         ax.set_title('All detected vehicles', fontsize=20)
@@ -319,6 +344,148 @@ class TrafficSensorAlg:
         ax.set_ylabel('Space (x 6d = m)', fontsize=18)
         ax.set_xlim([t_grid[0], t_grid[-1]])
         ax.set_ylim([x_grid[-1], x_grid[0]])
+        plt.draw()
+
+
+    def evaluate_detection_results_all(self, norm_df, ratio_tx=6.0, true_vehs=None, t_start=None, t_end=None):
+        """
+        A wrapper function. split into sub intervals; otherwise too large to plot
+        :param norm_df:
+        :param ratio_tx:
+        :param true_vehs:
+        :param t_start:
+        :param t_end:
+        :return:
+        """
+        # only plot the data in time interval
+        if t_start is None: t_start = norm_df.index[0]
+        if t_end is None: t_end = norm_df.index[-1]
+
+        _t_start = t_start
+        _t_end = t_start + timedelta(seconds=15*60.0)
+        while _t_end <= t_end:
+            self.evaluate_detection_results(norm_df, ratio_tx=ratio_tx, true_vehs=true_vehs,
+                                            t_start=_t_start, t_end=_t_end)
+            _t_start = _t_end
+            _t_end = _t_start + timedelta(seconds=15*60.0)
+
+        # plot the rest
+        self.evaluate_detection_results(norm_df, ratio_tx=ratio_tx, true_vehs=true_vehs, t_start=_t_start, t_end=t_end)
+
+
+    def evaluate_detection_results(self, norm_df, ratio_tx=6.0, true_vehs=None, t_start=None, t_end=None):
+
+        fig = plt.figure(figsize=(18, 10))
+        gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
+
+        # axis 0 is the scattered PIR plot
+        # axis 1 is the ultrasonic plot
+        ax_pir = plt.subplot(gs[0])
+        ax_ultra = plt.subplot(gs[1], sharex=ax_pir)
+        plt.setp(ax_pir.get_xticklabels(), visible=False)
+
+        # ==============================================================================
+        # only plot the data in time interval
+        if t_start is None: t_start = norm_df.index[0]
+        if t_end is None: t_end = norm_df.index[-1]
+
+        print('\n########################## Visualization: ')
+        print('                 Data interval from: {0}'.format(norm_df.index[0]))
+        print('                                 to: {0}'.format(norm_df.index[-1]))
+        print('                 Plotting interval from: {0}'.format(t_start))
+        print('                                     to: {0}'.format(t_end))
+
+        # save the batch normalized data
+        frames = norm_df.index[ (norm_df.index >= t_start) & (norm_df.index <= t_end) ]
+        plot_df = norm_df.loc[frames,:]
+
+        # align t_start and t_end
+        t_start = plot_df.index[0]
+        t_end = plot_df.index[-1]
+
+        # clean the detection
+        self.vehs = self.clean_det_data(self.vehs, speed_range=(0.0,50.0))
+
+        # ==============================================================================
+        # Plot the detection result
+        # --------------------------------------------------------
+        # plot all the data point, perform nonlinear transform
+        # ax_pir general
+        pts, t_grid, x_grid = self.nonlinear_trans(plot_df, ratio_tx=ratio_tx)
+        ax_pir.scatter(pts[:,0], pts[:,1], color='0.6')
+
+        # ax_ultra general
+        ultra = plot_df['ultra']
+        clean_ultra = self.clean_ultra(ultra, fp_thres=2.5, fp_del_start=3, fp_del_end=10)
+        tmp_t = ultra.index - t_start
+        rel_t = [i.total_seconds() for i in tmp_t]
+        ax_ultra.plot(rel_t, ultra.values, linewidth=2, marker='*')
+        ax_ultra.plot(rel_t, clean_ultra.values, linewidth=2, color='r')
+
+        # plot the detected vehicles
+        colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
+        for veh in self.vehs:
+
+            # vehicle enter and exit time
+            t_in_s = (veh.t_in-t_start).total_seconds()
+            t_out_s = (veh.t_out-t_start).total_seconds()
+
+            if t_in_s > t_out_s: t_in_s, t_out_s = t_out_s, t_in_s
+
+            # only plot those within the interval
+            if t_out_s <=0 or t_in_s >= (t_end-t_start).total_seconds():
+                continue
+
+            # plot the supporting points and the line
+            c = next(colors)
+            sup_pts = np.array( [[(p[0]-t_start).total_seconds(), p[1]] for p in veh.pts] )
+            ax_pir.scatter(sup_pts[:,0], sup_pts[:,1], color=c, alpha=0.75)
+            ax_pir.plot([t_in_s, t_out_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k')
+
+            # annotate the speed
+            text = 'Est: {0:.2f} mph'.format(veh.speed)
+            ax_pir.annotate(text, xy=(t_in_s, 0.22), fontsize=12)
+
+            # plot the used distance value
+            ax_ultra.plot([t_in_s, t_out_s], [veh.dist, veh.dist], linewidth=2, color=c)
+
+
+        ax_pir.set_title('{0} ~ {1}'.format(time2str(t_start), time2str(t_end)), fontsize=20)
+        # ax_pir.set_xlabel('Relative time (s)', fontsize=18)
+        ax_pir.set_ylabel('Space (x 6d = m)', fontsize=18)
+        ax_pir.set_xlim([t_grid[0], t_grid[-1]])
+        ax_pir.set_ylim([x_grid[-1], x_grid[0]])
+
+        ax_ultra.set_title('Ultrasonic data', fontsize=20)
+        ax_ultra.set_ylabel('Distance (m)', fontsize=18)
+        ax_ultra.set_xlabel('Relative Time (s)', fontsize=18)
+        ax_ultra.set_ylim([0,12])
+        ax_ultra.set_xlim([rel_t[0], rel_t[-1]])
+
+
+        # ==============================================================================
+        # Plot the true vehicle detection
+
+        for true_v in true_vehs:
+
+            mean_t_s = ((true_v[0]-t_start).total_seconds() + (true_v[1]-t_start).total_seconds())/2.0
+
+            # only plot those within the interval
+            if mean_t_s <= 0 or mean_t_s >= (t_end-t_start).total_seconds(): continue
+
+            # compute the slope
+            slope = true_v[2]/(2.24*ratio_tx*true_v[3])
+            true_t_in_s, true_t_out_s = mean_t_s + x_grid[0]/slope, mean_t_s + x_grid[-1]/slope
+
+            text = 'true: {0:.2f} mph'.format(true_v[2])
+            ax_pir.annotate(text, xy=((true_v[0]-t_start).total_seconds(), 0.20), fontsize=12)
+
+            # plot the true vehicle line in pir
+            ax_pir.plot([true_t_in_s, true_t_out_s], [x_grid[-1], x_grid[0]], linewidth=2, linestyle='--', color='k')
+            # plt the true vehicle distance in ultra
+            ax_ultra.plot([true_t_in_s, true_t_out_s], [true_v[3], true_v[3]], linewidth=2, linestyle='--', color='k')
+
+
         plt.draw()
 
 
@@ -566,7 +733,107 @@ class TrafficSensorAlg:
 
         cap.release()
 
+    def clean_ultra(self, ultra, fp_thres, fp_del_start=3, fp_del_end=10):
+        """
+        The ultrasonic sensor contains some erroneous readings. This function filters out those readings
+        :return: self.clean_ultra
+        """
+        clean_ultra = deepcopy(ultra)
 
+        len_d = len(clean_ultra)
+        det = False
+
+        i = 0
+        while i < len_d:
+            v = clean_ultra.values[i]
+
+            if det is False:
+                if v <= fp_thres:
+                    # set start index
+                    start_idx = np.max([0,i-fp_del_start])
+                    end_idx = i
+                    det = True
+                i+=1
+                continue
+            else:
+                # exiting a detection of false positive
+                if v <= fp_thres:
+                    # continue increasing idx
+                    end_idx = i
+                    i+=1
+                    continue
+                else:
+                    # exit the detection of false positive
+                    end_idx = np.min([len_d, end_idx+fp_del_end])
+
+                    # replace the values
+                    clean_ultra.values[start_idx:end_idx] = 11.0
+                    det = False
+                    # move on from the end_idx
+                    i = end_idx
+
+        print('Cleaned the ultrasonic sensor data')
+
+        return clean_ultra
+
+
+    def clean_det_data(self, vehs, speed_range):
+        """
+        This function cleans the detection data:
+            - Make sure speed is in speed range
+            - use the historical median distance to compute the speed if ultrasonic reading is not available
+            - Put threshold to check if ultrasonic sensor reading is on the other lane or not.
+        :param vehs: the loaded vehs:  Veh class
+        :param speed_range: tuple, speeds in mph
+        :return:
+        """
+        dists = []
+        mean_dist = 6.0
+        for veh in vehs:
+
+            # First, update the speed using historical median distance; and update historical median if reading is available
+            if veh.est_dist is True:
+                veh.speed = veh.speed*mean_dist/veh.dist
+                veh.dist = mean_dist
+            else:
+                dists.append(veh.dist)
+                mean_dist = np.median(dists)
+
+            # Second, cap the speed in the range
+            if veh.speed < speed_range[0]:
+                veh.speed = speed_range[0]
+                veh.est_dist = True
+            elif veh.speed > speed_range[1]:
+                veh.speed = speed_range[1]
+                veh.est_dist = True
+
+        return vehs
+
+
+    def load_true_results(self, true_file, init_t):
+        """
+        This function loads the true result file (npy)
+             start time, end time, speed (m/s), distance (m), image speed (px/frame), image distance (px)
+        :param true_file: str
+        :return:
+        """
+        true_vehs = np.load(true_file).tolist()
+
+        # convert the first column into datetime and the speed to mph
+        for true_v in true_vehs:
+            # the video data is a bit drifting. 14 seconds over 2 hrs
+            # There may be a time drift here
+            # true_v[0] = init_t + timedelta(seconds=true_v[0])
+            # true_v[1] = init_t + timedelta(seconds=true_v[1])
+            offset = 0.28
+            drift_cor = 1860.5/1864.0
+            true_v[0] = init_t + timedelta(seconds=true_v[0]*drift_cor - offset)
+            true_v[1] = init_t + timedelta(seconds=true_v[1]*drift_cor - offset)
+            true_v[2] *= 2.24
+
+        true_vehs = np.asarray(true_vehs)
+
+        return true_vehs
 
 
 
@@ -656,6 +923,7 @@ class Veh:
         self.pts = pts
         self.r2 = r2
         self.sigma = sigma
+
         self.frame_loc = frame_loc
         self.det_perc = det_perc
         self.det_window = det_window
@@ -671,7 +939,8 @@ class Veh:
 # Speed estimation class
 # ==================================================================================================================
 class SpeedEst:
-    def __init__(self, data_df, pir_res=(4,32), plot=False, save_dir=''):
+    # moved
+    def __init__(self, data_df, w_s=5.0, pir_res=(4,32), plot=False, save_dir=''):
 
         # ------------------------------------------------------------
         # Some parameters that may influence the performance, but should be robust
@@ -679,19 +948,32 @@ class SpeedEst:
         # acceptance threshold of R2 metric, accepted fitting must have higher r2
         self.r2_thres = 0.70
         # ratio multiplied by sigma is the new tolerance, 3.0 normally leads to expansion from bad fitting
-        self.expansion_ratio = 3.0
+        self.expansion_ratio = 2.5
         # ratio multiplied by sigma is the new tolerance, 2.0 normally leads to contraction from bad fitting
         self.contraction_ratio = 2.0
         # the new tolerance is set as sigma_ratio*sig + self.boundary_buf, which takes care of the quantization issue.
-        self.boundary_buf = 1/60.0
+        self.boundary_buf = 0.0
+        # the minimum number of points that can be accepted as a model
+        self.min_num_pts = 300
+        # the F threshold for accepting the model
+        self.F_thres = 10.0
+        # the density threshold: if > thres, accept the model
+        self.dens_thres = 0.4
+        self.w_s = w_s
 
         # The default distance to the sensor if no reading from ultrasonic sensor. Occurs when car on further lane
-        self.d_default = 8.0
+        self.d_default = 4.0
         # if distance data is greater then no_ultra_thres, then there is no ultrasonic sensor reading
         self.no_ultra_thres = 10.0
+        # false positive threshold, if a reading is below self.fp_thres, then it is a false positive reading, and the
+        # data with in i-self.fp_del_start: j+ self.fp_del_end will be replaced by 11
+        self.fp_thres = 2.5
+        self.fp_del_start = 3
+        self.fp_del_end = 10
 
         # the in and out space boundary of ultrasonic sensor fov in the time-space domain
-        self.ultra_fov_in = 0.04
+        # when direction is positive: [0.04 ~ -0.16]
+        self.ultra_fov_in = 0.16
         self.ultra_fov_out = -0.16
 
         # maximum number of iterations for fitting a model
@@ -702,6 +984,11 @@ class SpeedEst:
         # maximum added new point to stop the iteration, i.e., do NOT stop if there is more new pts added even if the
         # new model has negligible change from the old model
         self.new_pts_thres = 16
+
+        # Clean vehicle parameters
+        # if the entering or exiting time of two vehicles are separated by dt_s seconds, then considered as two vehicles
+        # merge vehicles that are too close ts1-ts2 <= dt_s and te1-te2<= dt_s
+        self.dt_s = 0.3
 
         # ------------------------------------------------------------
         # initialize the space grid with nonlinear transformation
@@ -735,12 +1022,19 @@ class SpeedEst:
                     self.time.append(t_grid[i])
                     self.space.append(x_grid[col])
             i += 1
-        self.time = np.asarray(self.time)
-        self.space = np.asarray(self.space)
+
+        # remove duplicated data points
+        pts = zip(self.time, self.space)
+        set_pts = set(pts)
+        l_pts = np.asarray([list(i) for i in set_pts])
+
+        self.time = l_pts[:,0]
+        self.space = l_pts[:,1]
 
         # ------------------------------------------------------------
         # extract the ultrasonic sensor data
         self.ultra = data_df['ultra']
+        self.clean_ultra = self.clean_ultra()
 
         # ------------------------------------------------------------
         # other properties
@@ -753,10 +1047,11 @@ class SpeedEst:
         self.all_vehs = []
 
     def estimate_speed(self, stop_tol=(0.002, 0.01), dist=3.5, r2_thres=0.85, min_num_pts=150,
-                       speed_range=(0,50)):
+                       speed_range=(0,50), plot_progress=True):
 
         # update r2 threshold
         self.r2_thres = r2_thres
+        self.min_num_pts = min_num_pts
 
         # first use RANSAC to get the clusters
         clusters = self.get_clusters(db_radius=0.05, db_min_size=30, min_num_pts=min_num_pts)
@@ -791,14 +1086,20 @@ class SpeedEst:
             # plot final estimates
             print('########################## Finished estimation ({0} models) for frame starting at: {1}\n'.format(len(self.all_mdls),
                                                                                                                     time2str_file(self.init_dt)))
-            self.plot_progress(cur_mdl=None, save_name='{0}'.format(time2str_file(self.init_dt)),
+            if plot_progress:
+                self.plot_progress(cur_mdl=None, save_name='{0}'.format(time2str_file(self.init_dt)),
                                title='{0}'.format(self.init_dt),
                                sig_ratio=2.0, dist=dist)
 
             # ================================================================================================
             # clean up fitted models by merging models and removing wrong direction
-            cleaned = self.clean_veh(dt_s=0.3)
-            if cleaned:
+            if np.mean(speed_range) > 0:
+                direction = 'positive'
+            else:
+                direction = 'negative'
+
+            cleaned = self.clean_veh(direction=direction)
+            if cleaned and plot_progress:
                 self.plot_progress(cur_mdl=None, save_name='{0}_cleaned'.format(time2str_file(self.init_dt)),
                                title='{0}'.format(self.init_dt),
                                sig_ratio=2.0, dist=dist)
@@ -817,12 +1118,16 @@ class SpeedEst:
                 t_in = self.init_dt + timedelta(seconds=in_sec)
                 t_out = self.init_dt + timedelta(seconds=out_sec)
 
-                idx = (self.ultra.index >= t_in) & (self.ultra.index <= t_out)
-                if len(self.ultra[idx].values) == 0:
+                # make sure the time window is in right order
+                if t_in > t_out: t_in, t_out = t_out, t_in
+
+                idx = (self.clean_ultra.index >= t_in) & (self.clean_ultra.index <= t_out)
+
+                if len(self.clean_ultra[idx].values) == 0:
                     d = self.d_default
                     est_d = True
                 else:
-                    d = np.min(self.ultra[idx].values)
+                    d = np.min(self.clean_ultra[idx].values)
                     est_d = False
 
                 if d >= self.no_ultra_thres:
@@ -836,141 +1141,6 @@ class SpeedEst:
             return self.all_vehs
 
 
-    def clean_veh(self, dt_s=0.3):
-        """
-        This function clean the estimated vehicle models.
-            - remove those that are at the wrong direction
-            - merge vehicles that are too close ts1-ts2 <= dt_s and te1-te2<= dt_s
-        :param dt_s:
-        :return:
-        """
-        flag = False
-
-        if len(self.all_mdls) == 1:
-            # remove the wrong direction mdl
-            if self.all_mdls[0]['line'][0] > 0:
-                self.all_mdls = []
-                flag = True
-
-        elif len(self.all_mdls) >=2:
-            # ========================================================================
-            # first convert the models to a format to be returned except the datetime
-            # [enter_time, exit_time, slope, points, sigma, r2]
-            mdls = []
-            for mdl in self.all_mdls:
-                # only consider the correct direction
-                if mdl['line'][0] > 0:
-                    flag = True
-                    print('########################## debug: slope removed: {0}'.format(mdl['line'][0]))
-                    continue
-
-                # compute the enter and exit time.
-                x_s = (self.x_grid[0]-mdl['line'][1])/mdl['line'][0]
-                x_e = (self.x_grid[-1]-mdl['line'][1])/mdl['line'][0]
-
-                mdls.append([x_s, x_e, mdl['line'][0], mdl['inlier_idx'], mdl['sigma'], mdl['r2']])
-
-            # ========================================================================
-            # If none vehicle in the correct direction left, then return []
-            if len(mdls) == 0:
-                self.all_mdls = []
-                return True
-
-            # ========================================================================
-            # Use DBSCAN to find the models that to be merged
-            ts_te = [i[0:2] for i in mdls]
-
-            y_pre = DBSCAN(eps=dt_s, min_samples=1).fit_predict(ts_te)
-            num_clusters = len(set(y_pre)) - (1 if -1 in y_pre else 0)
-            y_pre = np.asarray(y_pre)
-            print('########################## debug: y_pre: {0}'.format(y_pre))
-
-            # ========================================================================
-            # clean to final models in self.all_mdls format: (line, sigma, inlier_idx, r2)
-            final_mdls = []
-            for clus in range(0, num_clusters):
-                n_mdls = sum(y_pre==clus)
-
-                if n_mdls == 1:
-                    # append the original model
-                    idx = [i for i,x in enumerate(y_pre) if x==clus ]
-                    mdl = mdls[idx[0]]
-
-                    k = mdl[2]
-                    c = self.x_grid[0] - k*mdl[0]
-
-                    _mdl = {'line':(k,c), 'inlier_idx':mdl[3], 'sigma':mdl[4], 'r2':mdl[5]}
-                    final_mdls.append(_mdl)
-                else:
-                    # merge the idx
-                    _merge_idx = []
-                    idx = [i for i,x in enumerate(y_pre) if x==clus ]
-                    if len(idx) >1:
-                        flag = True
-                    for i in idx:
-                        mdl = mdls[i]
-                        _merge_idx += mdl[3].tolist()
-                    _merge_idx = np.asarray(_merge_idx)
-
-                    # fit a new model for each
-                    # first remove labeled point from self.labeled points before fit models
-                    _labeled_pts = list(self.labeled_pts)
-                    for idx in _merge_idx:
-                        _labeled_pts.remove(idx)
-                    self.labeled_pts = np.array(_labeled_pts).astype(int)
-                    _mdl = self.fit_mdl(_merge_idx, stop_tol=(np.inf, np.inf), dist=3.5, counter='0')
-
-                    final_mdls.append(_mdl)
-
-            # ========================================================================
-            # replace self.all_mdls
-            if flag is True:
-                self.all_mdls = final_mdls
-
-        return flag
-
-
-    def mdl2veh(self, mdl, dist, est_dist):
-        """
-        This function converts the mdl dictionary to standard veh class
-        :param mdl: dict
-        :param dist: distance in meters (data from ultrasonics sensor
-        :param est_dist: bool. If there is a FN, then the dist is estimated distance
-        :return: veh class object
-        """
-        # compute the enter and exit time.
-        in_s = (self.x_grid[0]-mdl['line'][1])/mdl['line'][0]
-        out_s = (self.x_grid[-1]-mdl['line'][1])/mdl['line'][0]
-
-        t_in = self.init_dt + timedelta(seconds=in_s)
-        t_out = self.init_dt + timedelta(seconds=out_s)
-
-        _t = self.time[mdl['inlier_idx']]
-        pts_t = [self.init_dt+timedelta(seconds=i) for i in _t]
-
-        # determine the frame location
-        # compute the percent of the trace in the detection window, which will be used as an indicator on how much the
-        # estimated speed should be trusted.
-        if in_s >=0 and out_s <= self.t_grid[-1]:
-            frame_loc = 'full'
-            det_perc = 1.0
-        elif in_s >=0 and out_s > self.t_grid[-1]:
-            frame_loc = 'head'
-            det_perc = (self.t_grid[-1]-in_s)/(out_s-in_s)
-        elif in_s <0 and out_s <= self.t_grid[-1]:
-            frame_loc = 'tail'
-            det_perc = (out_s-self.t_grid[0])/(out_s-in_s)
-        elif in_s <0 and out_s > self.t_grid[-1]:
-            frame_loc = 'body'
-            det_perc = (self.t_grid[-1]-self.t_grid[0])/(out_s-in_s)
-
-        veh = Veh(slope=mdl['line'][0], t_in=t_in, t_out=t_out, pts=zip(pts_t, self.space[mdl['inlier_idx']]),
-                  r2=mdl['r2'], sigma=mdl['sigma'], frame_loc=frame_loc, det_perc=det_perc,
-                  det_window=(self.init_dt, self.end_dt), dist=dist, est_dist=est_dist, tx_ratio=self.ratio_tx)
-
-        return veh
-
-
     def fit_mixed_mdls(self, initial_idx, stop_tol=(0.0001, 0.01),
                        dist=3.5, counter='0', r2_thres=0.8,
                        min_num_pts=100, top_n=8, min_init_pts=10, speed_range=(0,50)):
@@ -978,10 +1148,19 @@ class SpeedEst:
         mdl = self.fit_mdl(initial_idx, stop_tol=stop_tol,
                            dist=dist, counter=str(counter))
 
-        if mdl is not None:
-
+        if mdl is not None and len(mdl['inlier_idx']) >= self.min_num_pts:
+            # if the number of points is greater than the number of minimum pts, then continue; otherwise pass
             r2 = mdl['r2']
-            if r2 < r2_thres and len(mdl['inlier_idx']) >= min_num_pts:
+
+            if self.accept_mdl(mdl):
+                print('$$$$ Good fitting of {0} pts with r2: {1}'.format(len(mdl['inlier_idx']), r2))
+                # a good fitting with strong data support
+                # append either the converged line or the last line
+                self.all_mdls.append(mdl)
+                # register labeled points
+                self.labeled_pts = np.concatenate([self.labeled_pts, mdl['inlier_idx']])
+
+            else:
                 # a bad fitting but has a lot of points which could potentially be multiple vehicles
                 # then split the cluster by projection
                 print('\n$$$$ Bad fitting (r2 = {0}) with {1} pts.\n$$$$ Splitting to subclusters...'.format(r2, len(mdl['inlier_idx'])))
@@ -998,7 +1177,6 @@ class SpeedEst:
                                                              dist=dist,
                                                              counter=counter, top_n=top_n,
                                                              candidate_slopes= [mdl['line'][0]])
-                # sub_clusters = self.split_cluster(mdl[0], mdl[2], min_num_pts=min_num_pts, counter=counter)
 
                 for i, (line, sigma, w, aic, bic) in enumerate(sub_clusters):
 
@@ -1016,10 +1194,10 @@ class SpeedEst:
                     if sub_mdl is None:
                         continue
 
-                    # append the converged model only if r2>r2_thres and # pts > min_num_pts
+                    # append the model if accepted
                     r2 = sub_mdl['r2']
                     num_pts = len(sub_mdl['inlier_idx'])
-                    if r2 >= r2_thres and num_pts >= min_num_pts:
+                    if self.accept_mdl(sub_mdl):
                         self.all_mdls.append(sub_mdl)
                         # register labeled points
                         self.labeled_pts = np.concatenate([self.labeled_pts, sub_mdl['inlier_idx']])
@@ -1027,18 +1205,9 @@ class SpeedEst:
                     else:
                         print('$$$$ Discarding bad fitting of {0} pts with r2: {1}\n'.format(num_pts, r2))
 
-            elif r2 >= r2_thres and len(mdl['inlier_idx']) >= min_num_pts:
-                print('$$$$ Good fitting of {0} pts with r2: {1}'.format(len(mdl['inlier_idx']), r2))
-                # a good fitting with strong data support
-                # append either the converged line or the last line
-                self.all_mdls.append(mdl)
-                # register labeled points
-                self.labeled_pts = np.concatenate([self.labeled_pts, mdl['inlier_idx']])
-
-            else:
-                num_pts = len(mdl['inlier_idx'])
-                print('$$$$ Discarding bad fitting of {0} pts with r2: {1}\n'.format(num_pts, r2))
-
+        # else:
+        #     num_pts = len(mdl['inlier_idx'])
+        #     print('$$$$ Discarding bad fitting of {0} pts\n'.format(num_pts))
 
     def fit_mdl(self, inlier_idx, stop_tol=(0.0001, 0.01), dist=3.5, counter='0'):
         """
@@ -1052,6 +1221,7 @@ class SpeedEst:
                 mdl['sigma'] = sig
                 mdl['inlier_idx'] = the final converged inlier index
                 mdl['r2'] = the r2 score of the fitting de linear regression
+                mdl['F'] = the F value of the fitting
         """
 
         if len(inlier_idx) < self.min_inliers:
@@ -1112,7 +1282,7 @@ class SpeedEst:
                         added_pts < self.new_pts_thres:
                     # # converged by conditions:
                     #   - no significant change of lines
-                    #   - no significant increase of points
+                    #   - no significant change of points
                     # if stop_tol[0] == np.inf:
                     #     print('---------- #################################### inf stop_tol #######')
                     print('---------- Converged: y = {0:.03f}x + {1:.03f}, Speed {2:.01f} mph assuming dist={3:.01f} m'.format(line[0], line[1],
@@ -1122,35 +1292,327 @@ class SpeedEst:
 
                 # ---------------------------------------------------------------------
                 # projection, density kernel segmentation, and GMM
-                sig, dists = self.get_sigma(line, pt_idx=inlier_idx)
+                # sig, dists = self.get_sigma(line, pt_idx=inlier_idx)
 
                 # determine whether to expand or contract
                 if r2 <= self.r2_thres:
                     # bad fit, then expand
                     sigma_ratio = self.expansion_ratio
+                    # tol = sigma_ratio*sig + self.boundary_buf
                 else:
                     # contract to a good fit
                     # the value 2.0~2.2 all provide good results
                     sigma_ratio = self.contraction_ratio
+                    # tol = sigma_ratio*sig - self.boundary_buf
+
+                tol, sig = self.update_tol(line, inlier_idx, r2)
 
                 if self.plot is True:
-                    mdl={'line':line, 'sigma':sig, 'inlier_idx':inlier_idx, 'r2':r2}
+                    # compute the F value of the fitting
+                    F, F_Nn = self.compute_F(line, tol)
+                    dens = self.compute_density(line, tol)
+                    mdl={'line':line, 'sigma':sig, 'tol':tol, 'inlier_idx':inlier_idx, 'r2':r2,
+                         'F':F, 'F_Nn': F_Nn, 'dens':dens}
                     self.plot_progress(cur_mdl=mdl, save_name='clus{0}_{1}'.format(counter, i),
                                        title='Cluster {0} round {1}, converged:{2}'.format(counter, i, converged),
                                        sig_ratio=sigma_ratio, dist=dist)
 
                 if not converged:
                     # update cluster
-                    inlier_idx = self.update_inliers(line, tol=sigma_ratio * sig + self.boundary_buf)
-                    added_pts = len(inlier_idx) - last_pts
+                    inlier_idx = self.update_inliers(line, tol=tol)
+                    added_pts = np.abs(len(inlier_idx) - last_pts)
                     last_pts = len(inlier_idx)
                     _pre_line = deepcopy(line)
                 else:
-                    mdl={'line':line, 'sigma':sig, 'inlier_idx':inlier_idx, 'r2':r2}
+                    # compute the F value of the fitting
+                    F, F_Nn = self.compute_F(line, tol)
+                    dens = self.compute_density(line, tol)
+                    mdl={'line':line, 'sigma':sig, 'tol':tol, 'inlier_idx':inlier_idx, 'r2':r2,
+                         'F':F, 'F_Nn': F_Nn, 'dens':dens}
+
                     return mdl
 
         except ValueError:
             return None
+
+    def accept_mdl(self, mdl):
+        """
+        This function determine if the final model should be accepted dependingo on some metrics
+        :param mdl: the model dict
+        :return: True or False
+        """
+        r2 = mdl['r2']
+        num_pts = len(mdl['inlier_idx'])
+        F = mdl['F']
+        dens = mdl['dens']
+
+        # Version 1: uses r2 and num_pts to determine if should accept the model
+        # Fails when the track is too thick, which can be as low as 0.2
+        # return r2 >= self.r2_thres and num_pts >= self.min_num_pts
+
+        # Version 2: Use F to determine if should accept the model
+        # Fails when part of it is not densely distributed but generally uniform
+        # return F <= self.F_thres
+
+        # Version 3: Use the density of the final model
+        return dens >= self.dens_thres and num_pts >= self.min_num_pts
+
+    def clean_veh(self, direction='positive'):
+        """
+        This function clean the estimated vehicle models.
+            - remove those that are at the wrong direction
+            - merge vehicles that are too close ts1-ts2 <= dt_s and te1-te2<= dt_s
+        :param direction: 'positive' or 'negative' of the speed slope
+        :return:
+        """
+        flag = False
+
+        if len(self.all_mdls) == 1:
+            # remove the wrong direction mdl
+            if (direction == 'positive' and  self.all_mdls[0]['line'][0]>0) or \
+                        (direction=='negative' and self.all_mdls[0]['line'][0]<0):
+                self.all_mdls = []
+                flag = True
+
+        elif len(self.all_mdls) >=2:
+            # ========================================================================
+            # first convert the models to a format to be returned except the datetime
+            # [enter_time, exit_time, slope, points, sigma, r2]
+            mdls = []
+            for mdl in self.all_mdls:
+                # only consider the correct direction
+
+                if (direction == 'positive' and  mdl['line'][0]>0) or \
+                        (direction=='negative' and mdl['line'][0]<0):
+                    flag = True
+                    print('########################## debug: slope removed: {0}'.format(mdl['line'][0]))
+                    continue
+
+                # compute the enter and exit time.
+                t_in = (self.x_grid[0]-mdl['line'][1])/mdl['line'][0]
+                t_out = (self.x_grid[-1]-mdl['line'][1])/mdl['line'][0]
+
+                # make sure the time window is in right order
+                if t_in > t_out: t_in, t_out = t_out, t_in
+
+                mdls.append([t_in, t_out, mdl['line'][0], mdl['inlier_idx'], mdl['sigma'], mdl['r2'],
+                             mdl['F'], mdl['F_Nn'], mdl['dens'], mdl['tol']])
+
+            # ========================================================================
+            # If none vehicle in the correct direction left, then return []
+            if len(mdls) == 0:
+                self.all_mdls = []
+                return True
+
+            # ========================================================================
+            # Use DBSCAN to find the models that to be merged
+            ts_te = [i[0:2] for i in mdls]
+
+            y_pre = DBSCAN(eps=self.dt_s, min_samples=1).fit_predict(ts_te)
+            num_clusters = len(set(y_pre)) - (1 if -1 in y_pre else 0)
+            y_pre = np.asarray(y_pre)
+            print('########################## debug: y_pre: {0}'.format(y_pre))
+
+            # ========================================================================
+            # clean to final models in self.all_mdls format: (line, sigma, inlier_idx, r2)
+            final_mdls = []
+            for clus in range(0, num_clusters):
+                n_mdls = sum(y_pre==clus)
+
+                if n_mdls == 1:
+                    # append the original model
+                    idx = [i for i,x in enumerate(y_pre) if x==clus ]
+                    mdl = mdls[idx[0]]
+
+                    k = mdl[2]
+                    c = self.x_grid[0] - k*mdl[0]
+
+                    _mdl = {'line':(k,c), 'inlier_idx':mdl[3], 'sigma':mdl[4], 'r2':mdl[5], 'F':mdl[6],
+                            'F_Nn':mdl[7], 'dens':mdl[8], 'tol':mdl[9]}
+                    final_mdls.append(_mdl)
+                else:
+                    # merge the idx
+                    _merge_idx = []
+                    idx = [i for i,x in enumerate(y_pre) if x==clus ]
+                    if len(idx) >1:
+                        flag = True
+                    for i in idx:
+                        mdl = mdls[i]
+                        _merge_idx += mdl[3].tolist()
+                    _merge_idx = np.asarray(_merge_idx)
+
+                    # fit a new model for each
+                    # first remove labeled point from self.labeled points before fit models
+                    _labeled_pts = list(self.labeled_pts)
+                    for idx in _merge_idx:
+                        _labeled_pts.remove(idx)
+                    self.labeled_pts = np.array(_labeled_pts).astype(int)
+
+                    _mdl = self.fit_mdl(_merge_idx, stop_tol=(np.inf, np.inf), dist=3.5, counter='0')
+
+                    final_mdls.append(_mdl)
+
+            # ========================================================================
+            # replace self.all_mdls
+            if flag is True:
+                self.all_mdls = final_mdls
+
+        return flag
+
+    def compute_captured_trace_percent(self, line):
+        """
+        This function computes the percentage of the trace that was captured in the time window
+        :param line: k,c . s = kt + c, t = (s-c)/k
+        :return: [0,1]
+        """
+        k, c = line
+
+        # compute the enter and exit time.
+        in_s = (self.x_grid[0]-c)/k
+        out_s = (self.x_grid[-1]-c)/k
+
+        # make sure the time window is in right order
+        if in_s >= out_s: in_s, out_s = out_s, in_s
+
+        # determine the frame location
+        # compute the percent of the trace in the detection window, which will be used as an indicator on how much the
+        # estimated speed should be trusted.
+        if in_s >=0 and out_s <= self.w_s:
+            det_perc = 1.0
+        elif in_s >=0 and out_s > self.w_s:
+            det_perc = (self.w_s-in_s)/(out_s-in_s)
+        elif in_s <0 and out_s <= self.w_s:
+            det_perc = out_s/(out_s-in_s)
+        else:
+            det_perc = self.w_s/(out_s-in_s)
+
+        return det_perc
+
+    def mdl2veh(self, mdl, dist, est_dist):
+        """
+        This function converts the mdl dictionary to standard veh class
+        :param mdl: dict
+        :param dist: distance in meters (data from ultrasonics sensor
+        :param est_dist: bool. If there is a FN, then the dist is estimated distance
+        :return: veh class object
+        """
+        # compute the enter and exit time.
+        in_s = (self.x_grid[0]-mdl['line'][1])/mdl['line'][0]
+        out_s = (self.x_grid[-1]-mdl['line'][1])/mdl['line'][0]
+
+        # make sure the time window is in right order
+        if in_s > out_s: in_s, out_s = out_s, in_s
+
+        t_in = self.init_dt + timedelta(seconds=in_s)
+        t_out = self.init_dt + timedelta(seconds=out_s)
+
+        _t = self.time[mdl['inlier_idx']]
+        pts_t = [self.init_dt+timedelta(seconds=i) for i in _t]
+
+        # determine the frame location
+        # compute the percent of the trace in the detection window, which will be used as an indicator on how much the
+        # estimated speed should be trusted.
+        if in_s >=0 and out_s <= self.t_grid[-1]:
+            frame_loc = 'full'
+            det_perc = 1.0
+        elif in_s >=0 and out_s > self.t_grid[-1]:
+            frame_loc = 'head'
+            det_perc = (self.t_grid[-1]-in_s)/(out_s-in_s)
+        elif in_s <0 and out_s <= self.t_grid[-1]:
+            frame_loc = 'tail'
+            det_perc = (out_s-self.t_grid[0])/(out_s-in_s)
+        elif in_s <0 and out_s > self.t_grid[-1]:
+            frame_loc = 'body'
+            det_perc = (self.t_grid[-1]-self.t_grid[0])/(out_s-in_s)
+
+        veh = Veh(slope=mdl['line'][0], t_in=t_in, t_out=t_out, pts=zip(pts_t, self.space[mdl['inlier_idx']]),
+                  r2=mdl['r2'], sigma=mdl['sigma'], frame_loc=frame_loc, det_perc=det_perc,
+                  det_window=(self.init_dt, self.end_dt), dist=dist, est_dist=est_dist, tx_ratio=self.ratio_tx)
+
+        return veh
+
+    def compute_density(self, line, tol):
+        """
+        This function computes the points density in that model
+        :param mdl: model dict
+        :return: density [0,1]
+        """
+        inliers_idx = self.get_all_inliers(line, tol)
+
+        # number of time levels
+        n_t_levels = np.round(2*tol*64)
+
+        # compute the percentage of the trace being captured
+        perc = self.compute_captured_trace_percent(line)
+
+        return len(inliers_idx)/(32.0*n_t_levels*perc)
+
+    def compute_F(self, line, tol):
+        """
+        This function computes the F value of the line
+        :param line: k,c; s = kt+c ; t = (s-c)/k
+        :param tol: [-tol, tol] of the model
+        :return: F value
+        """
+        inlier_idx = self.get_all_inliers(line, tol)
+        k,c = line
+
+        # Number of parameters p
+        p = 2
+
+        # Number of observations N
+        N = len(inlier_idx)
+
+        # Number of levels of the independent variable n
+        s_levels = list(set(self.space[inlier_idx]))
+        n = len( s_levels )
+
+        # compute mean at each level, and pure error sum
+        pure_err = []
+        t_mean = []
+        ni = []
+        for s in s_levels:
+            _tmp = np.asarray([ self.time[i] for i in inlier_idx if self.space[i] == s ])
+            ni.append(len(_tmp))
+            mean_tmp = np.mean(_tmp)
+            t_mean.append(mean_tmp)
+            pure_err.append( np.sum( np.power( _tmp - mean_tmp ,2) ) )
+
+        ni = np.asarray(ni)
+        t_mean = np.asarray(t_mean)
+        pure_err = np.asarray(pure_err)
+
+        # compute the lack-of-fit sum
+        s_levels = np.asarray(s_levels)
+        t_hat = (s_levels-c)/k
+        lack_of_fit_sum = np.sum( ni*np.power(t_mean - t_hat,2))
+
+        # compute pure error sum
+        pure_err_sum = np.sum(pure_err)
+
+        # normalized by degree of freedom
+        F = (lack_of_fit_sum/(n-p))/(pure_err_sum/(N-n))
+
+        return F, (N, n)
+
+    def get_all_inliers(self, line, tol):
+        """
+        This function gets all the inliers for the line, including those pts labeled by other lines
+        :param line: k, c, s = kt + c
+        :param tol: the tolerance of the model [-tol, tol]
+        :return: index list
+        """
+        k, c = line
+
+        # the residual of t_data - f(s), where t = f(s) = (s-c)/k
+        if k!=0:
+            dist = np.abs( self.time - (self.space-c)/k )
+        else:
+            dist = np.abs(self.space - c)
+
+        idx = (dist <= tol)
+
+        return np.array([i for i, x in enumerate(idx) if x]).astype(int)
 
     def get_clusters(self, db_radius=0.05, db_min_size=30, min_num_pts=100):
         """
@@ -1204,9 +1666,65 @@ class SpeedEst:
         # return
         return clusters
 
+    def update_tol(self, line, last_inlier_idx, r2):
+        """
+        This function updates the tolerance of the model line, last_pt_idx are points used to fit the line
+            - Old version: use only last_pt_idx to compute the sigma and then compute the tolerance
+            - New version: use the union of (all pts except labeled) and (points falls in old tol computed by last_pt_idx)
+        :param line: k,c. s = kt + c
+        :param last_inlier_idx: list of integers
+        :param r2: the r2 score of the fitting
+        :return: tol, sigma
+        """
+
+        # --------------------------------------------------------------
+        # find the idx of points within in the old tolerance
+        # compute the old sigma
+        old_sig, dists = self.get_sigma(line, pt_idx=last_inlier_idx)
+
+        # determine whether to expand or contract
+        if r2 <= self.r2_thres:
+            # bad fit, then expand
+            old_tol = self.expansion_ratio*old_sig + self.boundary_buf
+        else:
+            # contract to a good fit
+            old_tol = self.contraction_ratio*old_sig - self.boundary_buf
+
+        # update inliers within the old tolerance
+        old_inliers = self.update_inliers(line, old_tol)
+
+        # --------------------------------------------------------------
+        # find the not labeled points
+        all_pts_len = len(self.time)
+        not_labeled_pts = np.asarray([i for i in xrange(all_pts_len) if i not in self.labeled_pts])
+
+        # combine all inliers
+        new_inliers = np.union1d(old_inliers, not_labeled_pts)
+        test_inliers = old_inliers
+
+        # --------------------------------------------------------------
+        # compute the new tolerance
+        new_sig, _ = self.get_sigma(line, new_inliers)
+        test_sig, _ = self.get_sigma(line, test_inliers)
+
+        # determine whether to expand or contract
+        if r2 <= self.r2_thres:
+            # bad fit, then expand
+            new_tol = self.expansion_ratio*new_sig + self.boundary_buf
+            test_tol = self.expansion_ratio*test_sig + self.boundary_buf
+        else:
+            # contract to a good fit
+            new_tol = self.contraction_ratio*new_sig - self.boundary_buf
+            test_tol = self.contraction_ratio*test_sig - self.boundary_buf
+
+        # print('Debug: old_tol: {0:.3f}, test_tol: {1:.3f}, new_tol:{2:.3f}'.format(old_tol, test_tol, new_tol))
+
+        return old_tol, old_sig
+
     def get_sigma(self, line, pt_idx=None):
         """
-        This function computes the sigma tolerance in the projected 1-d domain.
+        This function computes the sigma tolerance in the projected 1-d domain using the residuals of the inliers in the
+        last round.
         :param line: (k, b)
         :param pt_idx: index of points supporting this line
         :return:
@@ -1228,6 +1746,8 @@ class SpeedEst:
         #     k = line[0]*t_max/s_max
         #     c = line[1]/s_max
         # else:
+
+
         pts_t = self.time[pt_idx]
         pts_s = self.space[pt_idx]
         k, c = line
@@ -1238,10 +1758,12 @@ class SpeedEst:
         # Use time residual instead of the orthogonal distance
         dists = self.compute_residual(pts_t, pts_s, (k, c))
 
-        # fit GMM and update sigma
-        gmm = GaussianMixture()
-        r = gmm.fit(dists[:, np.newaxis])
-        sigma = np.sqrt(r.covariances_[0, 0])
+        # # fit GMM and update sigma
+        # gmm = GaussianMixture()
+        # r = gmm.fit(dists[:, np.newaxis])
+        # sigma = np.sqrt(r.covariances_[0, 0])
+
+        sigma = np.std(dists)
 
         # if normalize is True:
         #     # recover
@@ -1249,8 +1771,8 @@ class SpeedEst:
 
         return sigma, dists
 
-
-    def compute_residual(self, pts_t, pts_s, line):
+    @staticmethod
+    def compute_residual(pts_t, pts_s, line):
         """
         This function computes the residual of the regression
             line = k, c: s = kt+c  => t = f(s) = (s-c)/k
@@ -1261,8 +1783,26 @@ class SpeedEst:
         :return: distance (+/- values) to the line, same dimension as pts_t
         """
         k, c = line
-        return pts_t - (pts_s-c)/k
+        if k != 0:
+            return pts_t - (pts_s-c)/k
+        else:
+            return pts_s-c
 
+    @staticmethod
+    def compute_dist(pts_t, pts_s, line):
+        """
+        This function computes the distance of the points to the line mdl
+        :param pts_t: time, t
+        :param pts_s: space, m
+        :param mdl: (k, c); space = k*time + c
+        :return: a list of dists; NOT absolute value
+        """
+        pts_t = np.asarray(pts_t)
+        pts_s = np.asarray(pts_s)
+        k, c = line
+        dist = -(pts_t * k - pts_s + c) / np.sqrt(1 + k ** 2)
+
+        return dist
 
     def split_cluster(self, line, pt_idx=None, min_num_pts=100, counter='0'):
 
@@ -1277,7 +1817,8 @@ class SpeedEst:
         k, c = line
 
         # compute the distance of those points to the line
-        dists = self.compute_dist(pts_t, pts_s, (k, c))
+        # dists = self.compute_dist(pts_t, pts_s, (k, c))
+        dists = self.compute_residual(pts_t, pts_s, (k,c))
 
         # use gaussian kernel for density estimation
         # print('-------- Performing kernel density analysis ...')
@@ -1336,6 +1877,7 @@ class SpeedEst:
             return np.array(zip(lines, stds, weights, aic, bic))
         else:
             return []
+
 
     def split_cluster_exhaustive(self, pt_idx=None, min_num_pts=100, speed_range=(-70, 70, 10),
                                  dist=3.5, counter='0', top_n=8, candidate_slopes=None):
@@ -1458,7 +2000,7 @@ class SpeedEst:
         return possible_groups
 
 
-    def update_inliers(self, line=None, tol=0.1):
+    def update_inliers(self, line=None, tol=None):
         """
         This function updates the inliers, i.e., get data points that lies within tol perpendicular distance to model
         :param mdl: tuple (k, c): y = kx + c
@@ -1472,27 +2014,62 @@ class SpeedEst:
         # dist = np.abs(self.time * k - self.space + c) / np.sqrt(1 + k ** 2)
 
         # the residual of t_data - f(s), where t = f(s) = (s-c)/k
-        dist = np.abs( self.time - (self.space-c)/k )
+        if k!=0:
+            dist = np.abs( self.time - (self.space-c)/k )
+        else:
+            dist = np.abs(self.space-c)
 
         idx = (dist <= tol)
 
         return np.array([i for i, x in enumerate(idx) if x and i not in self.labeled_pts]).astype(int)
 
-    @staticmethod
-    def compute_dist(pts_t, pts_s, line):
-        """
-        This function computes the distance of the points to the line mdl
-        :param pts_t: time, t
-        :param pts_s: space, m
-        :param mdl: (k, c); space = k*time + c
-        :return: a list of dists; NOT absolute value
-        """
-        pts_t = np.asarray(pts_t)
-        pts_s = np.asarray(pts_s)
-        k, c = line
-        dist = -(pts_t * k - pts_s + c) / np.sqrt(1 + k ** 2)
 
-        return dist
+
+     # moved
+
+    def clean_ultra(self):
+        """
+        The ultrasonic sensor contains some erroneous readings. This function filters out those readings
+        :return: self.clean_ultra
+        """
+        clean_ultra = deepcopy(self.ultra)
+
+        len_d = len(clean_ultra)
+        det = False
+
+        i = 0
+        while i < len_d:
+            v = clean_ultra.values[i]
+
+            if det is False:
+                if v <= self.fp_thres:
+                    # set start index
+                    start_idx = np.max([0,i-self.fp_del_start])
+                    end_idx = i
+                    det = True
+                i+=1
+                continue
+            else:
+                # exiting a detection of false positive
+                if v <= self.fp_thres:
+                    # continue increasing idx
+                    end_idx = i
+                    i+=1
+                    continue
+                else:
+                    # exit the detection of false positive
+                    end_idx = np.min([len_d, end_idx+self.fp_del_end])
+
+                    # replace the values
+                    clean_ultra.values[start_idx:end_idx] = 11.0
+                    det = False
+                    # move on from the end_idx
+                    i = end_idx
+
+        print('Cleaned the ultrasonic sensor data')
+
+        return clean_ultra
+
 
     def plot_progress(self, cur_mdl, save_name=None, title=None, sig_ratio=2.0, dist=3.5):
 
@@ -1518,6 +2095,9 @@ class SpeedEst:
         if len(self.all_mdls) != 0:
             colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple'])
             for i, mdl in enumerate(self.all_mdls):
+
+                # --------------------------------------------------------
+                # ax0: the scatter plot
                 line = mdl['line']
                 sig = mdl['sigma']
                 inlier_idx = mdl['inlier_idx']
@@ -1526,12 +2106,14 @@ class SpeedEst:
                 y_line = line[0] * x_line + line[1]
                 ax0.plot(x_line, y_line, linewidth=3, color='k')
 
-                # --------------------------------------------------------
                 # compute the enter and exit time.
                 # t_enter = (self.x_grid[0]-line[1])/line[0]
                 # t_exit = (self.x_grid[-1]-line[1])/line[0]
                 t_enter = (self.ultra_fov_in-line[1])/line[0]
                 t_exit = (self.ultra_fov_out-line[1])/line[0]
+
+                if t_enter > t_exit:
+                    t_enter, t_exit = t_exit, t_enter
 
                 ax0.axvline(x=t_enter, linestyle='--')
                 ax0.axvline(x=t_exit, linestyle='--')
@@ -1539,11 +2121,11 @@ class SpeedEst:
                 # Get the maximum distance within this time interval
                 ax1.axvline(x=t_enter, linestyle='--')
                 ax1.axvline(x=t_exit, linestyle='--')
-                t_index = (self.ultra.index >= self.ultra.index[0] + timedelta(seconds=t_enter)) & \
-                          (self.ultra.index <= self.ultra.index[0] + timedelta(seconds=t_exit))
+                t_index = (self.clean_ultra.index >= self.clean_ultra.index[0] + timedelta(seconds=t_enter)) & \
+                          (self.clean_ultra.index <= self.clean_ultra.index[0] + timedelta(seconds=t_exit))
 
-                if len(self.ultra[t_index].values) != 0:
-                    d = np.min(self.ultra[t_index].values)
+                if len(self.clean_ultra[t_index].values) != 0:
+                    d = np.min(self.clean_ultra[t_index].values)
                 else:
                     d = self.d_default
                 if d >= self.no_ultra_thres:
@@ -1603,7 +2185,8 @@ class SpeedEst:
         # plot ax1: the ultrasonic sensor data
         tmp_t = self.ultra.index - self.ultra.index[0]
         rel_t = [i.total_seconds() for i in tmp_t]
-        ax1.plot(rel_t, self.ultra.values, linewidth=2)
+        ax1.plot(rel_t, self.ultra.values, linewidth=2, marker='*')
+        ax1.plot(rel_t, self.clean_ultra.values, linewidth=2, color='r')
         ax1.set_title('Ultrasonic data', fontsize=16)
         ax1.set_ylabel('Distance (m)', fontsize=14)
         ax1.set_xlabel('Time (s)', fontsize=14)
@@ -1627,9 +2210,10 @@ class SpeedEst:
             x_fill = np.linspace(-(sig*sig_ratio+self.boundary_buf), (sig*sig_ratio+self.boundary_buf), 100)
             ax2.fill_between(x_fill, 0, mlab.normpdf(x_fill, 0, sig), facecolor='r', alpha=0.65)
             ax2.plot(bins, mlab.normpdf(bins, 0, sig), linewidth=2, c='r')
-            text = ' R2: {0:.4f};\n # pts: {2}\n Speed: {1:.2f} mph'.format(cur_mdl['r2'],
+            text = ' R2:{0:.3f};# pts: {2}\n Speed: {1:.2f} mph\n F: {3:.2f}'.format(cur_mdl['r2'],
                                                              -cur_mdl['line'][0] * dist * self.ratio_tx*2.24,
-                                                                          len(inlier_idx))
+                                                                          len(inlier_idx),
+                                                                                         cur_mdl['F'])
             ax2.annotate(text, xy=(0.05, 0.65), xycoords='axes fraction', fontsize=12)
             ax2.set_ylim([0, np.max(n) * 1.5])
             ax2.set_title('Analyzing current model', fontsize=16)
@@ -1645,6 +2229,9 @@ class SpeedEst:
                 sig = mdl['sigma']
                 inlier_idx = mdl['inlier_idx']
                 r2 = mdl['r2']
+                F = mdl['F']
+                F_Nn = mdl['F_Nn']
+                dens = mdl['dens']
 
                 # projection, density kernel segmentation, and GMM
                 sigma, dists = self.get_sigma(line, pt_idx=inlier_idx)
@@ -1662,10 +2249,11 @@ class SpeedEst:
                 # the gaussian line
                 ax2.plot(bins, mlab.normpdf(bins, offset + 3 * sigma, sigma), linewidth=2, c='r')
 
-                text = ' R2: {0:.4f}\n #:{1}\n dist: {2:.1f} m\n {3:.2f} mph'.format(r2, len(inlier_idx),
+                text = ' R2: {0:.3f}; #:{1}\n {2:.1f} m; {3:.2f} mph\n F: {4:.2f}; F_Nn: {5}\n rho:{6:.2f}'.format(r2, len(inlier_idx),
                                                                                  all_mdls_dists[i],
-                                                                                 -line[0]*all_mdls_dists[i]*2.24*self.ratio_tx)
-                ax2.annotate(text, xy=(offset + sigma, np.max(n) * 1.3), fontsize=10)
+                                                                                 -line[0]*all_mdls_dists[i]*2.24*self.ratio_tx,
+                                                                                                 F, F_Nn, dens)
+                ax2.annotate(text, xy=(offset + sigma, np.max(n) * 1.1), fontsize=10)
                 ax2.set_title('All converged models', fontsize=16)
                 y_lim = np.max([np.max(n), y_lim])
                 # update offset to the right 3sigma of this distribution
@@ -1679,6 +2267,7 @@ class SpeedEst:
             plt.close()
         else:
             plt.draw()
+
 
     def plot_sub_cluster(self, ref_line, pt_idx, dists, gaussians, x_ticks=None,
                          log_dens=None, minimas=None, counter='0', save_name=None):
@@ -1784,7 +2373,16 @@ class SensorData:
 
         self._debug_MAP_data_len=[]
 
-    def load_txt_data(self, data_file):
+        # ------------------------------------------------------------
+        # Some parameters that may influence the performance, but should be robust
+        # ------------------------------------------------------------
+        # model noise
+        self.Q = 0.05**2
+        # measurement noise are the std of measurements
+
+
+
+    def load_txt_data(self, data_file, flip=False):
         """
         This function reads the data from the saved txt file.
         The data format in the file is assumed to be:
@@ -1822,9 +2420,10 @@ class SensorData:
 
                     # ----------------------------------------------------
                     # ONLY for sensor s1 which has two arrays misconnected.
-                    tmp = deepcopy(tmp_pir_data[0:64])
-                    tmp_pir_data[0:64] = tmp_pir_data[64:]
-                    tmp_pir_data[64:] = tmp
+                    if flip is True:
+                        tmp = deepcopy(tmp_pir_data[0:64])
+                        tmp_pir_data[0:64] = tmp_pir_data[64:]
+                        tmp_pir_data[64:] = tmp
                     # ----------------------------------------------------
 
                     pir_data = list(tmp_pir_data)
@@ -2322,7 +2921,7 @@ class SensorData:
 
     # @profile
     def subtract_background_KF(self, raw_data, t_start=None, t_end=None, init_s=300, veh_pt_thres=5, noise_pt_thres=5,
-                            prob_int=0.95, pixels=None):
+                            prob_int=0.95, pixels=None, debug=False):
         """
         This function models the background noise mean as a random walk process and uses a KF to track the mean.
         The std of PIR measurement was found to be constant, hence it suffices to just track the mean.
@@ -2337,7 +2936,7 @@ class SensorData:
         :return:
         """
 
-        _debug = False
+        _debug = debug
         if _debug:
             _debug_mu = []
 
@@ -2402,22 +3001,33 @@ class SensorData:
             v_buf = []
             n_buf = []
             noise = []
+            meas_buf = []
 
             # ------------------------------------------------------------------------
             # Kalman filter
-            Q = 0.05**2     # model noise
-            kf = KF_1d(1,Q,sig**2)
-            kf.initialize_states(mu,0.001**2)   # initialize state as current mu
+            kf = KF_1d(1, self.Q, sig**2)
+            kf.initialize_states(mu,sig**2)   # initialize state as current mu
 
             # ------------------------------------------------------------------------
             # start FSM and KF
             loop_c = 0
             for cur_t, sample_row in norm_data.iterrows():
 
-                # check if should update the mean
-                if len(noise) >= 16:
+                # update the mean using only the background noise
+                if len(noise) >= 4:
                     mu = kf.update_state_sequence(norm_data.ix[noise,pix])
                     noise = []
+                    # keep track of the updated mean
+                    if _debug: _debug_mu.append([cur_t, mu])
+
+                # update the mean using all the measurements
+                # if len(meas_buf) >= 16:
+                #     mu = kf.update_state_sequence(norm_data.ix[meas_buf,pix])
+                #     meas_buf = []
+                #     # keep track of the updated mean
+                #     if _debug: _debug_mu.append([cur_t, mu])
+
+                meas_buf.append(cur_t)
 
                 # check if current point is noise
                 meas = sample_row.values[pix]
@@ -2427,13 +3037,9 @@ class SensorData:
                 # State 0, in background mode
                 if state == 0:
                     if is_noise:
-                        # update noise distribution with single measurement
-                        # update once per second
+                        # append the noise into noise buffer for updates
                         noise.append(cur_t)
-                        # mu = kf.update_state(meas)
-                        if _debug: _debug_mu.append([cur_t, mu])
                     else:
-
                         # enter the vehicle detection cycle
                         # put the current measurement in the vehicle buffer
                         v_buf.append(cur_t)
@@ -2476,12 +3082,8 @@ class SensorData:
                                 # the veh points detected in this cycle do not support a vehicle, then they are noise
                                 n_buf += v_buf
 
-                            # update the noise distribution
-                            # print('n_buf: {0}'.format(n_buf))
+                            # To update the noise distribution
                             noise += n_buf
-                            # mu = kf.update_state_sequence(norm_data.ix[n_buf,pix].values)
-
-                            if _debug: _debug_mu.append([cur_t, mu])
 
                             # reset state
                             n_buf = []
@@ -2510,8 +3112,9 @@ class SensorData:
                         label='raw')
                 ax.plot(veh_data.index, veh_data['pir_{0}x{1}'.format(int(pix%4), int(pix/4))],
                         label='veh', linewidth=3)
-                ax.scatter(veh_data.index, veh_data['pir_{0}x{1}'.format(int(pix%4), int(pix/4))])
-                ax.plot(_debug_mu[:,0], _debug_mu[:,1], label='noise mu', linewidth=2)
+                # ax.scatter(veh_data.index, veh_data['pir_{0}x{1}'.format(int(pix%4), int(pix/4))])
+                ax.plot( _debug_mu[:,0], _debug_mu[:,1], label='noise mu', marker='*', linewidth=2)
+
                 ax.legend()
                 plt.draw()
 
@@ -3030,15 +3633,16 @@ class VideoData:
         for i in range(0, num_frames):
             ret, frame = cap.read()
 
-            # time_str = time2str( trim_period[0] + timedelta(seconds=i/fps) )
-            # #
-            # cv2.putText(frame, time_str, (150, 50), cv2.FONT_HERSHEY_SIMPLEX,
-            #             0.5, (255, 255, 255))
+            time_str = time2str( trim_period[0] + timedelta(seconds=i/fps) )
+            #
+            cv2.putText(frame, time_str, (150, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (255, 255, 255))
 
             if ret is True:
                 out.write(frame)
+
                 sys.stdout.write('\r')
-                sys.stdout.write('Status: filtering step {0}/{1}'.format(i, num_frames))
+                sys.stdout.write('Status: trimming step {0}/{1}'.format(i, num_frames))
                 sys.stdout.flush()
             else:
                 raise Exception('fail to read frame')
