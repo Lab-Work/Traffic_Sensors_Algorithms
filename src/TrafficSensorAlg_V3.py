@@ -68,6 +68,10 @@ Each vehicle structure: veh = {}
     'captured_part': 'head', 'body', 'tail', 'full', which part of the trace is captured in this window
 
     'inliers': [[datetime, space], []], n x 2 ndarray, where n=len('inlier_idx')
+
+Update in V3:
+    - Try not to use exhaustive search, instead just use mean or historical mean?
+    - Try to see if we can use percentile to determine if we should split the cluster instead of using R2?
 """
 
 
@@ -318,7 +322,7 @@ class TrafficSensorAlg:
         # Detect the vehicle using VehDet class
         windows = self.detect_vehs(_norm_df, TH_det=TH_det, window_s=window_s, step_s=step_s)
 
-        print(' debug: windows: {0}'.format(windows))
+        # print(' debug: windows: {0}'.format(windows))
 
         if len(windows) == 0:
             print('No vehicles detected during {0} ~ {1}'.format(t_start, t_end))
@@ -401,8 +405,8 @@ class TrafficSensorAlg:
             print('                    good:  {0},  {1}'.format(np.mean(_g_good_mdl), np.std(_g_good_mdl)))
             print('                    bad:  {0},  {1}'.format(np.mean(_g_bad_mdl), np.std(_g_bad_mdl)))
 
-            print('good:{0}'.format(_g_good_mdl))
-            print('bad:{0}'.format(_g_bad_mdl))
+            # print('good:{0}'.format(_g_good_mdl))
+            # print('bad:{0}'.format(_g_bad_mdl))
             # plot the distribution
             # plt.figure(figsize=(11.5,10))
             # n, bins, patches = plt.hist(_g_good_mdl, 50, normed=1, facecolor='g', alpha=0.75, label='Good')
@@ -1931,24 +1935,7 @@ class SpeedEst:
         # ------------------------------------------------------------
         # initialize the space grid with nonlinear transformation
         # Slope * self.ratio * distance(m) = m/s
-        # self.ratio_tx = 6.0  # to make the space and time look equal
-        # _dup = self.paras['pir_res'][0]
-        # d_theta = (60.0 / 16) * np.pi / 180.0
-        # x_grid = []
-        # for i in range(-16, 16):
-        #     for d in range(0, _dup):
-        #         # duplicate the nonlinear operator for vec
-        #         x_grid.append(np.tan(d_theta / 2 + i * d_theta) / self.ratio_tx)
-        # self.x_grid = -np.asarray(x_grid)
-
-        # self.x_grid = self._old_nonlinear_transform()
-        # print('old x_grid [0,15,16,31]: {0}, {1}, {2}, {3}'.format(self.x_grid[0], self.x_grid[15*4],
-        #                                                            self.x_grid[16*4], self.x_grid[31*4]))
-
         self.x_grid = self._new_nonlinear_transform()
-        # print('new x_grid [0,15,16,31]: {0}, {1}, {2}, {3}'.format(new_x_grid[0], new_x_grid[15*4],
-        #                                                            new_x_grid[16*4], new_x_grid[31*4]))
-        # print('new/old x_grid ratio: {0}'.format(new_x_grid[0]/self.x_grid[0]))
 
         # ------------------------------------------------------------
         # initialize the time grid in seconds
@@ -2017,29 +2004,13 @@ class SpeedEst:
         # Use DBSCAN to initialize the algorithm. Optional, but effective.
         clusters = self._init_clusters()
 
-        # # NOTE: this is just used for illustrating the splitting of clusters
-        # _c = []
-        # for c in clusters: _c += c
-        # clusters = [_c]
-        # slopes = [-60]
-        # for s in slopes:
-        #     slope = s / (self.paras['d_default'] * self.mps2mph * self.paras['tx_ratio'])
-        #     self._split_cluster(slope, pts_idx=None)
-
-        # NOTE: this is only for plotting the iterations of the robust linear regression by
-        # setting different initial inliers
-        # _c = []
-        # for c in clusters:
-        #     _c += c[0:3]
-        # clusters = [_c]
-
         if len(clusters) == 0:
             # Meaning all pts in frame is < min_num_pts, then skip
             print('########################## Did not find vehicles in this frame starting at: {0}\n'.format(
                 time2str_file(self.init_dt)))
             return []
         else:
-            self._plot_clusters(clusters, title='DBSCAN clusters', save_name='dbscan')
+            # self._plot_clusters(clusters, title='DBSCAN clusters', save_name='dbscan')
 
             # For each cluster, fit multiple models
             for counter, inlier_idx in enumerate(clusters):
@@ -2460,16 +2431,32 @@ class SpeedEst:
         """
 
         # -------------------------------------------------------------------------------------
-        # explore all directions of lines with reference to the left bottom corner
-        # explore all directions of lines with reference to the left bottom corner
-        speeds = np.arange(self.speed_range[0], self.speed_range[1], self.paras['speed_res']).astype(float)
-        slopes = speeds / (self.paras['d_default'] * self.mps2mph * self.paras['tx_ratio'])
+        # DEBUG
+        # -------------------------------------------------------------------------------------
 
-        # also explore the candidate directions
-        if candidate_slopes is not None:
-            slopes = np.concatenate([slopes, np.asarray(candidate_slopes)])
-            speeds = np.concatenate(
-                [speeds, np.asarray(candidate_slopes) * (self.paras['d_default'] * self.mps2mph * self.paras['tx_ratio'])])
+        # -------------------------------------------------------------------------------------
+        # OLD:
+        # explore all directions of lines with reference to the left bottom corner
+        # explore all directions of lines with reference to the left bottom corner
+        # speeds = np.arange(self.speed_range[0], self.speed_range[1], self.paras['speed_res']).astype(float)
+        # slopes = speeds / (self.paras['d_default'] * self.mps2mph * self.paras['tx_ratio'])
+        #
+        # # also explore the candidate directions
+        # if candidate_slopes is not None:
+        #     slopes = np.concatenate([slopes, np.asarray(candidate_slopes)])
+        #     speeds = np.concatenate(
+        #         [speeds, np.asarray(candidate_slopes) * (self.paras['d_default'] * self.mps2mph * self.paras['tx_ratio'])])
+
+        # -------------------------------------------------------------------------------------
+        # NEW:
+        # Only split along candidate slopes
+        slopes = np.asarray(candidate_slopes)
+        speeds = np.asarray(candidate_slopes) * (self.paras['d_default'] * self.mps2mph * self.paras['tx_ratio'])
+
+        # -------------------------------------------------------------------------------------
+        # FINISH DEBUG
+        # -------------------------------------------------------------------------------------
+
 
         all_dirs = []
         print('------ Exploring directions:')

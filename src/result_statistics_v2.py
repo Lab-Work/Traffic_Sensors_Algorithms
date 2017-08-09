@@ -19,7 +19,7 @@ def main():
 
     # ====================================================
     # Jun 08
-    if False:
+    if True:
         # Load the detection results
         folder = 'Jun08_2017'
         est_file = '../workspace/{0}/figs/speed/v2_6/detected_vehs.txt'.format(folder)
@@ -33,11 +33,11 @@ def main():
         drift_ratio = 1860.5/1864.0
 
     # Jun 9
-    if True:
+    if False:
         # Load the detection results
         folder = 'Jun09_2017'
-        est_file = '../workspace/{0}/figs/speed/v2_3/detected_vehs.txt'.format(folder)
-        true_file = '../workspace/{0}/data_convexlog_v2.npy'.format(folder)
+        est_file = '../workspace/{0}/figs/speed/v2_3/detected_vehs_cleaned.txt'.format(folder)
+        true_file = '../workspace/{0}/data_convexlog_v2_cleaned.npy'.format(folder)
 
         t_start = str2time('2017-06-09 19:09:00.009011')
         t_end = str2time('2017-06-09 20:39:30.905936')
@@ -82,13 +82,20 @@ def main():
     # ====================================================
     # match vehicles and compute error
     if True:
-        dt = 1.0
+        dt = 1.5
         matched_vehs, fp_vehs = match_vehs(vehs, true_vehs, dt)
         num_fp = len(fp_vehs)
 
         # ====================================================
         # plot the distributions
         _idx = ~np.isnan(matched_vehs[:,0])
+
+        for i, v in enumerate(matched_vehs):
+            if (v[3] - v[2]) <= -10:
+                print('Outliers: ')
+                print('        {0}: true_d {1:.2f}, est_d {2:.2f}, true_v {3:.2f}, est_v {4:.2f}'.format(i, v[0], v[1],
+                                                                                                         v[2], v[3]))
+
         num_fn = np.sum(np.isnan(matched_vehs[:,0]))
         plot_vehs = matched_vehs[_idx, :]
         _valid_idx = (plot_vehs[:,4] == True)
@@ -105,7 +112,7 @@ def main():
 
         # distance
         # true all VS est all
-        plot_distance_dist([plot_vehs[:,0], plot_vehs[:,1]], ['true all', 'est all'], title='Distance: true all vs. est all')
+        # plot_distance_dist([plot_vehs[:,0], plot_vehs[:,1]], ['true all', 'est all'], title='Distance: true all vs. est all')
         # # est all VS est valid
         # plot_distance_dist([plot_vehs[:,1], plot_vehs[_valid_idx,1]], ['est all', 'est valid'],
         #                    title='Distance: est all vs. est valid')
@@ -114,16 +121,16 @@ def main():
         #                    title='Distance: true valid vs. est valid')
 
         # true all VS est all
-        plot_speed_dist([plot_vehs[:,2], plot_vehs[:,3]], ['true all', 'est all'], title='Speed: true all vs. est all')
+        # plot_speed_dist([plot_vehs[:,2], plot_vehs[:,3]], ['true all', 'est all'], title='Speed: true all vs. est all')
         # # est all VS est valid
         # plot_speed_dist([plot_vehs[:,3], plot_vehs[_valid_idx,3]], ['est all', 'est valid'],
         #                 title='Speed: est all vs. est valid')
         # # true valid VS est valid
-        plot_speed_dist([plot_vehs[_valid_idx,2], plot_vehs[_valid_idx,3]], ['true valid', 'est valid'],
-                        title='Speed: true valid vs. est valid')
+        # plot_speed_dist([plot_vehs[_valid_idx,2], plot_vehs[_valid_idx,3]], ['true valid', 'est valid'],
+        #                 title='Speed: true valid vs. est valid')
 
-        # est_err = plot_vehs[:,3] - plot_vehs[:,2]
-        # plot_speed_dist([est_err], ['Speed error'], title='Error: true all vs. est all')
+        est_err = plot_vehs[:,3] - plot_vehs[:,2]
+        plot_speed_dist([est_err], ['Speed estimation error'], title='Test 1 speed estimation error')
         # est_err = plot_vehs[_valid_idx,3] - plot_vehs[_valid_idx,2]
         # plot_speed_dist([est_err], ['Speed error'], title='Error: true valid vs. est valid')
 
@@ -158,11 +165,13 @@ def clean_det_data(vehs, speed_range):
     :return:
     """
     dists = []
-    mean_dist = 4.0
+    dist_lim = [3.5, 8.0]
+
+    mean_dist = 6.0
     for veh in vehs:
 
         # First, update the speed using historical median distance; and update historical median if reading is available
-        if veh[4] is False or veh[2]>= 8.0:
+        if veh[2] <= dist_lim[0] or veh[2] >= dist_lim[1]:
             veh[3] = veh[3]*mean_dist/veh[2]
             veh[2] = mean_dist
         else:
@@ -249,7 +258,7 @@ def compute_ultra_FN_ratio(vehs):
     :return:
     """
     fn_ratio = sum(vehs[:,4]==False)/float(len(vehs))
-    print('\n\nTotal numebr of detected vehicles: {0}'.format(len(vehs)))
+    print('\n\nTotal number of detected vehicles: {0}'.format(len(vehs)))
     print('False negative ratio of ultrasonic sensor: {0}'.format(fn_ratio))
 
 
@@ -275,34 +284,61 @@ def match_vehs(vehs, true_vehs, dt):
     for v_idx, v in enumerate(vehs):
         _t_m = v[0] + (v[1]-v[0])/2
 
-        flag = False
-        for i, t_v in enumerate(true_vehs):
-            if abs( (_t_m - _true_t_m[i]).total_seconds() ) <= dt:
+        cur_min_dt = np.inf
+        cur_matched_idx = 0
+        # first find its closest vehicle
+        for i in range(len(true_vehs)):
+            _dt = abs( (_t_m - _true_t_m[i]).total_seconds() )
+            if _dt <= cur_min_dt:
+                cur_min_dt = _dt
+                cur_matched_idx = i
 
-                if not np.isnan(matched_vehs[i][5]):
-                    # if the true vehicle has already been matched
-                    print('WARNING: Two matches for true vehicle: {0} ~ {1},'.format(t_v[0],t_v[1]) +
-                          ' {0:.2f} m ; {1:.2f} mph'.format(t_v[3],t_v[2]))
-                    _i = int(matched_vehs[i][5])
+        if cur_min_dt <= dt:
+            # found the match, then check if it is duplicated detection
+            true_v = true_vehs[cur_matched_idx]
 
-                    print('                            Match one: {0} ~ {1},'.format(vehs[_i][0],vehs[_i][1]) +
-                          ' {0:.2f} m ; {1:.2f} mph'.format(vehs[_i][3],vehs[_i][2]))
-                    print('                            Match one: {0} ~ {1},'.format(v[0],v[1]) +
-                          ' {0:.2f} m ; {1:.2f} mph'.format(v[2],v[3]))
-                else:
+            if not np.isnan(matched_vehs[cur_matched_idx][5]):
+                # if the true vehicle has already been matched
+                print('WARNING: Two matches for true vehicle: {0} ~ {1},'.format(true_v[0],true_v[1]) +
+                      ' {0:.2f} m ; {1:.2f} mph'.format(true_v[3],true_v[2]))
+                old_i = int(matched_vehs[cur_matched_idx][5])
+
+                print('                            Old match: {0} ~ {1},'.format(vehs[old_i][0],vehs[old_i][1]) +
+                      ' {0:.2f} m ; {1:.2f} mph'.format(vehs[old_i][2],vehs[old_i][3]))
+                print('                            New match: {0} ~ {1},'.format(v[0],v[1]) +
+                      ' {0:.2f} m ; {1:.2f} mph'.format(v[2],v[3]))
+
+                # compare which one is closer
+                old_dt =  abs((vehs[old_i][0] + (vehs[old_i][1] - vehs[old_i][0])/2 -
+                               _true_t_m[cur_matched_idx]).total_seconds())
+                if cur_min_dt <= old_dt:
+                    print ('                            New replaced Old.')
+                    # replace old match, and append old to false positive
                     # match the vehicle, [true_dist, est_dist, true_speed, est_speed, valid, idx]
-                    matched_vehs[i][0], matched_vehs[i][1] = t_v[3], v[2]
-                    matched_vehs[i][2], matched_vehs[i][3] = t_v[2], v[3]
+                    matched_vehs[cur_matched_idx][0], matched_vehs[cur_matched_idx][1] = true_v[3], v[2]
+                    matched_vehs[cur_matched_idx][2], matched_vehs[cur_matched_idx][3] = true_v[2], v[3]
                     if v[4] is True:
-                        matched_vehs[i][4] = True
+                        matched_vehs[cur_matched_idx][4] = True
                     else:
-                        matched_vehs[i][4] = False
-                    matched_vehs[i][5] = v_idx
-                    flag = True
-                    break
+                        matched_vehs[cur_matched_idx][4] = False
+                    matched_vehs[cur_matched_idx][5] = v_idx
 
-        # check if matched
-        if flag is False:
+                    fp_vehs.append(vehs[old_i])
+                else:
+                    # otherwise, append to false positive
+                    fp_vehs.append(v)
+
+            else:
+                # match the vehicle, [true_dist, est_dist, true_speed, est_speed, valid, idx]
+                matched_vehs[cur_matched_idx][0], matched_vehs[cur_matched_idx][1] = true_v[3], v[2]
+                matched_vehs[cur_matched_idx][2], matched_vehs[cur_matched_idx][3] = true_v[2], v[3]
+                if v[4] is True:
+                    matched_vehs[cur_matched_idx][4] = True
+                else:
+                    matched_vehs[cur_matched_idx][4] = False
+                matched_vehs[cur_matched_idx][5] = v_idx
+        else:
+            # did not find a match, then as a false positive
             fp_vehs.append(v)
 
     return matched_vehs, fp_vehs
@@ -377,17 +413,19 @@ def plot_speed_dist(l_speeds, labels, title='Speed distribution'):
         plt.plot(bins, mlab.normpdf(bins, mu, std), color=c, linestyle='--',
                  linewidth=2)
 
-        text.append('{0} mean: {1:.2f}, std: {2:.2f}'.format(labels[i], mu, std))
+        # text.append('{0} mean: {1:.2f}, std: {2:.2f}'.format(labels[i], mu, std))
+        text.append('Mean: {0:.2f}\nStandard deviation: {1:.2f}'.format(mu, std))
 
     text_str = '\n'.join(text)
-    plt.text(mu-2*std, np.max(n)*1.1, text_str, fontsize=16)
+    plt.text(mu-3*std, np.max(n)*1.03, text_str, fontsize=30)
     # plt.text(6, 0.16, text_str, fontsize=16)
     plt.ylim(0, np.max(n)*1.2)
 
-    plt.legend()
-    plt.xlabel('Speed (mph)', fontsize=16)
-    plt.ylabel('Distribution', fontsize=16)
-    plt.title(title, fontsize=20)
+    # plt.legend()
+    plt.xlabel('Speed (mph)', fontsize=30)
+    plt.ylabel('Distribution', fontsize=30)
+    plt.title(title, fontsize=34)
+    plt.tick_params(axis='both', which='major', labelsize=28)
     plt.draw()
 
 

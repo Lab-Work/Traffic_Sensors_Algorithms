@@ -1,4 +1,4 @@
-from TrafficSensorAlg_V2 import *
+from TrafficSensorAlg_V3 import *
 
 def main():
 
@@ -233,11 +233,7 @@ def test_alg():
     # data set 0530, S1: 20:55 ~ 21:45;
     # Two sensors on both sides of road at the same location. Freeflow on Neil in Savoy
     # ===============================================================================================
-    # data set 0530, 2017
-    # Two sensors on both sides of road at the same location.
-    # Freeflow on Neil in Savoy
-    # data set is good to use
-    if True:
+    if False:
         folder = '0530_2017'
         speed_range = (-71,-1)
         save_dir = '../workspace/{0}/'.format(folder)
@@ -265,14 +261,14 @@ def test_alg():
         #                         t_start=str2time('2017-05-30 21:21:02.0'),
         #                         t_end=str2time('2017-05-30 21:21:10.0'))
         alg.run_adaptive_window(norm_df, TH_det=600, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
-                                plot_debug=True, save_dir='../workspace/{0}/figs/speed/s1/'.format(folder),
+                                plot_debug=False, save_dir='../workspace/{0}/figs/speed/s1/'.format(folder),
                                 t_start=str2time('2017-05-30 20:55:0.0'),
-                                t_end=str2time('2017-05-30 20:55:10.0'))
+                                t_end=str2time('2017-05-30 21:45:00.0'))
 
     # ===============================================================================================
     # data set 0530, S2: 20:55 ~ 21:45
     # ===============================================================================================
-    if False:
+    if True:
         folder = '0530_2017'
         sensor = 's2'
         speed_range = (1,71)
@@ -293,8 +289,8 @@ def test_alg():
 
         alg.run_adaptive_window(norm_df, TH_det=600, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
                                 plot_debug=False, save_dir='../workspace/{0}/figs/speed/s2/'.format(folder),
-                                t_start=str2time('2017-05-30 21:14:00.0'),
-                                t_end=str2time('2017-05-30 21:15:30.0'))
+                                t_start=str2time('2017-05-30 20:55:00.0'),
+                                t_end=str2time('2017-05-30 21:45:00.0'))
 
     # ===============================================================================================
     # dataset Jun 08, 2017 on 6th street down near the parking lot.
