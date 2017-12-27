@@ -34,7 +34,7 @@ from sklearn.neighbors import KernelDensity
 from sklearn.mixture import GaussianMixture
 
 __author__ = 'Yanning Li'
-__version__ = "2.0"
+__version__ = "3.0"
 __email__ = 'yli171@illinois.edu'
 
 
@@ -213,7 +213,7 @@ class TrafficSensorAlg:
         self.paras['d_default'] = 6.0
         # if distance data is greater then no_ultra_thres, then there is no ultrasonic sensor reading
         self.paras['TH_no_ultra'] = 8.0
-        # false positive threshold, if a reading is below self.fp_thres, then it is a false positive reading, and the
+        # false positive threshold, if a reading is below self.TH_ultra_fp, then it is a false positive reading, and the
         # data with in i-self.fp_del_start: j+ self.fp_del_end will be replaced by 11
         self.paras['TH_ultra_fp'] = 4.0
         self.paras['ultra_fp_pre'] = 3
@@ -293,13 +293,12 @@ class TrafficSensorAlg:
         self._save_det_vehs_txt(self.vehs, save_dir, 'detected_vehs.txt')
         self._save_paras(save_dir, 'paras.txt')
 
-    def run_adaptive_window(self, norm_df, TH_det=600, window_s=2.0, step_s=1.0, speed_range=(1, 50),
+    def run_adaptive_window(self, norm_df, window_s=2.0, step_s=1.0, speed_range=(1, 50),
             plot_final=True, plot_debug=False, save_dir='./', t_start=None, t_end=None):
         """
         This function runs the vehicle detection and speed estimation algorithm on the normalized data norm_df in a
         sliding window fashion with overlapping.
         :param norm_df: the pandas DataFrame data structure
-        :param TH_det: the threshold for determining if there are vehicles present in the window
         :param window_s: seconds, the window size
         :param step_s: seconds, moving windows by steps
         :param speed_range: (1,50) mph, the range of speeds to be estimated
@@ -320,7 +319,7 @@ class TrafficSensorAlg:
 
         # -------------------------------------------------------------------------------------------------------
         # Detect the vehicle using VehDet class
-        windows = self.detect_vehs(_norm_df, TH_det=TH_det, window_s=window_s, step_s=step_s)
+        windows = self.detect_vehs(_norm_df, window_s=window_s, step_s=step_s)
 
         # print(' debug: windows: {0}'.format(windows))
 
@@ -413,7 +412,7 @@ class TrafficSensorAlg:
             # n, bins, patches = plt.hist(_g_bad_mdl, 50, normed=1, facecolor='r', alpha=0.75, label='Bad')
             # plt.show()
 
-    def detect_vehs(self, norm_df, TH_det=600, window_s=2.0, step_s=1.0):
+    def detect_vehs(self, norm_df, window_s=2.0, step_s=1.0):
         """
         This function outputs the windows that may contain a vehicle
         :param norm_df: the pandas DataFrame structure

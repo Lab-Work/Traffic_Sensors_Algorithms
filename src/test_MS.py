@@ -35,7 +35,7 @@ __version__ = "1.0"
 __email__ = 'yli171@illinois.edu'
 
 """
-This script is used to test the midpoint smotthing algorithm for speed estimation.
+This script is used to test the midpoint smoothing algorithm for speed estimation.
 
 The key heuristics are follows
     - The trajectories always extends linearly along some trajectory. So starting from certain row of the trajectory, we

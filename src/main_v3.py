@@ -1,85 +1,124 @@
 from TrafficSensorAlg_V3 import *
 
+"""
+This script contains the main functions and modules for reproducing the results generated in the paper
+'Traffic detection via energy efficient passive infrared sensing' submitted to IEEE Transactions on ITS in 2017.
+"""
+
+__author__ = 'Yanning Li'
+__version__ = "3.0"
+__email__ = 'yli171@illinois.edu, yanning.k.li@gmail.com'
+
+
 def main():
+    """
+    The main function calls modules to
+        - preprocess the collected data (preprocess_data)
+        - run the vehicle detection and speed estimation algorithm (run_traffic_detection)
+        - evaluate the detection accuracy (evaluate_accuracy)
+    COMMENT/UNCOMMENT the corresponding function run each function one by one.
+    :return:
+    """
 
-    # data_analysis()
+    # ===============================================================================================
+    # Comment/Uncomment this function to process the collected data.
+    # Make modifications directly within the function.
+    # ===============================================================================================
+    # preprocess_data()
 
-    test_alg()
+    # ===============================================================================================
+    # Run vehicle detection and speed estimation algorithm on the processed data.
+    # This function runs on the processed data from process_data()
+    # ===============================================================================================
+    run_traffic_detection()
 
-    # trim_results()
+    # ===============================================================================================
+    # Run the following function to evaluate the traffic detection accuracy.
+    # ===============================================================================================
+    # evaluate_accuracy()
 
-    # evaluation()
 
     plt.show()
 
-def data_analysis():
+def preprocess_data():
+    """
+    This function is used to perform preprocessing and analysis of the data, including
+        - loading the raw data from txt file to pandas data frame structure
+        - visualizing the raw PIR and ultrasonic sensor data
+        - visualizing the evolution and distribution of the temperature data from each pixel
+        - performing background subtraction and data normalization using KF and FSM
+        - visualizing the normalized data
+    :return:
+    """
+
+    # ===============================================================================================
+    # Specify the directory of the data to be processed
+    # ===============================================================================================
+
     # --------------------------------------------------
-    # data set 0530, 2017
-    # Two sensors on both sides of road at the same location.
-    # Freeflow on Neil in Savoy
-    # data set is good to use
-    folder = '0530_2017'
-    sensor = 's1'
+    # Field experiment Test 1
+    # Deployed one sensor on 6th street (one-lane one direction) near the parking lot with ~18 mph average speeds.
+    # Collected data between 21:40 ~ 22:20 UTC on Jun 08, 2017
+    # folder = 'Jun08_2017'                             # folder of the dataset
+    # sensor = 's1'                                     # sensor id
+    # data_dir = '../datasets/{0}/s1/'.format(folder)
+    # dataset = '0806-201711_s1'                        # dataset name
+
+    # --------------------------------------------------
+    # Field experiment Test 2
+    # Deployed one sensor on 6th street (one-lane one direction) near the parking lot with ~18 mph average speeds.
+    # Collected data between 19:10~20:39 UTC Jun 09, 2017
+    # folder = 'Jun09_2017'                             # folder of the dataset
+    # data_dir = '../datasets/{0}/s1/'.format(folder)
+    # dataset = '0906-190351_s1'                        # dataset name
+
+    # --------------------------------------------------
+    # Field experiment Test 3
+    # Deployed two sensors, one on each side of Neil street in Savoy for freeflow traffic at ~45 mph average speeds
+    # Collected data between 20:55 ~ 21:45 UTC on May 30th, 2017
+    folder = 'May30_2017'                                # folder of the dataset
+    sensor = 's1'                                       # sensor id
     data_dir = '../datasets/{0}/{1}/'.format(folder, sensor)
-    dataset = '3005-205500_{0}'.format(sensor)
+    dataset = '3005-205500_{0}'.format(sensor)          # dataset name
 
-    # folder = '0530_2017'
-    # sensor = 's2'
+    # folder = 'May30_2017'
+    # sensor = 's2'                                     # sensor id
     # data_dir = '../datasets/{0}/{1}/'.format(folder, sensor)
-    # dataset = '3005-203625_{0}'.format(sensor)
+    # dataset = '3005-203625_{0}'.format(sensor)        # dataset name
 
-    # --------------------------------------------------
-    # dataset Jun 08, 2017 on 6th street down near the parking lot.
-    # Saved data is 21:40 ~ 22:20 UTC
-    # folder = 'Jun08_2017'
-    # sensor = 's1'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '0806-201711_s1'
-
-    # --------------------------------------------------
-    # dataset Jun 09, 2017, same setup as Jun 08
-    # folder = 'Jun09_2017'
-    # data_dir = '../datasets/{0}/s1/'.format(folder)
-    # dataset = '0906-190351_s1'
 
 
     # ===============================================================================================
-    # Configuration
+    # Load the raw data from txt files to pandas dataframe structure
+    # ===============================================================================================
     save_dir = '../workspace/{0}/'.format(folder)
     if not exists(save_dir): os.mkdir(save_dir)
 
     data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
     periods = data.get_data_periods(data_dir, update=True, f_type='txt')
 
-    # either load txt or csv data. csv is faster
-    if True:
-        print('Loading txt data...')
-        t1 = datetime.now()
+    print('Loading txt data...')
+    t1 = datetime.now()
 
-        if folder == '0530_2017' and sensor == 's1':
-            flip = True
-        else:
-            flip = False
+    if folder == '0530_2017' and sensor == 's1':
+        # the two sensor components on s1 was misconnected which flipped the upper 64 rows with the bottom 64 rows in
+        # the time space representation in the dataframe. Set flip to be true to correct.
+        flip = True
+    else:
+        flip = False
 
-        df = data.load_txt_data(data_dir+'{0}.txt'.format(dataset), flip=flip)
-        t2 = datetime.now()
-        print('Loading data took {0} s'.format((t2-t1).total_seconds()))
+    df = data.load_txt_data(data_dir+'{0}.txt'.format(dataset), flip=flip)
+    t2 = datetime.now()
+    print('Loading data took {0} s'.format((t2-t1).total_seconds()))
 
-        # df.to_csv(folder+'{0}.csv'.format(dataset))
-        # print('saved df data.')
-
-    if False:
-        t1 = datetime.now()
-        df = pd.read_csv(data_dir+'{0}.csv'.format(dataset), index_col=0)
-        df.index = df.index.to_datetime()
-        t2 = datetime.now()
-        print('Loading df csv data took {0} s'.format((t2-t1).total_seconds()))
 
     # ===============================================================================================
-    # plot the original df
+    # Plot the original raw data
+    # ===============================================================================================
     if False:
+        # Use periods or str2time to define the period to be plotted
         # t_start = periods[dataset][0] #+ timedelta(seconds=180)
-        # t_end = periods[dataset][1] # + timedelta(seconds=780)
+        # t_end = periods[dataset][0] # + timedelta(seconds=780)
         t_start = str2time('2017-05-30 21:21:00.0')
         t_end = str2time('2017-05-30 21:21:10.0')
         data.plot_heatmap_in_period(df, t_start=t_start, t_end=t_end, cbar=(35,45), option='vec',
@@ -93,8 +132,9 @@ def data_analysis():
         plt.draw()
 
     # ===============================================================================================
-    # plot the evolution of the noise (350~650)
-    if True:
+    # Plot the evolution of the collected data from a single pixel and its histogram
+    # ===============================================================================================
+    if False:
         t_start = periods[dataset][0] + timedelta(seconds=350)
         t_end = periods[dataset][0]  + timedelta(seconds=650)
         data.plot_noise_evolution(df, t_start=t_start, t_end=t_end, p_outlier=0.01, stop_thres=(0.01,0.1),
@@ -104,7 +144,9 @@ def data_analysis():
                                       stop_thres=(0.01, 0.1))
 
     # ===============================================================================================
-    # analyze and debug KF background subtraction
+    # Use Kalman filter and finite state machine to perform background subtraction and data normalization;
+    # The normalized data is then saved to run the vehicle detection and speed estimation algorithm later on.
+    # ===============================================================================================
     if False:
         t_start = periods[dataset][0] # + timedelta(seconds=200)
         t_end = periods[dataset][1] #+ timedelta(seconds=400)
@@ -112,15 +154,6 @@ def data_analysis():
         kf_norm_df = data.subtract_background_KF(df, t_start=t_start, t_end=t_end, init_s=30,
                                            veh_pt_thres=3, noise_pt_thres=3, prob_int=0.95,
                                                  pixels=None, debug=False)
-        # kf_norm_df = data.subtract_background_KF(df, t_start=t_start, t_end=t_end, init_s=30,
-        #                                    veh_pt_thres=3, noise_pt_thres=3, prob_int=0.95,
-        #                                          pixels=[(1, 5)], debug=True)
-        # kf_norm_df = data.subtract_background_KF(df, t_start=t_start, t_end=t_end, init_s=30,
-        #                                    veh_pt_thres=3, noise_pt_thres=3, prob_int=0.95,
-        #                                          pixels=[(2, 5)], debug=True)
-        # kf_norm_df = data.subtract_background_KF(df, t_start=t_start, t_end=t_end, init_s=30,
-        #                                    veh_pt_thres=3, noise_pt_thres=3, prob_int=0.95,
-        #                                          pixels=[(3, 5)], debug=True)
         t2 = datetime.now()
         print('\nNormalization sequential KF took {0} s'.format((t2-t1).total_seconds()))
 
@@ -129,385 +162,222 @@ def data_analysis():
 
 
     # ===============================================================================================
+    # deprecated
     # Use batch normalization to subtract the background noise
-    if False:
-        t_start = periods[dataset][0]
-        t_end = periods[dataset][0] + timedelta(seconds=30)
-        t1 = datetime.now()
-        dis_norm_df = data.batch_normalization(df, t_start=t_start, t_end=t_end, p_outlier=0.01,
-                                           stop_thres=(0.001,0.0001), window_s=5, step_s=1)
-        t2 = datetime.now()
-        print('Normalization using iterative distribution took {0} s'.format((t2-t1).total_seconds()))
-
-        # norm_df.to_csv(save_dir + 's3_2d_{0}.csv'.format(time2str_file(periods[dataset][0])))
-        fig, ax = data.plot_heatmap_in_period(dis_norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
-                                              option='vec', nan_thres_p=0.95, plot=True, save_dir=save_dir, save_img=False,
-                                              save_df=False, figsize=(18,8))
+    # if False:
+    #     t_start = periods[dataset][0]
+    #     t_end = periods[dataset][0] + timedelta(seconds=30)
+    #     t1 = datetime.now()
+    #     dis_norm_df = data.batch_normalization(df, t_start=t_start, t_end=t_end, p_outlier=0.01,
+    #                                        stop_thres=(0.001,0.0001), window_s=5, step_s=1)
+    #     t2 = datetime.now()
+    #     print('Normalization using iterative distribution took {0} s'.format((t2-t1).total_seconds()))
+    #
+    #     # norm_df.to_csv(save_dir + 's3_2d_{0}.csv'.format(time2str_file(periods[dataset][0])))
+    #     fig, ax = data.plot_heatmap_in_period(dis_norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
+    #                                           option='vec', nan_thres_p=0.95, plot=True, save_dir=save_dir, save_img=False,
+    #                                           save_df=False, figsize=(18,8))
 
 
     # ===============================================================================================
-    # plot saved heatmap
+    # Visualized the previously saved heatmap (i.e., pandas data frame), which can be the raw data or normalized data
+    # ===============================================================================================
     if False:
+
+        # ---------------------------------------------------------------------------------------
         # load norm_df
         t_start = periods[dataset][0]  # + timedelta(seconds=200)
         t_end = periods[dataset][1]  # + timedelta(seconds=400)
         norm_df = pd.read_csv(save_dir+'{0}_2d_KF__{1}__{2}_prob95.csv'.format(sensor, time2str_file(t_start),
-                                                                               time2str_file(t_end)),
-                              index_col=0)
+                                                                               time2str_file(t_end)), index_col=0)
         norm_df.index = norm_df.index.to_datetime()
         fig, ax = data.plot_heatmap_in_period(norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
                                               option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
                                               save_df=False, figsize=(18,8))
 
-        # norm_df = pd.read_csv(save_dir+'s1_2d_KF__{0}__{1}_prob95_all_meas.csv'.format(time2str_file(t_start), time2str_file(t_end)),
-        #                       index_col=0)
-        # norm_df.index = norm_df.index.to_datetime()
-        # fig, ax = data.plot_heatmap_in_period(norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
-        #                                       option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
-        #                                       save_df=False, figsize=(18,8))
-
-        if False:
-            # overlay the ground truth on the data heatmap
-
-            # read the manual labeled ground truth
-            idx = []
-            times = []
-            lane_idx = []
-            with open('../datasets/{0}/v11/'.format(folder) + 'ground_truth_10min.txt','r') as f:
-                for line in f:
-                    if len(line) == 0 or line[0] == '#':
-                        continue
-                    items = line.strip().split(',')
-
-                    ms = items[0].split(':')
-                    sec = int(ms[0])*60+float(ms[1])
-                    idx.append( int( sec * 64)-200 )
-                    times.append( t_start + timedelta(seconds=sec ) )
-                    lane_idx.append(int(items[1]))
-
-            for t_idx, l_idx in zip(idx, lane_idx):
-                # ax.fill_between(norm_df.index, 0, 127, where=((norm_df.index>=veh[0]) & (norm_df.index<=veh[1])), facecolor='green',alpha=0.5  )
-
-                if l_idx == 1:
-                    col = 'g'
-                elif l_idx == 2:
-                    col = 'r'
-                rect = patches.Rectangle((t_idx, 0), 16, 128, linewidth=1, edgecolor=col,
-                                         facecolor=(0,1,0,0.2))
-                ax.add_patch(rect)
-
-
-            # plot ultrasonic sensor
-            fig, ax = plt.subplots(figsize=(18,5))
-            t_ultra = df.index
-            # mtimes = [mdates.date2num(t) for t in times]
-            ultra = df['ultra']
-            ax.plot(t_ultra, ultra)
-
-            for t, l_idx in zip(times, lane_idx):
-                if l_idx == 1:
-                    col = 'g'
-                    f_col = (0,1,0,0.2)
-                elif l_idx == 2:
-                    col = 'r'
-                    f_col = (1,0,0,0.2)
-
-                # rect = patches.Rectangle((t, 0.0), 0.2, 12,
-                #                          linewidth=1, edgecolor=col, facecolor=(0,1,0,0.2))
-                # ax.add_patch(rect)
-
-                ax.axvspan(t, t+ pd.datetools.Second(1), facecolor=f_col, edgecolor=col)
-
-            # assign date locator / formatter to the x-axis to get proper labels
-            # locator = mdates.AutoDateLocator(minticks=3)
-            # formatter = mdates.AutoDateFormatter(locator)
-            # ax.xaxis.set_major_locator(locator)
-            # ax.xaxis.set_major_formatter(formatter)
+        # deprecated
+        # if False:
+        #     # overlay the ground truth on the data heat map
+        #
+        #     # read the manual labeled ground truth
+        #     idx = []
+        #     times = []
+        #     lane_idx = []
+        #     with open('../datasets/{0}/v11/'.format(folder) + 'ground_truth_10min.txt','r') as f:
+        #         for line in f:
+        #             if len(line) == 0 or line[0] == '#':
+        #                 continue
+        #             items = line.strip().split(',')
+        #
+        #             ms = items[0].split(':')
+        #             sec = int(ms[0])*60+float(ms[1])
+        #             idx.append( int( sec * 64)-200 )
+        #             times.append( t_start + timedelta(seconds=sec ) )
+        #             lane_idx.append(int(items[1]))
+        #
+        #     for t_idx, l_idx in zip(idx, lane_idx):
+        #         # ax.fill_between(norm_df.index, 0, 127, where=((norm_df.index>=veh[0]) & (norm_df.index<=veh[1])), facecolor='green',alpha=0.5  )
+        #
+        #         if l_idx == 1:
+        #             col = 'g'
+        #         elif l_idx == 2:
+        #             col = 'r'
+        #         rect = patches.Rectangle((t_idx, 0), 16, 128, linewidth=1, edgecolor=col,
+        #                                  facecolor=(0,1,0,0.2))
+        #         ax.add_patch(rect)
+        #
+        #
+        #     # plot ultrasonic sensor
+        #     fig, ax = plt.subplots(figsize=(18,5))
+        #     t_ultra = df.index
+        #     # mtimes = [mdates.date2num(t) for t in times]
+        #     ultra = df['ultra']
+        #     ax.plot(t_ultra, ultra)
+        #
+        #     for t, l_idx in zip(times, lane_idx):
+        #         if l_idx == 1:
+        #             col = 'g'
+        #             f_col = (0,1,0,0.2)
+        #         elif l_idx == 2:
+        #             col = 'r'
+        #             f_col = (1,0,0,0.2)
+        #
+        #         # rect = patches.Rectangle((t, 0.0), 0.2, 12,
+        #         #                          linewidth=1, edgecolor=col, facecolor=(0,1,0,0.2))
+        #         # ax.add_patch(rect)
+        #
+        #         ax.axvspan(t, t+ pd.datetools.Second(1), facecolor=f_col, edgecolor=col)
+        #
+        #     # assign date locator / formatter to the x-axis to get proper labels
+        #     # locator = mdates.AutoDateLocator(minticks=3)
+        #     # formatter = mdates.AutoDateFormatter(locator)
+        #     # ax.xaxis.set_major_locator(locator)
+        #     # ax.xaxis.set_major_formatter(formatter)
 
         plt.draw()
 
 
-def test_alg():
+def run_traffic_detection():
+    """
+    This function runs the vehicle detection and speed estimation algorithm for three data sets. Note the third test has
+    two sensors (one on each side), and the detection algorithm is applied to each sensor data separately. The detection
+    results from two sensors are combined in the evaluation function in the current version of code. The combination of
+    two the detection results should be moved to the traffic detection class later. Putting the combination in the
+    evaluation class is purely for ease of implementation and does not affect the accuracy results presented in paper.
+
+    Set False to True to run the detection algorithm for each data set.
+
+    :return:
+    """
 
     # ===============================================================================================
-    # data set 0530, S1: 20:55 ~ 21:45;
-    # Two sensors on both sides of road at the same location. Freeflow on Neil in Savoy
+    # Test 1: dataset Jun 08, 2017 on 6th street down near the parking lot.
+    # collected data 21:40 ~ 22:20 UTC
     # ===============================================================================================
     if False:
-        folder = '0530_2017'
-        speed_range = (-71,-1)
+
+        # Set up the directory
+        folder = 'Jun08_2017'
         save_dir = '../workspace/{0}/'.format(folder)
+
+        # Measured the traffic in one direction, hence negative. The current version of the algorithm does not support
+        # stopped traffic yet, hence the range starts from 1 mph.
+        speed_range = (-71,-1)  # mph
+
+        # read in the normalized data from the process_data() function.
+        norm_df = pd.read_csv(save_dir +
+                              's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv', index_col=0)
+        norm_df.index = norm_df.index.to_datetime()
+
+        # Set up the algorithm parameters.
+        # The parameters pir_res and sampling frequency are inherent to the sensor.
+        # The parameters r2_thres, dens_thres, min_dt determines the detection performance. See paper for more deteails.
+        alg = TrafficSensorAlg(r2_thres=0.2, dens_thres=0.4, min_dt=0.2, pir_res=(4,32), sampling_freq=64)
+
+        # The detection window is adaptive to capture the full trajectory of the vehicle. But parameters window_s and
+        # step_s sets the initial time window for detection.
+        alg.run_adaptive_window(norm_df, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=False,
+                                plot_debug=False, save_dir='../workspace/{0}/figs/speed/'.format(folder),
+                                t_start=str2time('2017-06-08 21:40:00.0'), t_end=str2time('2017-06-08 22:20:00.0'))
+
+
+    # ===============================================================================================
+    # Test 2: dataset Jun 09, 2017, 19:10~20:39
+    # ===============================================================================================
+    if False:
+
+        # Set up the directory
+        folder = 'Jun09_2017'
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        speed_range = (-71,-1)  # mph
+
+        # read in the normalized data from the process_data() function.
+        norm_df = pd.read_csv(save_dir +
+                              's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv', index_col=0)
+        norm_df.index = norm_df.index.to_datetime()
+
+        # Set up the algorithm parameters.
+        alg = TrafficSensorAlg(r2_thres=0.2, dens_thres=0.4, min_dt=0.2, pir_res=(4,32), sampling_freq=64)
+
+        # Run the algorithm
+        alg.run_adaptive_window(norm_df, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
+                                plot_debug=False, save_dir='../workspace/{0}/figs/speed/'.format(folder),
+                                t_start=None, t_end=None)
+
+    # ===============================================================================================
+    # Test 3, sensor 1:  data set 0530, S1: 20:55 ~ 21:45
+    # ===============================================================================================
+    if False:
+
+        # Set up directory
+        folder = '0530_2017'
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        speed_range = (-71,-1)  # mph
 
         # read in the data with background subtracted.
         norm_df = pd.read_csv(save_dir +
                               's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv', index_col=0)
         norm_df.index = norm_df.index.to_datetime()
 
-        # Plot the norm_df
-        # data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
-        # fig, ax = data.plot_heatmap_in_period(norm_df, t_start=str2time('2017-05-30 21:21:0.0'),
-        #                                       t_end=str2time('2017-05-30 21:21:10.0'),
-        #                                       cbar=(0,4), option='vec', nan_thres_p=None, plot=True,
-        #                                       save_dir=save_dir, save_img=False, save_df=False, figsize=(18,8))
-        #
+        # Set up algorithm parameters
         alg = TrafficSensorAlg(r2_thres=0.2, dens_thres=0.4, min_dt=0.2, pir_res=(4,32), sampling_freq=64)
 
-        # To plot overlapping cluster splitting
-        # str2time('2017-05-30 21:21:02.0')    to   str2time('2017-05-30 21:21:10.0')
-        # To plot different width and robust regression
-        # str2time('2017-05-30 20:55:0.0')     to   str2time('2017-05-30 20:55:10.0')
-        # alg.run_adaptive_window(norm_df, TH_det=600, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
-        #                         plot_debug=True, save_dir='../workspace/{0}/figs/speed/s1/'.format(folder),
-        #                         t_start=str2time('2017-05-30 21:21:02.0'),
-        #                         t_end=str2time('2017-05-30 21:21:10.0'))
-        alg.run_adaptive_window(norm_df, TH_det=600, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
+        # Run detection algorithm using adaptive window
+        alg.run_adaptive_window(norm_df, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
                                 plot_debug=False, save_dir='../workspace/{0}/figs/speed/s1/'.format(folder),
                                 t_start=str2time('2017-05-30 20:55:0.0'),
                                 t_end=str2time('2017-05-30 21:45:00.0'))
 
     # ===============================================================================================
-    # data set 0530, S2: 20:55 ~ 21:45
+    # Test 3, sensor 2: data set 0530, S2: 20:55 ~ 21:45
     # ===============================================================================================
-    if True:
+    if False:
+
+        # Set up directory
         folder = '0530_2017'
-        sensor = 's2'
-        speed_range = (1,71)
         save_dir = '../workspace/{0}/'.format(folder)
+
+        # This sensor is on the other side of the road, hence the speed direction measured in positive.
+        speed_range = (1,71)
 
         # read in the data with background subtracted.
         norm_df = pd.read_csv(save_dir +
                               's2_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv', index_col=0)
         norm_df.index = norm_df.index.to_datetime()
 
-        # Plot the norm_df
-        # data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
-        # fig, ax = data.plot_heatmap_in_period(norm_df, t_start=None, t_end=None, cbar=(0,4),
-        #                                           option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
-        #                                           save_df=False, figsize=(18,8))
-
+        # Set up algorithm parameters
         alg = TrafficSensorAlg(r2_thres=0.2, dens_thres=0.4, min_dt=0.2, pir_res=(4,32), sampling_freq=64)
 
-        alg.run_adaptive_window(norm_df, TH_det=600, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
+        # Run detection algorithm using adaptive windows.
+        alg.run_adaptive_window(norm_df, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
                                 plot_debug=False, save_dir='../workspace/{0}/figs/speed/s2/'.format(folder),
                                 t_start=str2time('2017-05-30 20:55:00.0'),
                                 t_end=str2time('2017-05-30 21:45:00.0'))
 
-    # ===============================================================================================
-    # dataset Jun 08, 2017 on 6th street down near the parking lot.
-    # Saved data is 21:40 ~ 22:20 UTC
-    # ===============================================================================================
-    if False:
-        folder = 'Jun08_2017'
-        speed_range = (-71,-1)
-        save_dir = '../workspace/{0}/'.format(folder)
 
-        # read in the data with background subtracted.
-        norm_df = pd.read_csv(save_dir +
-                              's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv', index_col=0)
-        norm_df.index = norm_df.index.to_datetime()
-
-        # Plot the norm_df
-        # data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
-        # fig, ax = data.plot_heatmap_in_period(norm_df, t_start=None, t_end=None, cbar=(0,4),
-        #                                           option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
-        #                                           save_df=False, figsize=(18,8))
-
-        alg = TrafficSensorAlg(r2_thres=0.2, dens_thres=0.4, min_dt=0.2, pir_res=(4,32), sampling_freq=64)
-
-        alg.run_adaptive_window(norm_df, TH_det=600, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=False,
-                                plot_debug=False, save_dir='../workspace/{0}/figs/speed/'.format(folder),
-                                t_start=str2time('2017-06-08 21:40:00.0'), t_end=str2time('2017-06-08 22:20:00.0'))
-
-
-    # ===============================================================================================
-    # dataset Jun 09, 2017, same setup as Jun 08: 19:10~20:39
-    # ===============================================================================================
-    if False:
-        folder = 'Jun09_2017'
-        speed_range = (-71,-1)
-
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        # read in the data with background subtracted.
-        norm_df = pd.read_csv(save_dir +
-                              's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv', index_col=0)
-        norm_df.index = norm_df.index.to_datetime()
-
-        # Plot the norm_df
-        # data = SensorData(pir_res=(4,32), save_dir=save_dir, plot=False)
-        # fig, ax = data.plot_heatmap_in_period(norm_df, t_start=None, t_end=None, cbar=(0,4),
-        #                                           option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
-        #                                           save_df=False, figsize=(18,8))
-
-        alg = TrafficSensorAlg(r2_thres=0.2, dens_thres=0.4, min_dt=0.2, pir_res=(4,32), sampling_freq=64)
-
-        alg.run_adaptive_window(norm_df, TH_det=600, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
-                                plot_debug=False, save_dir='../workspace/{0}/figs/speed/'.format(folder),
-                                t_start=None, t_end=None)
-
-
-def trim_results():
-    """
-    This function trims the same time period out from the datasets for evaluation.
-    For detection result:
-        - Add a column
-    :return:
-    """
-    # ===============================================================================================
-    # data set Jun08, 2017, S1: trim to 21:40~22:20
-    # ===============================================================================================
-    if False:
-        folder = 'Jun08_2017'
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        t_period_start = str2time('2017-06-08 21:40:00.0')
-        t_period_end = str2time('2017-06-08 22:20:00.0')
-
-        vehs_npy = save_dir + 'figs/speed/v3_final/detected_vehs.npy'
-
-        # Ground trueth
-        init_t = str2time('2017-06-08 21:32:18.252811')
-        offset = -0.28
-        drift_ratio = 1860.5/1864.0
-        true_file = save_dir + 'labels_Jun08.npy'
-
-        # Trimming
-        eval = EvaluateResult()
-
-        # trim the norm_df
-        if False:
-            norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
-            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
-
-        if True:
-            # paras_file = save_dir + 'figs/speed/v3_final/paras.txt'
-            # norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
-
-            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
-                                 ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
-
-        if False:
-            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
-
-
-    # ===============================================================================================
-    # data set Jun09, 2017, S1, trim to 19:10~20:39
-    # ===============================================================================================
-    if True:
-        folder = 'Jun09_2017'
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        t_period_start = str2time('2017-06-09 19:10:00.0')
-        t_period_end = str2time('2017-06-09 20:39:00.0')
-
-        vehs_npy = save_dir + 'figs/speed/detected_vehs.npy'
-
-        # Ground truth
-        init_t = str2time('2017-06-09 19:09:00.0')
-        offset = -0.66
-        drift_ratio = 1860.5/1864.0
-        true_file = save_dir + 'labels_Jun09.npy'
-
-        # Trimming
-        eval = EvaluateResult()
-
-        # trim the norm_df
-        if False:
-            norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
-            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
-
-        if True:
-            # paras_file = save_dir + 'figs/speed/paras.txt'
-            # norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
-
-            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
-                                 ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
-
-        if False:
-            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
-
-
-    # ===============================================================================================
-    # data set 0530, 2017, S1: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
-    # ===============================================================================================
-    if False:
-        folder = '0530_2017'
-        t_period_start = str2time('2017-05-30 20:55:00.0')
-        t_period_end = str2time('2017-05-30 21:45:00.0')
-
-        # Configuration
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        # Detections
-        paras_file = save_dir + 'figs/speed/s1/paras.txt'
-        norm_df_file = save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
-        vehs_npy = save_dir + 'figs/speed/s1/detected_vehs.npy'
-
-        # Ground truth
-        # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
-        init_t = str2time('2017-05-30 20:55:00.0')
-        offset = -0.48
-        drift_ratio = 1860.6/1864.0
-        true_file = save_dir + 'labels_v11.npy'
-
-        # Trimming
-        eval = EvaluateResult()
-
-        # trim the norm_df
-        if False:
-            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
-
-        if False:
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
-
-            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
-                                 ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
-
-        if True:
-            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
-
-    # ===============================================================================================
-    # data set 0530, 2017, S2: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
-    # ===============================================================================================
-    if False:
-        folder = '0530_2017'
-        t_period_start = str2time('2017-05-30 20:55:00.0')
-        t_period_end = str2time('2017-05-30 21:45:00.0')
-
-        # Configuration
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        # Detection
-        paras_file = save_dir + 'figs/speed/s2/paras.txt'
-        norm_df_file = save_dir + 's2_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
-        vehs_npy = save_dir + 'figs/speed/s2/detected_vehs.npy'
-
-        # Ground truth
-        # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
-        init_t = str2time('2017-05-30 20:55:00.0')
-        offset = 2.102
-        drift_ratio = 1860.6/1864.0
-        true_file = save_dir + 'labels_v21_post.npy'
-
-        # Trimming
-        eval = EvaluateResult()
-
-        # trim the norm_df
-        if False:
-            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
-
-        if False:
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
-            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
-                                 ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
-
-        if True:
-            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
-
-
-def evaluation():
+def evaluate_accuracy():
     """
     This function plot the detection results. MAKE SURE the run trim_results first.
     :return:
@@ -887,6 +757,9 @@ def evaluation():
                               t_end=str2time('2017-06-09 19:35:00.0'), matches=matched_vehs)
 
 
+
+
+
 def plot_hist(s1_det, s2_det, true_s1, true_s2):
     """
     This function plots the speed histogram of detections
@@ -1055,5 +928,169 @@ def update_fps(offset1, offset2, T, fps):
     """
     return fps*(T-offset1+offset2)/T
 
+
+def trim_results():
+    """
+    This function trims the same time period out from the datasets for evaluation.
+    For detection result:
+        - Add a column
+    :return:
+    """
+    # ===============================================================================================
+    # data set Jun08, 2017, S1: trim to 21:40~22:20
+    # ===============================================================================================
+    if False:
+        folder = 'Jun08_2017'
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        t_period_start = str2time('2017-06-08 21:40:00.0')
+        t_period_end = str2time('2017-06-08 22:20:00.0')
+
+        vehs_npy = save_dir + 'figs/speed/v3_final/detected_vehs.npy'
+
+        # Ground truth
+        init_t = str2time('2017-06-08 21:32:18.252811')
+        offset = -0.28
+        drift_ratio = 1860.5/1864.0
+        true_file = save_dir + 'labels_Jun08.npy'
+
+        # Trimming
+        eval = EvaluateResult()
+
+        # trim the norm_df
+        if False:
+            norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
+            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
+
+        if True:
+            # paras_file = save_dir + 'figs/speed/v3_final/paras.txt'
+            # norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
+            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
+
+            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
+                                 ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
+
+        if False:
+            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
+
+
+    # ===============================================================================================
+    # data set Jun09, 2017, S1, trim to 19:10~20:39
+    # ===============================================================================================
+    if True:
+        folder = 'Jun09_2017'
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        t_period_start = str2time('2017-06-09 19:10:00.0')
+        t_period_end = str2time('2017-06-09 20:39:00.0')
+
+        vehs_npy = save_dir + 'figs/speed/detected_vehs.npy'
+
+        # Ground truth
+        init_t = str2time('2017-06-09 19:09:00.0')
+        offset = -0.66
+        drift_ratio = 1860.5/1864.0
+        true_file = save_dir + 'labels_Jun09.npy'
+
+        # Trimming
+        eval = EvaluateResult()
+
+        # trim the norm_df
+        if False:
+            norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
+            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
+
+        if True:
+            # paras_file = save_dir + 'figs/speed/paras.txt'
+            # norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
+            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
+
+            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
+                                 ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
+
+        if False:
+            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
+
+
+    # ===============================================================================================
+    # data set 0530, 2017, S1: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
+    # ===============================================================================================
+    if False:
+        folder = '0530_2017'
+        t_period_start = str2time('2017-05-30 20:55:00.0')
+        t_period_end = str2time('2017-05-30 21:45:00.0')
+
+        # Configuration
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        # Detections
+        paras_file = save_dir + 'figs/speed/s1/paras.txt'
+        norm_df_file = save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
+        vehs_npy = save_dir + 'figs/speed/s1/detected_vehs.npy'
+
+        # Ground truth
+        # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
+        init_t = str2time('2017-05-30 20:55:00.0')
+        offset = -0.48
+        drift_ratio = 1860.6/1864.0
+        true_file = save_dir + 'labels_v11.npy'
+
+        # Trimming
+        eval = EvaluateResult()
+
+        # trim the norm_df
+        if False:
+            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
+
+        if False:
+            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
+
+            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
+                                 ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
+
+        if True:
+            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
+
+    # ===============================================================================================
+    # data set 0530, 2017, S2: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
+    # ===============================================================================================
+    if False:
+        folder = '0530_2017'
+        t_period_start = str2time('2017-05-30 20:55:00.0')
+        t_period_end = str2time('2017-05-30 21:45:00.0')
+
+        # Configuration
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        # Detection
+        paras_file = save_dir + 'figs/speed/s2/paras.txt'
+        norm_df_file = save_dir + 's2_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
+        vehs_npy = save_dir + 'figs/speed/s2/detected_vehs.npy'
+
+        # Ground truth
+        # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
+        init_t = str2time('2017-05-30 20:55:00.0')
+        offset = 2.102
+        drift_ratio = 1860.6/1864.0
+        true_file = save_dir + 'labels_v21_post.npy'
+
+        # Trimming
+        eval = EvaluateResult()
+
+        # trim the norm_df
+        if False:
+            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
+
+        if False:
+            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
+            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
+                                 ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
+
+        if True:
+            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
+
+
 if __name__ == '__main__':
     main()
+
+
