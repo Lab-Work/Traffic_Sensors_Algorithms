@@ -146,11 +146,15 @@ def suppress_stdout():
 
 
 # ==================================================================================================================
-# Top level traffic sensor algorithm
+# Top level traffic sensor algorithm running on each PIR data stream
 # ==================================================================================================================
 class TrafficSensorAlg:
     """
-    This class performs vehicle detection and speed estimation on normalized data set in pandas DataFrame structure.
+    This class performs vehicle detection and speed estimation on normalized streaming data from each PIR.
+        - It receives streaming data and adaptively create data windows (bins).
+        - The preliminary detection of vehicles in each data window is performed by the function detect_vehs.
+        - If detect_vehs returns positive detections, it will call SpeedEst class to confirm or remove false positives,
+          and perform speed estimation for each detected vehicle.
     """
 
     def __init__(self, r2_thres=0.2, dens_thres=0.5, min_dt=0.2, pir_res=(4, 32), sampling_freq=64):
@@ -294,7 +298,7 @@ class TrafficSensorAlg:
         self._save_paras(save_dir, 'paras.txt')
 
     def run_adaptive_window(self, norm_df, window_s=2.0, step_s=1.0, speed_range=(1, 50),
-            plot_final=True, plot_debug=False, save_dir='./', t_start=None, t_end=None):
+            plot_final=True, plot_debug=False, save_dir='./', sensor='s1', t_start=None, t_end=None):
         """
         This function runs the vehicle detection and speed estimation algorithm on the normalized data norm_df in a
         sliding window fashion with overlapping.
@@ -304,13 +308,14 @@ class TrafficSensorAlg:
         :param speed_range: (1,50) mph, the range of speeds to be estimated
         :param plot_final: True or False, if want to plot the final estimates for each time window
         :param plot_debug: True or False, if want to plot the process, including splitting the clusters
+        :param sensor: string, the sensor id. Only used for naming the result
         :param save_dir: directory for saving the results
         :param t_start: datetime
         :param t_end: datetime
         :return:
         """
         # -------------------------------------------------------------------------------------------------------
-        # Only work on those data within in the time interval
+        # Select the data period
         if t_start is None: t_start = norm_df.index[0]
         if t_end is None: t_end = norm_df.index[-1]
 
@@ -329,7 +334,11 @@ class TrafficSensorAlg:
 
         # -------------------------------------------------------------------------------------------------------
         # Speed estimation
+
+        # Detection and speed estimation results will be saved in save_dir
         if not exists(save_dir): os.makedirs(save_dir)
+        # All figures will be saved in save_dir/figs
+        if not exists(save_dir+'figs/'): os.makedirs(save_dir+'figs/')
 
         i = 0
         w_start, w_end = windows[0][0], windows[0][0]
@@ -353,7 +362,7 @@ class TrafficSensorAlg:
 
                     est = SpeedEst(norm_df=_norm_df.ix[frames_win,:], paras=self.paras, window_s=w_sec,
                            speed_range=speed_range,
-                           plot_final=plot_final, plot_debug=plot_debug, save_dir=save_dir)
+                           plot_final=plot_final, plot_debug=plot_debug, save_dir=save_dir+'figs/')
                     vehs_in_win = est.estimate_speed()
 
                     # print('               debug: Finished with {0} vehicles'.format(len(vehs_in_win)))
@@ -393,9 +402,9 @@ class TrafficSensorAlg:
             if v is not None:
                 _vehs.append(v)
 
-        np.save(save_dir + 'detected_vehs.npy', _vehs)
-        self._save_det_vehs_txt(_vehs, save_dir, 'detected_vehs.txt')
-        self._save_paras(save_dir, 'paras.txt')
+        np.save(save_dir + sensor + '_detected_vehs.npy', _vehs)
+        self._save_det_vehs_txt(_vehs, save_dir, sensor + '_detected_vehs.txt')
+        self._save_paras(save_dir, sensor + '_detector_paras.txt')
 
         # -------------------------------------------------------------------------------------------------------
         # Check the convergence rate
@@ -642,73 +651,64 @@ class TrafficSensorAlg:
                 f.write('{0}: {1}\n'.format(key, self.paras[key]))
 
 
-class EvaluateResult:
+# ==================================================================================================================
+# Post processing class which post-processes the detection result, combines the detection result from two PIR sensors at
+# the same location, and post-processes the computer vision result using video camera.
+# ==================================================================================================================
+class PostProcess:
     """
-    This class evaluates and visualizes the estimation results.
+    This class post processes the detection results for accuracy evaluation.
+        - Combine the detection result from two PIR data streams at the same location to a combined multi-lane detection.
+        - Post process data set Ultrasonic sensor noise.
+        - Post process computer vision algorithm result to remove false positives, or negatives.
     """
     def __init__(self):
-        self.mps2mph = 2.23694  # 1 m/s = 2.23694 mph
-
-    def post_trim_norm_df(self, norm_df_file, t_start, t_end):
-        """
-        This function
-            - trims the norm_df to contain only data in [t_start, t_end]
-        :param norm_df_file: the dataframe data structure containing the raw data
-        :param t_start: datetime
-        :param t_end: datetime
-        :return:
-        """
-        norm_df = pd.read_csv(norm_df_file, index_col=0)
-        norm_df.index = norm_df.index.to_datetime()
-
-        # save the slices in the time period
-        frames = norm_df.index[ (norm_df.index >= t_start) & (norm_df.index <= t_end) ]
-        norm_df.loc[frames,:].to_csv(norm_df_file.replace('.csv', '_post.csv'))
-
-    def post_clean_ultra_norm_df(self, norm_df_file, paras_file):
-        """
-        This function
-            - cleans the ultrasonic sensor data and save in column clean_ultra in norm_df new file
-            - the purpose is only for visualization
-        :param norm_df_file: the dataframe data structure containing the raw data
-        :param paras_file: the paras used to generate det_npy
-        :return:
-        """
-
-        paras = self._load_paras(paras_file)
-        norm_df = pd.read_csv(norm_df_file, index_col=0)
-        norm_df.index = norm_df.index.to_datetime()
-
-        # ----------------------------------------------------------------------------
-        # First clean the ultrasonic sensor data and save in norm df additional column
-        ultra = norm_df['ultra']
-        clean_ultra = self._clean_ultra(ultra, paras, TH_ultra_fp=None)
-        norm_df['clean_ultra'] = clean_ultra
-
-        norm_df.to_csv(norm_df_file.replace('.csv', '_clean_ultra.csv'))
+        self.mps2mph = 2.23694  # m/s to mph
 
 
-    def post_trim_detection(self, det_npy_file, t_start, t_end,
+    @staticmethod
+    def postprocess_detection(det_npy_file, t_start, t_end,
                             ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0,70.0)):
         """
-        This function
-            - trims the det_npy to contain only data in [t_start, t_end]
-            - update the distance, speed, and valid for the det_npy
+        This function postprocesses the detection result:
+            - trims the det_npy to period [t_start, t_end], where we also have the computer vision truth
+            - FOR DEBUG ONLY: quickly generate updated result with new parameters (ultra_fp_lb, ultra_fp_ub, speed_range)
+              without rerun the entire vehicle detection algorithm.
         :param det_npy_file: the detection result
         :param t_start: datetime
         :param t_end: datetime
-        :param ultra_fp_lb: float, the lower bound for cleaning the ultrasonic false positives
-        :param ultra_fp_ub: float, the upper bound for cleaning the ultrasonic false positives. If a reading is above
-            ultra_fp_ub, then it is regarded as invalid.
+        :param ultra_fp_lb: float, the lower bound for false positives ultrasonic reading.
+            If ultra_reading < ultra_fp_lb, then it is false positive and invalid
+        :param ultra_fp_ub: float, the upper bound for false positives ultrasonic reading.
+            If ultra_reading > ultra_fp_ub, then it is false positive and invalid
         :param speed_range: mph, the speed range
         :return: trimmed and processed data will be saved in
-            - norm_df file name with _post.csv
             - det_npy with _post.npy
         """
 
-        # Trim and clean the detection result
-        vehs = self._load_clean_detection(det_npy_file, ultra_fp_lb=ultra_fp_lb, ultra_fp_ub=ultra_fp_ub,
-                                          speed_range=speed_range)
+        # a list of historical distances.
+        dists = []
+
+        med_dist = 6.0
+        vehs = np.load(det_npy_file)
+
+        for veh in vehs:
+            if veh['distance'] >= ultra_fp_ub or veh['distance'] <= ultra_fp_lb:
+                veh['speed'] = veh['speed']*med_dist/veh['distance']
+                # remove false positive ultrasonic reading and replace with historical median
+                veh['distance'] = med_dist
+                veh['valid'] = False
+            else:
+                # valid ultrasonic sensor reading.
+                dists.append(veh['distance'])
+                med_dist = np.median(dists)
+
+            # cap the speed in range
+            if abs(veh['speed']) < speed_range[0]:
+                veh['speed'] = veh['speed']*speed_range[0]/abs(veh['speed'])
+            elif abs(veh['speed']) > speed_range[1]:
+                veh['speed'] = veh['speed']*speed_range[1]/abs(veh['speed'])
+
 
         # Save the vehicles detected within the period
         vehs_idx = []
@@ -721,20 +721,20 @@ class EvaluateResult:
     def post_trim_true_detection(self, true_det_file, init_t, offset, drift_ratio, t_start, t_end):
         """
         This function
-            - trims the true detection npy to the period (t_start, t_end)
-            - corrects the timestamps (which drifts using constant 60 fps)
+            - trims the true detection npy to the period [t_start, t_end], where we have PIR data
+            - corrects the timestamps (which drifts when using constant 60 fps)
             - convert the speed to mph
             - remove erroneous true vehicles with speed being negative or np.nan or np.inf
-        :param true_det_file: the true npy file
+        :param true_det_file: the true npy file generated by the computer vision algorithm
             start time (s), end time (s), speed (m/s), distance (m), image speed (px/frame), image distance (px)
         :param init_t: datetime, the starting time for the true detections
         :param offset: t_true = t_s*drift_ratio + offset
         :param drift_ratio:t_true = t_s*drift_ratio + offset
-        :param t_start: start time of the period
-        :param t_end: end time of the period
+        :param t_start: datetime, start time of the period
+        :param t_end: datetime, end time of the period
         :return: result saved in
             true_det_file + _post.npy
-            start_time (dt), end_time (dt), speed (mph), distance (m), image speed (px/frame), image distance (px)
+        start_time (datetime), end_time (datetime), speed (mph), distance (m), image speed (px/frame), image distance (px)
         """
 
         true_vehs = np.load(true_det_file)
@@ -801,395 +801,21 @@ class EvaluateResult:
         idx = _t_idx  & _speed_idx
         np.save(true_det_file.replace('.npy', '_post.npy'), true_vehs[idx,:])
 
-
-    def plot_det_vs_true(self, norm_df, paras_file, vehs=None, true_vehs=None, t_start=None, t_end=None, matches=None):
-
-        paras = self._load_paras(paras_file)
-
-        fig = plt.figure(figsize=(18, 10))
-        gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
-
-        # axis 0 is the scattered PIR plot
-        # axis 1 is the ultrasonic plot
-        ax_pir = plt.subplot(gs[0])
-        ax_ultra = plt.subplot(gs[1], sharex=ax_pir)
-        plt.setp(ax_pir.get_xticklabels(), visible=False)
-
-        # ==============================================================================
-        # only plot the data in time interval
-        if t_start is None: t_start = norm_df.index[0]
-        if t_end is None: t_end = norm_df.index[-1]
-
-        print('\n########################## Visualization: ')
-        print('                 Data interval from: {0}'.format(norm_df.index[0]))
-        print('                                 to: {0}'.format(norm_df.index[-1]))
-        print('                 Plotting interval from: {0}'.format(t_start))
-        print('                                     to: {0}'.format(t_end))
-
-        # save the batch normalized data
-        frames = norm_df.index[ (norm_df.index >= t_start) & (norm_df.index <= t_end) ]
-        plot_df = norm_df.loc[frames,:]
-
-        # align t_start and t_end
-        t_start = plot_df.index[0]
-        t_end = plot_df.index[-1]
-
-        # ==============================================================================
-        # Plot the detection result
-        # --------------------------------------------------------
-        # plot all the data point, perform nonlinear transform
-        # ax_pir general
-        pts, t_grid, x_grid = self._tx_representation(plot_df, paras)
-        ax_pir.scatter(pts[:,0], pts[:,1], color='0.6')
-
-        # ax_ultra general
-        ultra = plot_df['ultra']
-        clean_ultra = plot_df['clean_ultra']
-        tmp_t = ultra.index - t_start
-        rel_t = [i.total_seconds() for i in tmp_t]
-        ax_ultra.plot(rel_t, ultra.values, linewidth=2, marker='*')
-        ax_ultra.plot(rel_t, clean_ultra.values, linewidth=2, color='r')
-
-        # plot the detected vehicles
-        if vehs is not None:
-            colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple'])
-            for veh in vehs:
-
-                # vehicle enter and exit time
-                t_left_s = (veh['t_left']-t_start).total_seconds()
-                t_right_s = (veh['t_right']-t_start).total_seconds()
-
-                # only plot those within the interval
-                if np.max([t_left_s, t_right_s]) <=0 or np.min([t_left_s, t_right_s]) >= (t_end-t_start).total_seconds():
-                    continue
-
-                # plot the supporting points and the line
-                c = next(colors)
-                sup_pts = np.array( [[(p[0]-t_start).total_seconds(), p[1]] for p in veh['inliers']] )
-                ax_pir.scatter(sup_pts[:,0], sup_pts[:,1], color=c, alpha=0.75)
-
-                if 'closer_lane' in veh.keys() and veh['closer_lane'] is False:
-                    ax_pir.plot([t_left_s, t_right_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k', linestyle=':')
-                else:
-                    ax_pir.plot([t_left_s, t_right_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k')
-
-                # plot the used distance value
-                ax_ultra.plot([t_left_s, t_right_s], [veh['distance'], veh['distance']], linewidth=2, color=c)
-
-        ax_pir.set_title('{0} ~ {1}'.format(time2str(t_start), time2str(t_end)), fontsize=20)
-        # ax_pir.set_xlabel('Relative time (s)', fontsize=18)
-        ax_pir.set_ylabel('Space (x 6d = m)', fontsize=18)
-        ax_pir.set_xlim([t_grid[0], t_grid[-1]])
-        ax_pir.set_ylim([x_grid[-1], x_grid[0]])
-
-        ax_ultra.set_title('Ultrasonic data', fontsize=20)
-        ax_ultra.set_ylabel('Distance (m)', fontsize=18)
-        ax_ultra.set_xlabel('Relative Time (s)', fontsize=18)
-        ax_ultra.set_ylim([0,12])
-        ax_ultra.set_xlim([rel_t[0], rel_t[-1]])
-
-
-        # ==============================================================================
-        # Plot the true vehicle detection
-        if true_vehs is not None:
-            for true_v in true_vehs:
-
-                mean_t_s = ((true_v[0]-t_start).total_seconds() + (true_v[1]-t_start).total_seconds())/2.0
-
-                # only plot those within the interval
-                if (true_v[1]-t_start).total_seconds() <= 0 or \
-                                (true_v[0]-t_start).total_seconds() >= (t_end-t_start).total_seconds(): continue
-
-                # compute the slope
-                slope = true_v[2]/(self.mps2mph*paras['tx_ratio']*true_v[3])
-                true_t_in_s, true_t_out_s = mean_t_s + x_grid[0]/slope, mean_t_s + x_grid[-1]/slope
-
-                # plot the true vehicle line in pir
-                ax_pir.plot([true_t_in_s, true_t_out_s], [x_grid[-1], x_grid[0]], linewidth=2, linestyle='--', color='k')
-                # plt the true vehicle distance in ultra
-                ax_ultra.plot([true_t_in_s, true_t_out_s], [true_v[3], true_v[3]], linewidth=2, linestyle='--', color='k')
-
-
-        # ==============================================================================
-        # plot the matches of the detected vehicle and the true vehicles
-        markers = itertools.cycle(['o', 'v', '^', 's'])
-        if matches is not None:
-            for ma in matches:
-                m = next(markers)
-                if not pd.isnull(ma[4]):
-                    ax_pir.scatter((ma[4]-t_start).total_seconds(), 0, marker=m, c='r', s=50)
-                if not pd.isnull(ma[5]):
-                    ax_pir.scatter((ma[5]-t_start).total_seconds(), 0, marker=m, c='r', s=50)
-
-        plt.draw()
-
-
-    def plot_two_lane_vs_true(self, s1_df, s1_vehs, s1_true=None, s1_paras_file=None, s2_df=None, s2_vehs=None,
-                          s2_true=None, s1s2_shift=0.33, t_start=None, t_end=None, unique_vehs=None):
-
-        paras = self._load_paras(s1_paras_file)
-
-        fig = plt.figure(figsize=(18, 10))
-        gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
-
-        # axis 0 is the scattered PIR plot
-        # axis 1 is the ultrasonic plot
-        ax_pir = plt.subplot(gs[0])
-        ax_ultra = plt.subplot(gs[1], sharex=ax_pir)
-        plt.setp(ax_pir.get_xticklabels(), visible=False)
-
-        # ==============================================================================
-        # only plot the data in time interval
-        if t_start is None: t_start = s1_df.index[0]
-        if t_end is None: t_end = s1_df.index[-1]
-
-        print('\n########################## Visualization: ')
-        print('                 Data interval from: {0}'.format(s1_df.index[0]))
-        print('                                 to: {0}'.format(s1_df.index[-1]))
-        print('                 Plotting interval from: {0}'.format(t_start))
-        print('                                     to: {0}'.format(t_end))
-
-        # save the batch normalized data
-        frames = s1_df.index[ (s1_df.index >= t_start) & (s1_df.index <= t_end) ]
-        plot_df = s1_df.loc[frames,:]
-
-        # align t_start and t_end
-        t_start = plot_df.index[0]
-        t_end = plot_df.index[-1]
-
-        # ==============================================================================
-        # Plot the detection result
-        # --------------------------------------------------------
-        # plot all the data point, perform nonlinear transform
-        # ax_pir general
-        pts, t_grid, x_grid = self._tx_representation(plot_df, paras)
-        ax_pir.scatter(pts[:,0], pts[:,1], color='0.6')
-
-        # ax_ultra general
-        ultra = plot_df['ultra']
-        clean_ultra = plot_df['clean_ultra']
-        tmp_t = ultra.index - t_start
-        rel_t = [i.total_seconds() for i in tmp_t]
-        # ax_ultra.plot(rel_t, ultra.values, linewidth=2, marker='*')
-        ax_ultra.plot(rel_t, clean_ultra.values, linewidth=2, color='g', label='s1', linestyle='--')
-
-        # plot the s2 ultra
-        s2_ultra = s2_df['ultra']
-        s2_clean_ultra = s2_df['clean_ultra']
-        tmp_t = s2_ultra.index - t_start
-        s2_rel_t = [i.total_seconds()+s1s2_shift for i in tmp_t]
-        # ax_ultra.plot(s2_rel_t, s2_ultra.values, linewidth=2, marker='*')
-        ax_ultra.plot(s2_rel_t, s2_clean_ultra.values, linewidth=2, color='b', label='s2', linestyle='--')
-
-        # plot the detected vehicles
-        colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple'])
-        for veh in s1_vehs:
-
-            # vehicle enter and exit time
-            t_left_s = (veh['t_left']-t_start).total_seconds()
-            t_right_s = (veh['t_right']-t_start).total_seconds()
-
-            # only plot those within the interval
-            if np.max([t_left_s, t_right_s]) <=0 or np.min([t_left_s, t_right_s]) >= (t_end-t_start).total_seconds():
-                continue
-
-            # plot the supporting points and the line
-            c = next(colors)
-            sup_pts = np.array( [[(p[0]-t_start).total_seconds(), p[1]] for p in veh['inliers']] )
-            ax_pir.scatter(sup_pts[:,0], sup_pts[:,1], color=c, alpha=0.5)
-
-            if 'closer_lane' in veh.keys() and veh['closer_lane'] is False:
-                ax_pir.plot([t_left_s, t_right_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k', linestyle=':')
-            else:
-                ax_pir.plot([t_left_s, t_right_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k')
-
-            # plot the used distance value
-            m_t_s = (t_left_s+t_right_s)/2.0
-            if veh['valid'] is True:
-                ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [veh['distance'], veh['distance']], linewidth=2, color='k')
-            else:
-                ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [veh['distance'], veh['distance']], linewidth=2, color='k', linestyle=':')
-
-        # plot the other lane detected vehicles
-        if s2_vehs is not None:
-            for s2_v in s2_vehs:
-
-                # vehicle enter and exit time
-                t_left_s = (s2_v['t_left']-t_start).total_seconds() + s1s2_shift
-                t_right_s = (s2_v['t_right']-t_start).total_seconds() + s1s2_shift
-
-                # only plot those within the interval
-                if np.max([t_left_s, t_right_s]) <=0 or np.min([t_left_s, t_right_s]) >= (t_end-t_start).total_seconds():
-                    continue
-
-                if 'closer_lane' in s2_v.keys() and s2_v['closer_lane'] is False:
-                    ax_pir.plot([t_right_s, t_left_s],[x_grid[0], x_grid[-1]], linewidth=2, color='r', linestyle=':')
-                else:
-                    ax_pir.plot([t_right_s, t_left_s],[x_grid[0], x_grid[-1]], linewidth=2, color='r')
-
-                # plot the used distance value
-                m_t_s = (t_left_s+t_right_s)/2.0
-                if s2_v['valid'] is True:
-                    ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [s2_v['distance'], s2_v['distance']], linewidth=3, color='r')
-                else:
-                    ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [s2_v['distance'], s2_v['distance']], linewidth=3, color='r', linestyle=':')
-
-        ax_pir.set_title('{0} ~ {1}'.format(time2str(t_start), time2str(t_end)), fontsize=20)
-        # ax_pir.set_xlabel('Relative time (s)', fontsize=18)
-        ax_pir.set_ylabel('Space (x 6d = m)', fontsize=18)
-        ax_pir.set_xlim([t_grid[0], t_grid[-1]])
-        ax_pir.set_ylim([x_grid[-1], x_grid[0]])
-
-        ax_ultra.set_title('Ultrasonic data (S1)', fontsize=20)
-        ax_ultra.set_ylabel('Distance (m)', fontsize=18)
-        ax_ultra.set_xlabel('Relative Time (s)', fontsize=18)
-        ax_ultra.set_ylim([0,12])
-        ax_ultra.set_xlim([rel_t[0], rel_t[-1]])
-
-        # ==============================================================================
-        # plot the matches of the same vehicles for s1 and s2
-        markers = itertools.cycle(['o', 'v', '^', 's'])
-        if unique_vehs is not None:
-            for vehs in unique_vehs:
-                m = next(markers)
-                for v in vehs:
-                    ax_pir.scatter((v[0]-t_start).total_seconds(), 0, marker=m, c='r', s=50)
-
-        # ==============================================================================
-        # Plot the true vehicle detection
-        if s1_true is not None:
-            for true_v in s1_true:
-
-                mean_t_s = ((true_v[0]-t_start).total_seconds() + (true_v[1]-t_start).total_seconds())/2.0
-
-                # only plot those within the interval
-                if (true_v[1]-t_start).total_seconds() <= 0 or \
-                                (true_v[0]-t_start).total_seconds() >= (t_end-t_start).total_seconds(): continue
-
-                # compute the slope
-                slope = true_v[2]/(self.mps2mph*paras['tx_ratio']*true_v[3])
-                true_t_in_s, true_t_out_s = mean_t_s + x_grid[0]/slope, mean_t_s + x_grid[-1]/slope
-
-                # plot the true vehicle line in pir
-                ax_pir.plot([true_t_in_s, true_t_out_s], [x_grid[-1], x_grid[0]], linewidth=2, linestyle='--', color='k')
-                # plt the true vehicle distance in ultra
-                m_t_s = (true_t_in_s+ true_t_out_s)/2.0
-                ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [true_v[3], true_v[3]], linewidth=2, linestyle='--', color='k')
-
-        # plot the s2 true vehicles
-        if s2_true is not None:
-            for true_v in s2_true:
-
-                mean_t_s = ((true_v[0]-t_start).total_seconds() + (true_v[1]-t_start).total_seconds())/2.0
-
-                # only plot those within the interval
-                if (true_v[1]-t_start).total_seconds() <= 0 or \
-                                (true_v[0]-t_start).total_seconds() >= (t_end-t_start).total_seconds(): continue
-
-                # compute the slope
-                slope = true_v[2]/(self.mps2mph*paras['tx_ratio']*true_v[3])
-                true_t_in_s, true_t_out_s = mean_t_s + x_grid[0]/slope + s1s2_shift, \
-                                            mean_t_s + x_grid[-1]/slope + s1s2_shift
-
-                # plot the true vehicle line in pir
-                ax_pir.plot([true_t_in_s, true_t_out_s], [x_grid[0], x_grid[-1]], linewidth=2, linestyle='--', color='r')
-                # plt the true vehicle distance in ultra
-                m_t_s = (true_t_in_s+ true_t_out_s)/2.0
-                ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [true_v[3], true_v[3]], linewidth=2, linestyle='--', color='r')
-
-        plt.draw()
-
-
-    def plot_hist(self, arrs, labels, title='', xlabel='', fontsizes = (22, 18, 16),
-                  xlim=None, ylim=None, text_loc=None):
-        """
-        This function plots the histogram of the list of arrays
-        :param arrs: list of arrs
-        :param labels: label for each array
-        :param title: title
-        :param xlabel: xlabel
-        :param fontsizes: (title, label, tick)
-        :return:
-        """
-        plt.figure(figsize=(11.5,10))
-
-        colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
-        text = []
-        y_max = 0.0
-        std_max = 0.0
-        for i, d in enumerate(arrs):
-            c = next(colors)
-            mu, std = np.mean(d), np.std(d)
-            if labels is not None:
-                n, bins, patches = plt.hist(d, 50, normed=1, facecolor=c, alpha=0.75, label=labels[i])
-            else:
-                n, bins, patches = plt.hist(d, 50, normed=1, facecolor=c, alpha=0.75)
-            plt.plot(bins, mlab.normpdf(bins, mu, std), color=c, linestyle='--',
-                     linewidth=2)
-            if labels is not None:
-                text.append('{0} mean: {1:.2f}, std: {2:.2f}'.format(labels[i], mu, std))
-            else:
-                text.append('Bias: {0:.2f}\nStd : {1:.2f}'.format(mu, std))
-            # text.append('Mean: {0:.2f}\nStandard deviation: {1:.2f}'.format(mu, std))
-
-            y_max = np.max([y_max, np.max(n)])
-            std_max = np.max([std_max, std])
-
-        text_str = '\n'.join(text)
-        if text_loc is None:
-            plt.text(mu-4*std_max, y_max*1.0, text_str, fontsize=fontsizes[1])
-        else:
-            plt.text(text_loc[0], text_loc[1], text_str, fontsize=fontsizes[1])
-
-        if xlim is not None:
-            plt.xlim(xlim)
-        if ylim is None:
-            plt.ylim(0, y_max*1.2)
-        else:
-            plt.ylim(ylim)
-
-        if labels is not None: plt.legend()
-        plt.xlabel(xlabel, fontsize=fontsizes[1])
-        plt.ylabel('Distribution', fontsize=fontsizes[1])
-        plt.title(title, fontsize=fontsizes[0])
-        plt.tick_params(axis='both', which='major', labelsize=fontsizes[2])
-        plt.draw()
-
-    def visualize_results_all(self, norm_df, vehs, true_vehs=None, t_start=None, t_end=None):
-        """
-        A wrapper function. split into sub intervals; otherwise too large to plot
-        :param norm_df:
-        :param ratio_tx:
-        :param true_vehs:
-        :param t_start:
-        :param t_end:
-        :return:
-        """
-        # only plot the data in time interval
-        if t_start is None: t_start = norm_df.index[0]
-        if t_end is None: t_end = norm_df.index[-1]
-
-        _t_start = t_start
-        _t_end = t_start + timedelta(seconds=15*60.0)
-        while _t_end <= t_end:
-            self.visualize_results(norm_df, vehs, true_vehs=true_vehs, t_start=_t_start, t_end=_t_end)
-            _t_start = _t_end
-            _t_end = _t_start + timedelta(seconds=15*60.0)
-
-        # plot the rest
-        self.visualize_results(norm_df, vehs, true_vehs=true_vehs, t_start=_t_start, t_end=t_end)
-
-    def combine_two_lane_detections(self, s1_vehs_npy_file, s2_vehs_npy_file, s1_s2_shift=0.33, dt=0.5, save_dir='',
+    @staticmethod
+    def combine_two_lane_detections(s1_vehs_npy_file, s2_vehs_npy_file, s1_s2_shift=0.33, dt=0.5, save_dir='',
                                     speed_range=(0,70)):
         """
-        This function combines the detections on two lanes.
-        :param s1_vehs_npy_file: npy file
-        :param s2_vehs_npy_file: npy file
+        This function combines the detections on two lanes to a list of unique vehicles with their lane information
+        :param s1_vehs_npy_file: post processed detection result from s1, e.g., _post.npy file
+        :param s2_vehs_npy_file: post processed detection result from s2
         :param s1_s2_shift: t_s1 = t_s2 + s1_s2_shift
         :param dt: float, seconds, <= dt will be considered same trace
         :return: save files:
-            s1_veh_comb_npy, s2_veh_comb_npy, with additional entry 'closer_lane' = True or False
-            unique_vehs.npy: [ [[t_mean, idx, 0, speed], [t_mean, idx, 1, speed]], ... ] ; 0 ~ s1, 1 ~ s2
+            s1_veh_comb_npy: with additional entry 'closer_lane' = True or False to mark the detected vehicle alne
+            s2_veh_comb_npy, with additional entry 'closer_lane' = True or False to mark the detected vehicle alne
+            combined_detections.npy: a list of unique vehicles, each vehicle (row) is
+                [
+             [ [[t_mean, idx, 0, speed], [t_mean, idx, 1, speed]], ... ] ; 0 ~ s1, 1 ~ s2
         """
         s1_vehs = np.load(s1_vehs_npy_file)
         s2_vehs = np.load(s2_vehs_npy_file)
@@ -1418,15 +1044,177 @@ class EvaluateResult:
         np.save(s1_vehs_npy_file.replace('.npy', '_comb.npy'), s1_vehs)
         np.save(s2_vehs_npy_file.replace('.npy', '_comb.npy'), s2_vehs)
 
-    def match_one_lane_det_with_true(self, vehs, true_veh, dt=0.5):
+
+    @staticmethod
+    def trim_norm_df(norm_df_file, t_start, t_end):
         """
+        This function
+            - trims the norm_df to contain only data in [t_start, t_end]
+        :param norm_df_file: the dataframe data structure containing the raw data
+        :param t_start: datetime
+        :param t_end: datetime
+        :return:
+        """
+        norm_df = pd.read_csv(norm_df_file, index_col=0)
+        norm_df.index = norm_df.index.to_datetime()
+
+        # save the slices in the time period
+        frames = norm_df.index[ (norm_df.index >= t_start) & (norm_df.index <= t_end) ]
+        norm_df.loc[frames,:].to_csv(norm_df_file.replace('.csv', '_post.csv'))
+
+    def add_clean_ultra_col_norm_df(self, norm_df_file, paras_file):
+        """
+        This function
+            - cleans the ultrasonic sensor data and save in column clean_ultra in norm_df new file
+            - is only for debugging, e.g., investigating what ultrasonic readings were
+        :param norm_df_file: the dataframe data structure containing the raw data
+        :param paras_file: the paras used to generate det_npy
+        :return:
+        """
+
+        paras = self._load_paras(paras_file)
+        norm_df = pd.read_csv(norm_df_file, index_col=0)
+        norm_df.index = norm_df.index.to_datetime()
+
+        # ----------------------------------------------------------------------------
+        # First clean the ultrasonic sensor data and save in norm df additional column
+        ultra = norm_df['ultra']
+        clean_ultra = self._clean_ultra(ultra, paras, TH_ultra_fp=None)
+        norm_df['clean_ultra'] = clean_ultra
+
+        norm_df.to_csv(norm_df_file.replace('.csv', '_clean_ultra.csv'))
+
+    @staticmethod
+    def _load_paras(paras_file):
+        """
+        This function loads the parameter files used for generating the results.
+        :param paras_file: string, file dir + file name
+        :return:
+        """
+        paras = OrderedDict()
+
+        with open(paras_file, 'r') as fi:
+            for line in fi:
+                para, val_str = line.strip().split(':')
+                val = make_tuple(val_str.strip())
+                paras[para] = val
+
+        return paras
+
+    @staticmethod
+    def _clean_ultra(raw_ultra, paras, TH_ultra_fp=None):
+        """
+        The ultrasonic sensor contains some erroneous readings. This function filters out those readings
+        :param raw_ultra: the raw ultrasonic sensor data in DataFrame format
+        :param paras: the parameters used for the detection corresponding to this dataset
+        :return: self.clean_ultra
+        """
+
+        if TH_ultra_fp is None:
+            th_fp = paras['TH_ultra_fp']
+        else:
+            th_fp = TH_ultra_fp
+
+        clean_ultra = deepcopy(raw_ultra)
+
+        len_d = len(raw_ultra)
+        det = False
+
+        i = 0
+        start_idx, end_idx = 0, 0
+        while i < len_d:
+            v = clean_ultra.values[i]
+
+            if det is False:
+                if v <= th_fp:
+                    # set start index
+                    start_idx = np.max([0, i - paras['ultra_fp_pre']])
+                    end_idx = i
+                    det = True
+                i += 1
+                continue
+            else:
+                # exiting a detection of false positive
+                if v <= th_fp:
+                    # continue increasing idx
+                    end_idx = i
+                    i += 1
+                    continue
+                else:
+                    # exit the detection of false positive
+                    end_idx = int(np.min([len_d, end_idx + paras['ultra_fp_post']]))
+
+                    # replace the values
+                    clean_ultra.values[start_idx:end_idx] = 11.0
+                    det = False
+                    # move on from the end_idx
+                    i = end_idx
+
+        if det is True:
+            clean_ultra.values[start_idx:end_idx] = 11.0
+
+        return clean_ultra
+
+
+
+
+
+
+
+
+
+
+
+    @staticmethod
+    def _new_nonlinear_transform(paras):
+        """
+        This function performs the nonlinear transform to the norm_df data
+        :return: space grid
+        """
+        _dup = paras['pir_res'][0]
+        d_theta = (paras['pir_fov'] / 15) * np.pi / 180.0
+
+        alpha = np.tan( paras['pir_fov_offset']*np.pi/180.0)
+
+        x_grid_pos = []
+        for i in range(0, 16):
+            for d in range(0, _dup):
+                # duplicate the nonlinear operator for vec
+                x_grid_pos.append(np.tan(alpha + i * d_theta ) / paras['tx_ratio'])
+        x_grid_pos = np.asarray(x_grid_pos)
+
+        x_grid_neg = np.sort(-deepcopy(x_grid_pos))
+
+        x_grid = np.concatenate([x_grid_neg, x_grid_pos])
+
+        return -x_grid
+
+
+
+class EvaluateResult:
+    """
+    This class evaluates and visualizes the estimation results.
+    """
+    def __init__(self):
+        self.mps2mph = 2.23694  # 1 m/s = 2.23694 mph
+
+    # DONE
+    def match_single_lane_detection_with_true(self, vehs, true_veh, dt=0.5):
+        """
+        OLD_NAME: match_one_lane_det_with_true
         This function
             - matches the detected vehicle with true vehicles
         :param vehs: list of veh dict
         :param true_veh: t_start (dt), t_end (dt), speed (mph), distance (m), image speed (px/frame), image distance (px)
         :param dt: float, seconds
-        :return: matched_vehs: each row is a match
-            [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh]
+        :return: matched_vehs: a list of matches, each row is
+            [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh], where
+                idx_veh: the index of the matched vehicle in the list of detected vehicles
+                idx_true_veh: the index of the matched vehicle in the list of true vehicles
+                est_speed: mph, the speed of estimated speed
+                true_speed: mph, the speed of the true speed generated by computer vision
+                t_veh: datetime, the detection time of the vehicle
+                t_true_veh: datetime, the true time the vehicle passed the sensor (generated from computer vision)
         """
         # create two lists
         l_vehs = []
@@ -1450,16 +1238,26 @@ class EvaluateResult:
 
         return matched_vehs
 
-    def match_two_lane_det_with_true(self, s1_vehs, s2_vehs, s1_true, s2_true, dt=0.5):
+    # DONE
+    def match_two_lanes_detection_with_true(self, s1_vehs, s2_vehs, s1_true, s2_true, dt=0.5):
         """
+        OLD_NAME = match_two_lane_det_with_true
         This function matches the two-lane detection result with the true
-        :param s1_vehs: list of veh dict; 'closer_lane' indicate the lane
-        :param s2_vehs: list of veh dict; 'closer_lane' indicate the lane
-        :param s1_true: t_start (dt), t_end (dt), speed (mph), distance (m), image speed (px/frame), image distance (px)
-        :param s2_true: t_start (dt), t_end (dt), speed (mph), distance (m), image speed (px/frame), image distance (px)
-        :param dt: float, seconds
-        :return: matched vehs
-            [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh]
+        :param s1_vehs: list of veh dict after combining detections from two sensors, i.e.,
+            detected_veh.npy -1-> detected_veh_post.npy -2-> detected_veh_post_combined.npy. It has an additional entry
+            'closer_lane', while true indicates the vehicle is on the closer lane to the sensor;
+        :param s2_vehs: list of veh dict after combining detections from two sensors
+        :param s1_true: t_start (datetime), t_end (datetime), speed (mph), distance (m), image speed (px/frame), image distance (px)
+        :param s2_true: t_start (datetime), t_end (datetime), speed (mph), distance (m), image speed (px/frame), image distance (px)
+        :param dt: float, seconds, the detected instance and the true instance will be considered as the same vehicle if
+            they are separated by less than dt.
+        :return: matched_vehs, a list of
+            [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh], where
+            idx_veh: the index of the instance in detected vehicles
+            idx_true_veh: the index of the instance in the list of true vehicles
+            est_speed: mph, the estimated vehicle speed
+            true_speed, mph, the true speed from computer vision
+            t_veh: datetime,
         """
         l_vehs = []
         for v in s1_vehs:
@@ -1490,6 +1288,444 @@ class EvaluateResult:
                 matched_vehs.append( [it1[1], it2[1], abs(l_vehs[it1[1]][1]), l_true[it2[1]][1], it1[0], it2[0] ] )
 
         return matched_vehs
+
+    # DONE
+    def plot_single_lane_detection_vs_true(self, norm_df, paras_file, vehs=None, true_vehs=None,
+                                           t_start=None, t_end=None, matches=None):
+        """
+        OLD_NAME: plot_det_vs_true
+        This function plots the single lane detection result vs the truth from computer vision
+        :param norm_df: the normalized dataframe for visualization
+        :param paras_file: the parameter files txt used by the TrafficSensorAlg
+        :param vehs: the postprocessed vehicle detection result
+        :param true_vehs: the postprocessed true vehicles generated by computer vision
+        :param t_start: datetime, start time of the plotted period
+        :param t_end: datetime, end time of the plotted period
+        :param matches: the matched vehicle generated by match_single_lane_detection_with_true(), which is a list of
+            [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh], where
+                idx_veh: the index of the matched vehicle in the list of detected vehicles
+                idx_true_veh: the index of the matched vehicle in the list of true vehicles
+                est_speed: mph, the speed of estimated speed
+                true_speed: mph, the speed of the true speed generated by computer vision
+                t_veh: datetime, the detection time of the vehicle
+                t_true_veh: datetime, the true time the vehicle passed the sensor (generated from computer vision)
+        :return:
+        """
+        paras = self._load_paras(paras_file)
+
+        fig = plt.figure(figsize=(18, 10))
+        gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
+
+        # axis 0 is the scattered PIR plot
+        # axis 1 is the ultrasonic plot
+        ax_pir = plt.subplot(gs[0])
+        ax_ultra = plt.subplot(gs[1], sharex=ax_pir)
+        plt.setp(ax_pir.get_xticklabels(), visible=False)
+
+        # ==============================================================================
+        # only plot the data in time interval
+        if t_start is None: t_start = norm_df.index[0]
+        if t_end is None: t_end = norm_df.index[-1]
+
+        print('\n########################## Visualization: ')
+        print('                 Data interval from: {0}'.format(norm_df.index[0]))
+        print('                                 to: {0}'.format(norm_df.index[-1]))
+        print('                 Plotting interval from: {0}'.format(t_start))
+        print('                                     to: {0}'.format(t_end))
+
+        # save the batch normalized data
+        frames = norm_df.index[ (norm_df.index >= t_start) & (norm_df.index <= t_end) ]
+        plot_df = norm_df.loc[frames,:]
+
+        # align t_start and t_end
+        t_start = plot_df.index[0]
+        t_end = plot_df.index[-1]
+
+        # ==============================================================================
+        # Plot the detection result
+        # --------------------------------------------------------
+        # plot all the data point, perform nonlinear transform
+        # ax_pir general
+        pts, t_grid, x_grid = self._tx_representation(plot_df, paras)
+        ax_pir.scatter(pts[:,0], pts[:,1], color='0.6')
+
+        # ax_ultra general
+        ultra = plot_df['ultra']
+        clean_ultra = plot_df['clean_ultra']
+        tmp_t = ultra.index - t_start
+        rel_t = [i.total_seconds() for i in tmp_t]
+        ax_ultra.plot(rel_t, ultra.values, linewidth=2, marker='*')
+        ax_ultra.plot(rel_t, clean_ultra.values, linewidth=2, color='r')
+
+        # plot the detected vehicles
+        if vehs is not None:
+            colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple'])
+            for veh in vehs:
+
+                # vehicle enter and exit time
+                t_left_s = (veh['t_left']-t_start).total_seconds()
+                t_right_s = (veh['t_right']-t_start).total_seconds()
+
+                # only plot those within the interval
+                if np.max([t_left_s, t_right_s]) <=0 or np.min([t_left_s, t_right_s]) >= (t_end-t_start).total_seconds():
+                    continue
+
+                # plot the supporting points and the line
+                c = next(colors)
+                sup_pts = np.array( [[(p[0]-t_start).total_seconds(), p[1]] for p in veh['inliers']] )
+                ax_pir.scatter(sup_pts[:,0], sup_pts[:,1], color=c, alpha=0.75)
+
+                if 'closer_lane' in veh.keys() and veh['closer_lane'] is False:
+                    ax_pir.plot([t_left_s, t_right_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k', linestyle=':')
+                else:
+                    ax_pir.plot([t_left_s, t_right_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k')
+
+                # plot the used distance value
+                ax_ultra.plot([t_left_s, t_right_s], [veh['distance'], veh['distance']], linewidth=2, color=c)
+
+        ax_pir.set_title('{0} ~ {1}'.format(time2str(t_start), time2str(t_end)), fontsize=20)
+        # ax_pir.set_xlabel('Relative time (s)', fontsize=18)
+        ax_pir.set_ylabel('Space (x 6d = m)', fontsize=18)
+        ax_pir.set_xlim([t_grid[0], t_grid[-1]])
+        ax_pir.set_ylim([x_grid[-1], x_grid[0]])
+
+        ax_ultra.set_title('Ultrasonic data', fontsize=20)
+        ax_ultra.set_ylabel('Distance (m)', fontsize=18)
+        ax_ultra.set_xlabel('Relative Time (s)', fontsize=18)
+        ax_ultra.set_ylim([0,12])
+        ax_ultra.set_xlim([rel_t[0], rel_t[-1]])
+
+
+        # ==============================================================================
+        # Plot the true vehicle detection
+        if true_vehs is not None:
+            for true_v in true_vehs:
+
+                mean_t_s = ((true_v[0]-t_start).total_seconds() + (true_v[1]-t_start).total_seconds())/2.0
+
+                # only plot those within the interval
+                if (true_v[1]-t_start).total_seconds() <= 0 or \
+                                (true_v[0]-t_start).total_seconds() >= (t_end-t_start).total_seconds(): continue
+
+                # compute the slope
+                slope = true_v[2]/(self.mps2mph*paras['tx_ratio']*true_v[3])
+                true_t_in_s, true_t_out_s = mean_t_s + x_grid[0]/slope, mean_t_s + x_grid[-1]/slope
+
+                # plot the true vehicle line in pir
+                ax_pir.plot([true_t_in_s, true_t_out_s], [x_grid[-1], x_grid[0]], linewidth=2, linestyle='--', color='k')
+                # plt the true vehicle distance in ultra
+                ax_ultra.plot([true_t_in_s, true_t_out_s], [true_v[3], true_v[3]], linewidth=2, linestyle='--', color='k')
+
+
+        # ==============================================================================
+        # Mark the matches of the detected vehicle and the true vehicles
+        markers = itertools.cycle(['o', 'v', '^', 's'])
+        if matches is not None:
+            for ma in matches:
+                m = next(markers)
+                if not pd.isnull(ma[4]):
+                    ax_pir.scatter((ma[4]-t_start).total_seconds(), 0, marker=m, c='r', s=50)
+                if not pd.isnull(ma[5]):
+                    ax_pir.scatter((ma[5]-t_start).total_seconds(), 0, marker=m, c='r', s=50)
+
+        plt.draw()
+
+    # DONE
+    def plot_two_lanes_detection_vs_true(self, s1_df, s1_vehs, s1_true=None, s1_paras_file=None,
+                                         s2_df=None, s2_vehs=None, s2_true=None, s2_paras_file=None,
+                                         s1s2_shift=0.33, t_start=None, t_end=None, combined_detections=None):
+        """
+        OLD_NAME: plot_two_lane_vs_true
+        This function plots the combined two lanes detection with
+        :param s1_df: dataframe, normalized (preprocessed) PIR s1 data, used for visualization
+        :param s1_vehs: the combined s1 detection result, e.g., _post_combined.npy
+        :param s1_true: the postprocessed true data for s1
+        :param s1_paras_file: the parameters used by s1 detection algorithm
+        :param s2_df: dataframe, normalized (preprocessed) PIR s2 data to overlap s2 raw data on s1; optional
+        :param s2_vehs: the combined s2 detection result, e.g., _post_combined.npy
+        :param s2_true: the postprocessed true data for s2
+        :param s2_paras_file: the parameters used by s2 detection algorithm
+        :param s1s2_shift: the time shift of two PIR data stream due to the longitudinal placement error.
+        :param t_start: datetime, start time of the plotted period
+        :param t_end: datetime, end time of the plotted period
+        :param combined_detections: the combined detections generated combine_two_lanes_detection in Post processing
+        :return:
+        """
+
+        # ==============================================================================
+        # Load the parameters used for two detectors for visualize the raw data and ultrasonic sensor readings
+        s1_paras = self._load_paras(s1_paras_file)
+        s2_paras = self._load_paras(s2_paras_file)
+
+        # generate the cleaned ultrasonic readings for visualization which were used in the algorithm
+        if 'clean_ultra' not in s1_df.keys():
+            s1_df['clean_ultra'] = self._clean_ultra(s1_df['ultra'], s1_paras, TH_ultra_fp=None)
+        if 'clean_ultra' not in s2_df.keys():
+            s2_df['clean_ultra'] = self._clean_ultra(s2_df['ultra'], s2_paras, TH_ultra_fp=None)
+
+
+        # ==============================================================================
+        # Set figure axis
+        fig = plt.figure(figsize=(18, 10))
+        gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
+
+        # axis 0 is the scattered PIR plot
+        # axis 1 is the ultrasonic plot
+        ax_pir = plt.subplot(gs[0])
+        ax_ultra = plt.subplot(gs[1], sharex=ax_pir)
+        plt.setp(ax_pir.get_xticklabels(), visible=False)
+
+        # ==============================================================================
+        # only plot the data in time interval
+        if t_start is None: t_start = s1_df.index[0]
+        if t_end is None: t_end = s1_df.index[-1]
+
+        print('\n########################## Visualization: ')
+        print('                 Data interval from: {0}'.format(s1_df.index[0]))
+        print('                                 to: {0}'.format(s1_df.index[-1]))
+        print('                 Plotting interval from: {0}'.format(t_start))
+        print('                                     to: {0}'.format(t_end))
+
+        # save the batch normalized data
+        frames = s1_df.index[ (s1_df.index >= t_start) & (s1_df.index <= t_end) ]
+        plot_df = s1_df.loc[frames,:]
+
+        # align t_start and t_end
+        t_start = plot_df.index[0]
+        t_end = plot_df.index[-1]
+
+        # ==============================================================================
+        # Plot the detection result
+        # --------------------------------------------------------
+        # plot all the data point, perform nonlinear transform
+        # ax_pir general
+        pts, t_grid, x_grid = self._tx_representation(plot_df, s1_paras)
+        ax_pir.scatter(pts[:,0], pts[:,1], color='0.6')
+
+        # ax_ultra general
+        ultra = plot_df['ultra']
+        clean_ultra = plot_df['clean_ultra']
+        tmp_t = ultra.index - t_start
+        rel_t = [i.total_seconds() for i in tmp_t]
+        # ax_ultra.plot(rel_t, ultra.values, linewidth=2, marker='*')
+        ax_ultra.plot(rel_t, clean_ultra.values, linewidth=2, color='g', label='s1', linestyle='--')
+
+        # plot the s2 ultra
+        s2_ultra = s2_df['ultra']
+        s2_clean_ultra = s2_df['clean_ultra']
+        tmp_t = s2_ultra.index - t_start
+        s2_rel_t = [i.total_seconds()+s1s2_shift for i in tmp_t]
+        # ax_ultra.plot(s2_rel_t, s2_ultra.values, linewidth=2, marker='*')
+        ax_ultra.plot(s2_rel_t, s2_clean_ultra.values, linewidth=2, color='b', label='s2', linestyle='--')
+
+        # plot the detected vehicles
+        colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple'])
+        for veh in s1_vehs:
+
+            # vehicle enter and exit time
+            t_left_s = (veh['t_left']-t_start).total_seconds()
+            t_right_s = (veh['t_right']-t_start).total_seconds()
+
+            # only plot those within the interval
+            if np.max([t_left_s, t_right_s]) <=0 or np.min([t_left_s, t_right_s]) >= (t_end-t_start).total_seconds():
+                continue
+
+            # plot the supporting points and the line
+            c = next(colors)
+            sup_pts = np.array( [[(p[0]-t_start).total_seconds(), p[1]] for p in veh['inliers']] )
+            ax_pir.scatter(sup_pts[:,0], sup_pts[:,1], color=c, alpha=0.5)
+
+            if 'closer_lane' in veh.keys() and veh['closer_lane'] is False:
+                ax_pir.plot([t_left_s, t_right_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k', linestyle=':')
+            else:
+                ax_pir.plot([t_left_s, t_right_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k')
+
+            # plot the used distance value
+            m_t_s = (t_left_s+t_right_s)/2.0
+            if veh['valid'] is True:
+                ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [veh['distance'], veh['distance']], linewidth=2, color='k')
+            else:
+                ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [veh['distance'], veh['distance']], linewidth=2, color='k', linestyle=':')
+
+        # plot the other lane detected vehicles
+        if s2_vehs is not None:
+            for s2_v in s2_vehs:
+
+                # vehicle enter and exit time
+                t_left_s = (s2_v['t_left']-t_start).total_seconds() + s1s2_shift
+                t_right_s = (s2_v['t_right']-t_start).total_seconds() + s1s2_shift
+
+                # only plot those within the interval
+                if np.max([t_left_s, t_right_s]) <=0 or np.min([t_left_s, t_right_s]) >= (t_end-t_start).total_seconds():
+                    continue
+
+                if 'closer_lane' in s2_v.keys() and s2_v['closer_lane'] is False:
+                    ax_pir.plot([t_right_s, t_left_s],[x_grid[0], x_grid[-1]], linewidth=2, color='r', linestyle=':')
+                else:
+                    ax_pir.plot([t_right_s, t_left_s],[x_grid[0], x_grid[-1]], linewidth=2, color='r')
+
+                # plot the used distance value
+                m_t_s = (t_left_s+t_right_s)/2.0
+                if s2_v['valid'] is True:
+                    ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [s2_v['distance'], s2_v['distance']], linewidth=3, color='r')
+                else:
+                    ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [s2_v['distance'], s2_v['distance']], linewidth=3, color='r', linestyle=':')
+
+        ax_pir.set_title('{0} ~ {1}'.format(time2str(t_start), time2str(t_end)), fontsize=20)
+        # ax_pir.set_xlabel('Relative time (s)', fontsize=18)
+        ax_pir.set_ylabel('Space (x 6d = m)', fontsize=18)
+        ax_pir.set_xlim([t_grid[0], t_grid[-1]])
+        ax_pir.set_ylim([x_grid[-1], x_grid[0]])
+
+        ax_ultra.set_title('Ultrasonic data (S1)', fontsize=20)
+        ax_ultra.set_ylabel('Distance (m)', fontsize=18)
+        ax_ultra.set_xlabel('Relative Time (s)', fontsize=18)
+        ax_ultra.set_ylim([0,12])
+        ax_ultra.set_xlim([rel_t[0], rel_t[-1]])
+
+        # ==============================================================================
+        # plot the matches of the same vehicles for s1 and s2
+        markers = itertools.cycle(['o', 'v', '^', 's'])
+        if combined_detections is not None:
+            for vehs in combined_detections:
+                m = next(markers)
+                for v in vehs:
+                    ax_pir.scatter((v[0]-t_start).total_seconds(), 0, marker=m, c='r', s=50)
+
+        # ==============================================================================
+        # Plot the true vehicle detection
+        if s1_true is not None:
+            for true_v in s1_true:
+
+                mean_t_s = ((true_v[0]-t_start).total_seconds() + (true_v[1]-t_start).total_seconds())/2.0
+
+                # only plot those within the interval
+                if (true_v[1]-t_start).total_seconds() <= 0 or \
+                                (true_v[0]-t_start).total_seconds() >= (t_end-t_start).total_seconds(): continue
+
+                # compute the slope
+                slope = true_v[2]/(self.mps2mph*s1_paras['tx_ratio']*true_v[3])
+                true_t_in_s, true_t_out_s = mean_t_s + x_grid[0]/slope, mean_t_s + x_grid[-1]/slope
+
+                # plot the true vehicle line in pir
+                ax_pir.plot([true_t_in_s, true_t_out_s], [x_grid[-1], x_grid[0]], linewidth=2, linestyle='--', color='k')
+                # plt the true vehicle distance in ultra
+                m_t_s = (true_t_in_s+ true_t_out_s)/2.0
+                ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [true_v[3], true_v[3]], linewidth=2, linestyle='--', color='k')
+
+        # plot the s2 true vehicles
+        if s2_true is not None:
+            for true_v in s2_true:
+
+                mean_t_s = ((true_v[0]-t_start).total_seconds() + (true_v[1]-t_start).total_seconds())/2.0
+
+                # only plot those within the interval
+                if (true_v[1]-t_start).total_seconds() <= 0 or \
+                                (true_v[0]-t_start).total_seconds() >= (t_end-t_start).total_seconds(): continue
+
+                # compute the slope
+                slope = true_v[2]/(self.mps2mph*s2_paras['tx_ratio']*true_v[3])
+                true_t_in_s, true_t_out_s = mean_t_s + x_grid[0]/slope + s1s2_shift, \
+                                            mean_t_s + x_grid[-1]/slope + s1s2_shift
+
+                # plot the true vehicle line in pir
+                ax_pir.plot([true_t_in_s, true_t_out_s], [x_grid[0], x_grid[-1]], linewidth=2, linestyle='--', color='r')
+                # plt the true vehicle distance in ultra
+                m_t_s = (true_t_in_s+ true_t_out_s)/2.0
+                ax_ultra.plot([m_t_s-0.1, m_t_s+0.1], [true_v[3], true_v[3]], linewidth=2, linestyle='--', color='r')
+
+        plt.draw()
+
+    # DONE
+    @staticmethod
+    def plot_hist(arrs, labels, title='', xlabel='', fontsizes = (22, 18, 16),
+                  xlim=None, ylim=None, text_loc=None):
+        """
+        This function plots the histogram of the list of arrays
+        :param arrs: list of array
+        :param labels: label for each array
+        :param title: title
+        :param xlabel: xlabel
+        :param fontsizes: (title, label, tick)
+        :param xlim: tuple, x limit
+        :param ylim: tuple, y limit
+        :param text_loc: text box location
+        :return:
+        """
+        plt.figure(figsize=(11.5,10))
+
+        colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
+        text = []
+        y_max = 0.0
+        std_max = 0.0
+        for i, d in enumerate(arrs):
+            c = next(colors)
+            mu, std = np.mean(d), np.std(d)
+            if labels is not None:
+                n, bins, patches = plt.hist(d, 50, normed=1, facecolor=c, alpha=0.75, label=labels[i])
+            else:
+                n, bins, patches = plt.hist(d, 50, normed=1, facecolor=c, alpha=0.75)
+            plt.plot(bins, mlab.normpdf(bins, mu, std), color=c, linestyle='--',
+                     linewidth=2)
+            if labels is not None:
+                text.append('{0} mean: {1:.2f}, std: {2:.2f}'.format(labels[i], mu, std))
+            else:
+                text.append('Bias: {0:.2f}\nStd : {1:.2f}'.format(mu, std))
+            # text.append('Mean: {0:.2f}\nStandard deviation: {1:.2f}'.format(mu, std))
+
+            y_max = np.max([y_max, np.max(n)])
+            std_max = np.max([std_max, std])
+
+        text_str = '\n'.join(text)
+        if text_loc is None:
+            plt.text(mu-4*std_max, y_max*1.0, text_str, fontsize=fontsizes[1])
+        else:
+            plt.text(text_loc[0], text_loc[1], text_str, fontsize=fontsizes[1])
+
+        if xlim is not None:
+            plt.xlim(xlim)
+        if ylim is None:
+            plt.ylim(0, y_max*1.2)
+        else:
+            plt.ylim(ylim)
+
+        if labels is not None: plt.legend()
+        plt.xlabel(xlabel, fontsize=fontsizes[1])
+        plt.ylabel('Distribution', fontsize=fontsizes[1])
+        plt.title(title, fontsize=fontsizes[0])
+        plt.tick_params(axis='both', which='major', labelsize=fontsizes[2])
+        plt.draw()
+
+    def visualize_results_all(self, norm_df, vehs, true_vehs=None, t_start=None, t_end=None):
+        """
+        A wrapper function. split into sub intervals; otherwise too large to plot
+        :param norm_df:
+        :param ratio_tx:
+        :param true_vehs:
+        :param t_start:
+        :param t_end:
+        :return:
+        """
+        # only plot the data in time interval
+        if t_start is None: t_start = norm_df.index[0]
+        if t_end is None: t_end = norm_df.index[-1]
+
+        _t_start = t_start
+        _t_end = t_start + timedelta(seconds=15*60.0)
+        while _t_end <= t_end:
+            self.visualize_results(norm_df, vehs, true_vehs=true_vehs, t_start=_t_start, t_end=_t_end)
+            _t_start = _t_end
+            _t_end = _t_start + timedelta(seconds=15*60.0)
+
+        # plot the rest
+        self.visualize_results(norm_df, vehs, true_vehs=true_vehs, t_start=_t_start, t_end=t_end)
+
+
+
+
+
+
+
 
     def compute_statistics(self, matched_vehs):
         """
@@ -1522,6 +1758,7 @@ class EvaluateResult:
         rmse = np.sqrt( np.sum(speed_err**2)/len(speed_err) )
         print('           RMSE : {0:.3f}'.format(rmse))
 
+
     def compute_aggregated_error(self, matched_vehs, agg_s=60):
         """
         This function computes the aggregated speed estimation error in intervals agg_s
@@ -1553,6 +1790,7 @@ class EvaluateResult:
 
         return speed_err
 
+    # deprecated
     def _load_paras(self, paras_file):
         """
         This function loads the parameter files used for generating the results.
@@ -1569,7 +1807,9 @@ class EvaluateResult:
 
         return paras
 
-    def _lists_matching(self, list1, list2, dt):
+
+    @staticmethod
+    def _lists_matching(list1, list2, dt):
         """
         This function matches items in two lists: two items are matched if they are separated by less than dt.
         :param list1: a list of datetime
@@ -1716,6 +1956,8 @@ class EvaluateResult:
 
         return matches
 
+
+    # deprecated
     def _load_clean_detection(self, det_npy_file, ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0,70)):
         """
         This function loads the detected vehicles npy file. If the ultrasonic sensor reading is greater than ultra_fp_ub,
@@ -1748,6 +1990,7 @@ class EvaluateResult:
 
         return vehs
 
+    # NEED
     def _tx_representation(self, norm_df, paras):
         """
         This function performs the nonlinear transform of norm_df.
@@ -1789,7 +2032,9 @@ class EvaluateResult:
 
         return pts, t_grid, x_grid
 
-    def _new_nonlinear_transform(self, paras):
+    # DONE
+    @staticmethod
+    def _new_nonlinear_transform(paras):
         """
         This function performs the nonlinear transform to the norm_df data
         :return: space grid
@@ -1812,7 +2057,9 @@ class EvaluateResult:
 
         return -x_grid
 
-    def _clean_ultra(self, raw_ultra, paras, TH_ultra_fp=None):
+    # NEED
+    @staticmethod
+    def _clean_ultra(raw_ultra, paras, TH_ultra_fp=None):
         """
         The ultrasonic sensor contains some erroneous readings. This function filters out those readings
         :param raw_ultra: the raw ultrasonic sensor data in DataFrame format
@@ -1899,6 +2146,160 @@ class EvaluateResult:
         plt.xlim([rel_t[0], rel_t[-1]])
         plt.ylim([0,12])
 
+
+    # deprecated
+    def post_trim_norm_df(self, norm_df_file, t_start, t_end):
+        """
+        This function
+            - trims the norm_df to contain only data in [t_start, t_end]
+        :param norm_df_file: the dataframe data structure containing the raw data
+        :param t_start: datetime
+        :param t_end: datetime
+        :return:
+        """
+        norm_df = pd.read_csv(norm_df_file, index_col=0)
+        norm_df.index = norm_df.index.to_datetime()
+
+        # save the slices in the time period
+        frames = norm_df.index[ (norm_df.index >= t_start) & (norm_df.index <= t_end) ]
+        norm_df.loc[frames,:].to_csv(norm_df_file.replace('.csv', '_post.csv'))
+
+    # deprecated
+    def post_clean_ultra_norm_df(self, norm_df_file, paras_file):
+        """
+        This function
+            - cleans the ultrasonic sensor data and save in column clean_ultra in norm_df new file
+            - the purpose is only for visualization
+        :param norm_df_file: the dataframe data structure containing the raw data
+        :param paras_file: the paras used to generate det_npy
+        :return:
+        """
+
+        paras = self._load_paras(paras_file)
+        norm_df = pd.read_csv(norm_df_file, index_col=0)
+        norm_df.index = norm_df.index.to_datetime()
+
+        # ----------------------------------------------------------------------------
+        # First clean the ultrasonic sensor data and save in norm df additional column
+        ultra = norm_df['ultra']
+        clean_ultra = self._clean_ultra(ultra, paras, TH_ultra_fp=None)
+        norm_df['clean_ultra'] = clean_ultra
+
+        norm_df.to_csv(norm_df_file.replace('.csv', '_clean_ultra.csv'))
+
+    # deprecated
+    def post_trim_detection(self, det_npy_file, t_start, t_end,
+                            ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0,70.0)):
+        """
+        This function
+            - trims the det_npy to contain only data in [t_start, t_end]
+            - update the distance, speed, and valid for the det_npy
+        :param det_npy_file: the detection result
+        :param t_start: datetime
+        :param t_end: datetime
+        :param ultra_fp_lb: float, the lower bound for cleaning the ultrasonic false positives
+        :param ultra_fp_ub: float, the upper bound for cleaning the ultrasonic false positives. If a reading is above
+            ultra_fp_ub, then it is regarded as invalid.
+        :param speed_range: mph, the speed range
+        :return: trimmed and processed data will be saved in
+            - norm_df file name with _post.csv
+            - det_npy with _post.npy
+        """
+
+        # Trim and clean the detection result
+        vehs = self._load_clean_detection(det_npy_file, ultra_fp_lb=ultra_fp_lb, ultra_fp_ub=ultra_fp_ub,
+                                          speed_range=speed_range)
+
+        # Save the vehicles detected within the period
+        vehs_idx = []
+        for i, v in enumerate(vehs):
+            if v['t_in'] >= t_start and v['t_out'] <= t_end:
+                vehs_idx.append(i)
+        np.save(det_npy_file.replace('.npy', '_post.npy'), vehs[vehs_idx])
+
+    # deprecated
+    def post_trim_true_detection(self, true_det_file, init_t, offset, drift_ratio, t_start, t_end):
+        """
+        This function
+            - trims the true detection npy to the period (t_start, t_end)
+            - corrects the timestamps (which drifts using constant 60 fps)
+            - convert the speed to mph
+            - remove erroneous true vehicles with speed being negative or np.nan or np.inf
+        :param true_det_file: the true npy file
+            start time (s), end time (s), speed (m/s), distance (m), image speed (px/frame), image distance (px)
+        :param init_t: datetime, the starting time for the true detections
+        :param offset: t_true = t_s*drift_ratio + offset
+        :param drift_ratio:t_true = t_s*drift_ratio + offset
+        :param t_start: datetime, start time of the period
+        :param t_end: datetime, end time of the period
+        :return: result saved in
+            true_det_file + _post.npy
+        start_time (datetime), end_time (datetime), speed (mph), distance (m), image speed (px/frame), image distance (px)
+        """
+
+        true_vehs = np.load(true_det_file)
+
+        # ----------------------------------------------------------------------
+        # First correct the speed
+        true_vehs[:,2] *= self.mps2mph
+        # only for s1
+        # true_vehs[:,2] *=1.125
+
+        _speed_idx = (true_vehs[:,2]>=0) & (~np.isnan(true_vehs[:,2])) & (~np.isinf(true_vehs[:,2]))
+
+        # ----------------------------------------------------------------------
+        # Second correct the timestamps
+        true_vehs = true_vehs.tolist()
+        for v in true_vehs:
+            v[0] = init_t + timedelta(seconds=v[0]*drift_ratio + offset)
+            v[1] = init_t + timedelta(seconds=v[1]*drift_ratio + offset)
+
+        # ----------------------------------------------------------------------
+        # Additional corrections for better alignment, only for S2 for dataset on May 30, 2017
+        # cor_t_start = str2time('2017-05-30 20:57:30.0')
+        # cor_t_end = str2time('2017-05-30 20:57:33.0')
+        # for v in true_vehs:
+        #     if cor_t_start <= v[0] + (v[1]-v[0])/2 <= cor_t_end:
+        #         v[0] = v[0] + timedelta(seconds=0.4)
+        #         v[1] = v[1] + timedelta(seconds=0.4)
+        #
+        # cor_t_start = str2time('2017-05-30 21:01:06.0')
+        # cor_t_end = str2time('2017-05-30 21:01:07.0')
+        # for v in true_vehs:
+        #     if cor_t_start <= v[0] + (v[1]-v[0])/2 <= cor_t_end:
+        #         v[0] = v[0] - timedelta(seconds=0.2)
+        #         v[1] = v[1] - timedelta(seconds=0.2)
+        #
+        # cor_t_start = str2time('2017-05-30 21:21:05.0')
+        # cor_t_end = str2time('2017-05-30 21:21:06.0')
+        # for v in true_vehs:
+        #     if cor_t_start <= v[0] + (v[1]-v[0])/2 <= cor_t_end:
+        #         v[0] = v[0] - timedelta(seconds=0.2)
+        #         v[1] = v[1] - timedelta(seconds=0.2)
+        #
+        # cor_t_start = str2time('2017-05-30 21:04:55.0')
+        # cor_t_end = str2time('2017-05-30 21:04:56.0')
+        # for v in true_vehs:
+        #     if cor_t_start <= v[0] + (v[1]-v[0])/2 <= cor_t_end:
+        #         v[0] = v[0] + timedelta(seconds=0.2)
+        #         v[1] = v[1] + timedelta(seconds=0.2)
+        #
+        # cor_t_start = str2time('2017-05-30 21:33:20.0')
+        # cor_t_end = str2time('2017-05-30 21:33:21.0')
+        # for v in true_vehs:
+        #     if cor_t_start <= v[0] + (v[1]-v[0])/2 <= cor_t_end:
+        #         v[0] = v[0] + timedelta(seconds=0.2)
+        #         v[1] = v[1] + timedelta(seconds=0.2)
+
+        # ----------------------------------------------------------------------
+        true_vehs = np.asarray(true_vehs)
+        # get the index for the period to trim
+        _t_idx = (true_vehs[:,0]>=t_start) & (true_vehs[:,1]<=t_end)
+
+        # ----------------------------------------------------------------------
+        # Finally, save the trimmed true detection
+        idx = _t_idx  & _speed_idx
+        np.save(true_det_file.replace('.npy', '_post.npy'), true_vehs[idx,:])
 
 class SpeedEst:
     """

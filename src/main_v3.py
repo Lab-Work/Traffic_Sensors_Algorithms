@@ -16,13 +16,18 @@ def main():
         - preprocess the collected data (preprocess_data)
         - run the vehicle detection and speed estimation algorithm (run_traffic_detection)
         - evaluate the detection accuracy (evaluate_accuracy)
+
     COMMENT/UNCOMMENT the corresponding function run each function one by one.
     :return:
     """
 
     # ===============================================================================================
-    # Comment/Uncomment this function to process the collected data.
-    # Make modifications directly within the function.
+    # This function is used to perform preprocessing and analysis of the data, including
+    #     - loading the raw data from txt file to pandas data frame structure
+    #     - visualizing the raw PIR and ultrasonic sensor data
+    #     - visualizing the evolution and distribution of the temperature data from each pixel
+    #     - performing background subtraction and data normalization using KF and FSM
+    #     - visualizing the normalized data
     # ===============================================================================================
     # preprocess_data()
 
@@ -32,10 +37,17 @@ def main():
     # ===============================================================================================
     run_traffic_detection()
 
+
+    # ===============================================================================================
+    #
+    # ===============================================================================================
+
     # ===============================================================================================
     # Run the following function to evaluate the traffic detection accuracy.
     # ===============================================================================================
     # evaluate_accuracy()
+
+
 
 
     plt.show()
@@ -76,11 +88,13 @@ def preprocess_data():
     # Field experiment Test 3
     # Deployed two sensors, one on each side of Neil street in Savoy for freeflow traffic at ~45 mph average speeds
     # Collected data between 20:55 ~ 21:45 UTC on May 30th, 2017
+    # SENSOR 1
     folder = 'May30_2017'                                # folder of the dataset
     sensor = 's1'                                       # sensor id
     data_dir = '../datasets/{0}/{1}/'.format(folder, sensor)
     dataset = '3005-205500_{0}'.format(sensor)          # dataset name
 
+    # SENSOR 2
     # folder = 'May30_2017'
     # sensor = 's2'                                     # sensor id
     # data_dir = '../datasets/{0}/{1}/'.format(folder, sensor)
@@ -100,7 +114,7 @@ def preprocess_data():
     print('Loading txt data...')
     t1 = datetime.now()
 
-    if folder == '0530_2017' and sensor == 's1':
+    if folder == 'May30_2017' and sensor == 's1':
         # the two sensor components on s1 was misconnected which flipped the upper 64 rows with the bottom 64 rows in
         # the time space representation in the dataframe. Set flip to be true to correct.
         flip = True
@@ -259,10 +273,11 @@ def preprocess_data():
 
 def run_traffic_detection():
     """
-    This function runs the vehicle detection and speed estimation algorithm for three data sets. Note the third test has
-    two sensors (one on each side), and the detection algorithm is applied to each sensor data separately. The detection
-    results from two sensors are combined in the evaluation function in the current version of code. The combination of
-    two the detection results should be moved to the traffic detection class later. Putting the combination in the
+    This function runs the vehicle detection and speed estimation algorithm for each PIR sensor. The two sensors in the
+    third test are processed separately for vehicle detection and speed estimation.
+
+    The detection results from two sensors are combined in the evaluation function in the current version of code.
+    The combination of two the detection results should be moved to the traffic detection class later. Putting the combination in the
     evaluation class is purely for ease of implementation and does not affect the accuracy results presented in paper.
 
     Set False to True to run the detection algorithm for each data set.
@@ -284,7 +299,7 @@ def run_traffic_detection():
         # stopped traffic yet, hence the range starts from 1 mph.
         speed_range = (-71,-1)  # mph
 
-        # read in the normalized data from the process_data() function.
+        # read in the normalized data from the preprocess_data() function.
         norm_df = pd.read_csv(save_dir +
                               's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv', index_col=0)
         norm_df.index = norm_df.index.to_datetime()
@@ -297,7 +312,7 @@ def run_traffic_detection():
         # The detection window is adaptive to capture the full trajectory of the vehicle. But parameters window_s and
         # step_s sets the initial time window for detection.
         alg.run_adaptive_window(norm_df, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=False,
-                                plot_debug=False, save_dir='../workspace/{0}/figs/speed/'.format(folder),
+                                plot_debug=False, save_dir='../workspace/{0}/'.format(folder), sensor='s1',
                                 t_start=str2time('2017-06-08 21:40:00.0'), t_end=str2time('2017-06-08 22:20:00.0'))
 
 
@@ -322,7 +337,7 @@ def run_traffic_detection():
 
         # Run the algorithm
         alg.run_adaptive_window(norm_df, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
-                                plot_debug=False, save_dir='../workspace/{0}/figs/speed/'.format(folder),
+                                plot_debug=False, save_dir='../workspace/{0}/'.format(folder), sensor='s1',
                                 t_start=None, t_end=None)
 
     # ===============================================================================================
@@ -331,7 +346,7 @@ def run_traffic_detection():
     if False:
 
         # Set up directory
-        folder = '0530_2017'
+        folder = 'May30_2017'
         save_dir = '../workspace/{0}/'.format(folder)
 
         speed_range = (-71,-1)  # mph
@@ -346,7 +361,7 @@ def run_traffic_detection():
 
         # Run detection algorithm using adaptive window
         alg.run_adaptive_window(norm_df, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
-                                plot_debug=False, save_dir='../workspace/{0}/figs/speed/s1/'.format(folder),
+                                plot_debug=False, save_dir='../workspace/{0}/figs/'.format(folder), sensor='s1',
                                 t_start=str2time('2017-05-30 20:55:0.0'),
                                 t_end=str2time('2017-05-30 21:45:00.0'))
 
@@ -356,7 +371,7 @@ def run_traffic_detection():
     if False:
 
         # Set up directory
-        folder = '0530_2017'
+        folder = 'May30_2017'
         save_dir = '../workspace/{0}/'.format(folder)
 
         # This sensor is on the other side of the road, hence the speed direction measured in positive.
@@ -372,7 +387,7 @@ def run_traffic_detection():
 
         # Run detection algorithm using adaptive windows.
         alg.run_adaptive_window(norm_df, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
-                                plot_debug=False, save_dir='../workspace/{0}/figs/speed/s2/'.format(folder),
+                                plot_debug=False, save_dir='../workspace/{0}/'.format(folder), sensor='s2',
                                 t_start=str2time('2017-05-30 20:55:00.0'),
                                 t_end=str2time('2017-05-30 21:45:00.0'))
 
@@ -384,11 +399,12 @@ def evaluate_accuracy():
     """
     # ===============================================================================================
     # data set 0530, 2017: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
+    # ===============================================================================================
     # S1 and S2
     # -----------------------------------------------------------------------------------------------
     # Combine detections
     if False:
-        folder = '0530_2017'
+        folder = 'May30_2017'
         save_dir = '../workspace/{0}/'.format(folder)
 
         s1_vehs_npy = save_dir + 'figs/speed/s1/v2_3/detected_vehs_post.npy'
@@ -404,7 +420,7 @@ def evaluate_accuracy():
     # -----------------------------------------------------------------------------------------------
     # S1 and S2, plot combined detection vs true
     if False:
-        folder = '0530_2017'
+        folder = 'May30_2017'
         save_dir = '../workspace/{0}/'.format(folder)
         paras_file = save_dir + 'figs/speed/s1/v2_3/paras.txt'
 
@@ -492,7 +508,7 @@ def evaluate_accuracy():
     # -----------------------------------------------------------------------------------------------
     # S1 and S2, plot combined speed and distance distribution
     if False:
-        folder = '0530_2017'
+        folder = 'May30_2017'
         save_dir = '../workspace/{0}/'.format(folder)
 
         s1_true = np.load(save_dir + 'labels_v11_post.npy')
@@ -522,7 +538,7 @@ def evaluate_accuracy():
     # -----------------------------------------------------------------------------------------------
     # S1: plot det vs true
     if False:
-        folder = '0530_2017'
+        folder = 'May30_2017'
 
         # Configuration
         save_dir = '../workspace/{0}/'.format(folder)
@@ -550,7 +566,7 @@ def evaluate_accuracy():
     # -----------------------------------------------------------------------------------------------
     # S2: plot det vs true
     if False:
-        folder = '0530_2017'
+        folder = 'May30_2017'
 
         # Configuration
         save_dir = '../workspace/{0}/'.format(folder)
@@ -1016,7 +1032,7 @@ def trim_results():
     # data set 0530, 2017, S1: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
     # ===============================================================================================
     if False:
-        folder = '0530_2017'
+        folder = 'May30_2017'
         t_period_start = str2time('2017-05-30 20:55:00.0')
         t_period_end = str2time('2017-05-30 21:45:00.0')
 
@@ -1055,7 +1071,7 @@ def trim_results():
     # data set 0530, 2017, S2: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
     # ===============================================================================================
     if False:
-        folder = '0530_2017'
+        folder = 'May30_2017'
         t_period_start = str2time('2017-05-30 20:55:00.0')
         t_period_end = str2time('2017-05-30 21:45:00.0')
 
