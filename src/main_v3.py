@@ -46,14 +46,12 @@ def main():
     #   - correcting the time drift of the ground truth caused by the constant video drift assumption
     #   - combine two sensors detection result for two lanes
     # ===============================================================================================
-
+    # post_process()
 
     # ===============================================================================================
     # Run the following function to evaluate the traffic detection accuracy.
     # ===============================================================================================
     # evaluate_accuracy()
-
-
 
 
     plt.show()
@@ -182,24 +180,6 @@ def preprocess_data():
 
 
     # ===============================================================================================
-    # deprecated
-    # Use batch normalization to subtract the background noise
-    # if False:
-    #     t_start = periods[dataset][0]
-    #     t_end = periods[dataset][0] + timedelta(seconds=30)
-    #     t1 = datetime.now()
-    #     dis_norm_df = data.batch_normalization(df, t_start=t_start, t_end=t_end, p_outlier=0.01,
-    #                                        stop_thres=(0.001,0.0001), window_s=5, step_s=1)
-    #     t2 = datetime.now()
-    #     print('Normalization using iterative distribution took {0} s'.format((t2-t1).total_seconds()))
-    #
-    #     # norm_df.to_csv(save_dir + 's3_2d_{0}.csv'.format(time2str_file(periods[dataset][0])))
-    #     fig, ax = data.plot_heatmap_in_period(dis_norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
-    #                                           option='vec', nan_thres_p=0.95, plot=True, save_dir=save_dir, save_img=False,
-    #                                           save_df=False, figsize=(18,8))
-
-
-    # ===============================================================================================
     # Visualized the previously saved heatmap (i.e., pandas data frame), which can be the raw data or normalized data
     # ===============================================================================================
     if False:
@@ -214,65 +194,6 @@ def preprocess_data():
         _, _ = data.plot_heatmap_in_period(norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
                                               option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
                                               save_df=False, figsize=(18,8))
-
-        # deprecated
-        # if False:
-        #     # overlay the ground truth on the data heat map
-        #
-        #     # read the manual labeled ground truth
-        #     idx = []
-        #     times = []
-        #     lane_idx = []
-        #     with open('../datasets/{0}/v11/'.format(folder) + 'ground_truth_10min.txt','r') as f:
-        #         for line in f:
-        #             if len(line) == 0 or line[0] == '#':
-        #                 continue
-        #             items = line.strip().split(',')
-        #
-        #             ms = items[0].split(':')
-        #             sec = int(ms[0])*60+float(ms[1])
-        #             idx.append( int( sec * 64)-200 )
-        #             times.append( t_start + timedelta(seconds=sec ) )
-        #             lane_idx.append(int(items[1]))
-        #
-        #     for t_idx, l_idx in zip(idx, lane_idx):
-        #         # ax.fill_between(norm_df.index, 0, 127, where=((norm_df.index>=veh[0]) & (norm_df.index<=veh[1])), facecolor='green',alpha=0.5  )
-        #
-        #         if l_idx == 1:
-        #             col = 'g'
-        #         elif l_idx == 2:
-        #             col = 'r'
-        #         rect = patches.Rectangle((t_idx, 0), 16, 128, linewidth=1, edgecolor=col,
-        #                                  facecolor=(0,1,0,0.2))
-        #         ax.add_patch(rect)
-        #
-        #
-        #     # plot ultrasonic sensor
-        #     fig, ax = plt.subplots(figsize=(18,5))
-        #     t_ultra = df.index
-        #     # mtimes = [mdates.date2num(t) for t in times]
-        #     ultra = df['ultra']
-        #     ax.plot(t_ultra, ultra)
-        #
-        #     for t, l_idx in zip(times, lane_idx):
-        #         if l_idx == 1:
-        #             col = 'g'
-        #             f_col = (0,1,0,0.2)
-        #         elif l_idx == 2:
-        #             col = 'r'
-        #             f_col = (1,0,0,0.2)
-        #
-        #         # rect = patches.Rectangle((t, 0.0), 0.2, 12,
-        #         #                          linewidth=1, edgecolor=col, facecolor=(0,1,0,0.2))
-        #         # ax.add_patch(rect)
-        #
-        #         ax.axvspan(t, t+ pd.datetools.Second(1), facecolor=f_col, edgecolor=col)
-        #
-        #     # assign date locator / formatter to the x-axis to get proper labels
-        #     # locator = mdates.AutoDateLocator(minticks=3)
-        #     # formatter = mdates.AutoDateFormatter(locator)
-        #     # ax.xaxis.set_major_locator(locator)
-        #     # ax.xaxis.set_major_formatter(formatter)
 
         plt.draw()
 
@@ -367,7 +288,7 @@ def run_traffic_detection():
 
         # Run detection algorithm using adaptive window
         alg.run_adaptive_window(norm_df, window_s=5.0, step_s=2.5, speed_range=speed_range, plot_final=True,
-                                plot_debug=False, save_dir='../workspace/{0}/figs/'.format(folder), sensor='s1',
+                                plot_debug=False, save_dir='../workspace/{0}/'.format(folder), sensor='s1',
                                 t_start=str2time('2017-05-30 20:55:0.0'),
                                 t_end=str2time('2017-05-30 21:45:00.0'))
 
@@ -420,13 +341,13 @@ def post_process():
         t_period_start = str2time('2017-06-08 21:40:00.0')
         t_period_end = str2time('2017-06-08 22:20:00.0')
 
-        vehs_npy = save_dir + 'figs/speed/v3_final/detected_vehs.npy'
+        vehs_npy = save_dir + 's1_detected_vehs.npy'
 
         # Ground truth
         init_t = str2time('2017-06-08 21:32:18.252811')
         offset = -0.28
         drift_ratio = 1860.5/1864.0
-        true_file = save_dir + 'labels_Jun08.npy'
+        true_file = save_dir + 'CV_truth_Jun08.npy'
 
         # Trimming
         post = PostProcess()
@@ -437,9 +358,6 @@ def post_process():
             post.trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
 
         if True:
-            # paras_file = save_dir + 'figs/speed/v3_final/paras.txt'
-            # norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
 
             post.postprocess_detection(vehs_npy, t_period_start, t_period_end,
                                  ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
@@ -458,13 +376,13 @@ def post_process():
         t_period_start = str2time('2017-06-09 19:10:00.0')
         t_period_end = str2time('2017-06-09 20:39:00.0')
 
-        vehs_npy = save_dir + 'figs/speed/detected_vehs.npy'
+        vehs_npy = save_dir + 'detected_vehs.npy'
 
         # Ground truth
         init_t = str2time('2017-06-09 19:09:00.0')
         offset = -0.66
         drift_ratio = 1860.5/1864.0
-        true_file = save_dir + 'labels_Jun09.npy'
+        true_file = save_dir + 'CV_truth_Jun09.npy'
 
         # Trimming
         post = PostProcess()
@@ -475,9 +393,6 @@ def post_process():
             post.trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
 
         if True:
-            # paras_file = save_dir + 'figs/speed/paras.txt'
-            # norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
 
             post.postprocess_detection(vehs_npy, t_period_start, t_period_end,
                                  ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
@@ -498,16 +413,15 @@ def post_process():
         save_dir = '../workspace/{0}/'.format(folder)
 
         # Detections
-        paras_file = save_dir + 'figs/speed/s1/paras.txt'
+        vehs_npy = save_dir + 's1_detected_vehs.npy'
         norm_df_file = save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
-        vehs_npy = save_dir + 'figs/speed/s1/detected_vehs.npy'
 
         # Ground truth
         # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
         init_t = str2time('2017-05-30 20:55:00.0')
         offset = -0.48
         drift_ratio = 1860.6/1864.0
-        true_file = save_dir + 'labels_v11.npy'
+        true_file = save_dir + 'CV_truth_v11.npy'
 
         # Trimming
         post = PostProcess()
@@ -517,7 +431,6 @@ def post_process():
             post.trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
 
         if False:
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
 
             post.postprocess_detection(vehs_npy, t_period_start, t_period_end,
                                  ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
@@ -537,16 +450,15 @@ def post_process():
         save_dir = '../workspace/{0}/'.format(folder)
 
         # Detection
-        paras_file = save_dir + 'figs/speed/s2/paras.txt'
+        vehs_npy = save_dir + 's2_detected_vehs.npy'
         norm_df_file = save_dir + 's2_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
-        vehs_npy = save_dir + 'figs/speed/s2/detected_vehs.npy'
 
         # Ground truth
         # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
         init_t = str2time('2017-05-30 20:55:00.0')
         offset = 2.102
         drift_ratio = 1860.6/1864.0
-        true_file = save_dir + 'labels_v21_post.npy'
+        true_file = save_dir + 'CV_truth_v21.npy'
 
         # Trimming
         post = PostProcess()
@@ -556,7 +468,7 @@ def post_process():
             post.trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
 
         if False:
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
+
             post.postprocess_detection(vehs_npy, t_period_start, t_period_end,
                                  ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
 
@@ -570,8 +482,8 @@ def post_process():
             folder = 'May30_2017'
             save_dir = '../workspace/{0}/'.format(folder)
 
-            s1_vehs_npy = save_dir + 'figs/speed/s1/v2_3/detected_vehs_post.npy'
-            s2_vehs_npy = save_dir + 'figs/speed/s2/v2_3/detected_vehs_post.npy'
+            s1_vehs_npy = save_dir + 's1_detected_vehs_post.npy'
+            s2_vehs_npy = save_dir + 's2_detected_vehs_post.npy'
 
             # combine detection
             s1_s2_shift = 0.33
@@ -587,29 +499,87 @@ def evaluate_accuracy():
     """
     # ===============================================================================================
     # data set 0530, 2017: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
+    # SET TRUE/FALSE TO
+    #   - plot s1 detections vs truth
+    #   - plot s2 detections vs truth
+    #   - plot combined s1-s2 detections vs truth
+    #   - compute error statistics
+    #   - plot error histogram
     # ===============================================================================================
+
+    # -----------------------------------------------------------------------------------------------
+    # S1: plot s1 detection vs true
+    if False:
+        folder = 'May30_2017'
+
+        # Configuration
+        save_dir = '../workspace/{0}/'.format(folder)
+        paras_file = save_dir + 's1_detector_paras.txt'
+        norm_df_file = save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
+        est_vehs_npy = save_dir + 's1_detected_vehs_post.npy'
+        true_file = save_dir + 'CV_truth_v11_post.npy'
+
+        # Plot the detection VS true
+        ev = EvaluatePerformance()
+
+        # load norm df data
+        norm_df = pd.read_csv(norm_df_file, index_col=0)
+        norm_df.index = norm_df.index.to_datetime()
+        true_vehs = np.load(true_file)
+        det_vehs = np.load(est_vehs_npy)
+
+        ev.plot_single_lane_detection_vs_true(norm_df, paras_file, vehs=det_vehs, true_vehs=true_vehs,
+                              t_start=str2time('2017-05-30 21:30:00.0'),
+                              t_end=str2time('2017-05-30 21:35:00.0'))
+
+    # -----------------------------------------------------------------------------------------------
+    # S2: plot s2 detection vs true
+    if False:
+        folder = 'May30_2017'
+
+        # Configuration
+        save_dir = '../workspace/{0}/'.format(folder)
+        paras_file = save_dir + 's2_detector_paras.txt'
+        norm_df_file = save_dir + 's2_2d_KF__20170530_205500_0__20170530_214500_0_prob95.csv'
+        est_vehs_npy = save_dir + 's2_detected_vehs_post.npy'
+        true_file = save_dir + 'CV_truth_v21_post.npy'
+
+        # Plot the detection VS true
+        ev = EvaluatePerformance()
+
+        # load norm df data
+        norm_df = pd.read_csv(norm_df_file, index_col=0)
+        norm_df.index = norm_df.index.to_datetime()
+        true_vehs = np.load(true_file)
+        true_vehs[:,2] = -true_vehs[:,2]
+        det_vehs = np.load(est_vehs_npy)
+
+        ev.plot_single_lane_detection_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
+                              t_start=str2time('2017-05-30 21:35:00.0'),
+                              t_end=str2time('2017-05-30 21:50:00.0'))
 
     # -----------------------------------------------------------------------------------------------
     # S1 and S2, plot combined detection vs true
     if False:
         folder = 'May30_2017'
         save_dir = '../workspace/{0}/'.format(folder)
-        paras_file = save_dir + 'figs/speed/s1/v2_3/paras.txt'
+        paras_file = save_dir + 's1_detector_paras.txt'
 
-        s1_true = np.load(save_dir + 'labels_v11_post.npy')
-        s2_true = np.load(save_dir + 'labels_v21_post.npy')
+        s1_true = np.load(save_dir + 'CV_truth_v11_post.npy')
+        s2_true = np.load(save_dir + 'CV_truth_v21_post.npy')
         s2_true[:,2] = -s2_true[:,2]
 
-        s1_vehs_comb = np.load(save_dir + 'figs/speed/s1/v2_3/detected_vehs_post_comb_v2.npy')
-        s2_vehs_comb = np.load(save_dir + 'figs/speed/s2/v2_3/detected_vehs_post_comb_v2.npy')
+        s1_vehs_comb = np.load(save_dir + 's1_detected_vehs_post_combined.npy')
+        s2_vehs_comb = np.load(save_dir + 's2_detected_vehs_post_combined.npy')
 
-        debug_combined_vehs = np.load(save_dir + 'unique_detected_vehs.npy')
+        debug_combined_vehs = np.load(save_dir + 'debug_combined_vehs.npy')
 
         ev = EvaluatePerformance()
+        # Plot the detections vs truth
         if False:
-            s1_norm_df = pd.read_csv(save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95_clean_ultra.csv', index_col=0)
+            s1_norm_df = pd.read_csv(save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv', index_col=0)
             s1_norm_df.index = s1_norm_df.index.to_datetime()
-            s2_norm_df = pd.read_csv(save_dir + 's2_2d_KF__20170530_205400_0__20170530_214500_0_prob95_clean_ultra.csv', index_col=0)
+            s2_norm_df = pd.read_csv(save_dir + 's2_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv', index_col=0)
             s2_norm_df.index = s2_norm_df.index.to_datetime()
             s1_s2_shift = 0.33
             ev.plot_two_lanes_detection_vs_true(s1_df=s1_norm_df, s1_vehs=s1_vehs_comb, s1_true=s1_true,
@@ -618,20 +588,6 @@ def evaluate_accuracy():
                                      t_start=str2time('2017-05-30 21:29:00.0'),
                                      t_end=str2time('2017-05-30 21:44:00.0'),
                                      debug_combined_vehs=debug_combined_vehs)
-
-            # ev.plot_two_lane_vs_true(s1_df=s1_norm_df, s1_vehs=s1_vehs_comb, s1_true=s1_true,
-            #                          s2_df=s2_norm_df, s2_vehs=s2_vehs_comb, s2_true=s2_true,
-            #                          s1s2_shift=s1_s2_shift, s1_paras_file=paras_file,
-            #                          t_start=str2time('2017-05-30 21:20:00.0'),
-            #                          t_end=str2time('2017-05-30 21:25:00.0'),
-            #                          unique_vehs=unique_vehs)
-            #
-            # ev.plot_two_lane_vs_true(s1_df=s1_norm_df, s1_vehs=s1_vehs_comb, s1_true=s1_true,
-            #                          s2_df=s2_norm_df, s2_vehs=s2_vehs_comb, s2_true=s2_true,
-            #                          s1s2_shift=s1_s2_shift, s1_paras_file=paras_file,
-            #                          t_start=str2time('2017-05-30 21:40:00.0'),
-            #                          t_end=str2time('2017-05-30 21:45:00.0'),
-            #                          unique_vehs=unique_vehs)
 
         # Match vehicle and compute statistics
         if True:
@@ -683,11 +639,11 @@ def evaluate_accuracy():
         folder = 'May30_2017'
         save_dir = '../workspace/{0}/'.format(folder)
 
-        s1_true = np.load(save_dir + 'labels_v11_post.npy')
-        s2_true = np.load(save_dir + 'labels_v21_post.npy')
+        s1_true = np.load(save_dir + 'CV_truth_v11_post.npy')
+        s2_true = np.load(save_dir + 'CV_truth_v21_post.npy')
 
-        s1_vehs_npy_comb = save_dir + 'figs/speed/s1/detected_vehs_post_comb.npy'
-        s2_vehs_npy_comb = save_dir + 'figs/speed/s2/detected_vehs_post_comb.npy'
+        s1_vehs_npy_comb = save_dir + 's1_detected_vehs_post_combined.npy'
+        s2_vehs_npy_comb = save_dir + 's2_detected_vehs_post_combined.npy'
 
         true_count_l1 = len(s1_true)
         true_count_l2 = len(s2_true)
@@ -698,90 +654,36 @@ def evaluate_accuracy():
         # vehicle during the true period
         s1_vehs_comb = np.load(s1_vehs_npy_comb)
         s2_vehs_comb = np.load(s2_vehs_npy_comb)
-        count_l1 = count_vehs(s1_vehs_comb)
-        count_l2 = count_vehs(s2_vehs_comb)
+
+        tmp_ev = EvaluatePerformance()
+        count_l1 = tmp_ev.count_closer_lane_vehs(s1_vehs_comb)
+        count_l2 = tmp_ev.count_closer_lane_vehs(s2_vehs_comb)
 
         print('Estimated    : Lane 1,  Lane 2,  Total')
         print('               {0},     {1},     {2}'.format(count_l1, count_l2, count_l1 + count_l2))
 
         # plot the distribution
-        plot_hist(s1_vehs_comb, s2_vehs_comb, s1_true, s2_true)
+        tmp_ev.plot_two_lanes_hist(s1_vehs_comb, s2_vehs_comb, s1_true, s2_true)
 
-    # -----------------------------------------------------------------------------------------------
-    # S1: plot det vs true
-    if False:
-        folder = 'May30_2017'
-
-        # Configuration
-        save_dir = '../workspace/{0}/'.format(folder)
-        paras_file = save_dir + 'figs/speed/s1/v2_3/paras.txt'
-        norm_df_file = save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95_clean_ultra.csv'
-        est_vehs_npy = save_dir + 'figs/speed/s1/v2_3/detected_vehs_post.npy'
-        true_file = save_dir + 'labels_v11_post.npy'
-
-        # Plot the detection VS true
-        ev = EvaluatePerformance()
-
-        # load norm df data
-        norm_df = pd.read_csv(norm_df_file, index_col=0)
-        norm_df.index = norm_df.index.to_datetime()
-        true_vehs = np.load(true_file)
-        det_vehs = np.load(est_vehs_npy)
-
-        # ev.plot_det_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
-        #                       t_start=str2time('2017-05-30 20:55:00.0'),
-        #                       t_end=str2time('2017-05-30 21:05:00.0'))
-        ev.plot_single_lane_detection_vs_true(norm_df, paras_file, vehs=None, true_vehs=None,
-                              t_start=str2time('2017-05-30 21:30:00.0'),
-                              t_end=str2time('2017-05-30 21:35:00.0'))
-
-    # -----------------------------------------------------------------------------------------------
-    # S2: plot det vs true
-    if False:
-        folder = 'May30_2017'
-
-        # Configuration
-        save_dir = '../workspace/{0}/'.format(folder)
-        paras_file = save_dir + 'figs/speed/s2/paras.txt'
-        norm_df_file = save_dir + 's2_2d_KF__20170530_205500_0__20170530_214500_0_prob95.csv'
-        est_vehs_npy = save_dir + 'figs/speed/s2/detected_vehs_post.npy'
-        true_file = save_dir + 'labels_v21_post.npy'
-
-        # Plot the detection VS true
-        ev = EvaluatePerformance()
-
-        # load norm df data
-        norm_df = pd.read_csv(norm_df_file, index_col=0)
-        norm_df.index = norm_df.index.to_datetime()
-        true_vehs = np.load(true_file)
-        true_vehs[:,2] = -true_vehs[:,2]
-        det_vehs = np.load(est_vehs_npy)
-
-        ev.plot_single_lane_detection_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
-                              t_start=str2time('2017-05-30 21:35:00.0'),
-                              t_end=str2time('2017-05-30 21:50:00.0'))
 
 
     # ===============================================================================================
     # dataset Jun 08, 2017 on 6th street down near the parking lot.
+    # ===============================================================================================
     # Saved data is 21:40 ~ 22:20 UTC
     if False:
         folder = 'Jun08_2017'
 
         # Configuration
         save_dir = '../workspace/{0}/'.format(folder)
-        est_vehs_npy = save_dir + 'figs/speed/v3_1/detected_vehs_post.npy'
-        true_file = save_dir + 'labels_Jun08_post.npy'
+        est_vehs_npy = save_dir + 's1_detected_vehs_post.npy'
+        true_file = save_dir + 'CV_truth_Jun08_post.npy'
 
         true_vehs = np.load(true_file)
         det_vehs = np.load(est_vehs_npy)
 
-        # find the outliers
-        # for v in det_vehs:
-        #     if abs(v['distance']) <= 4:
-        #         print('outlier vehicles {0:.2f} m: {1}, {2}'.format(v['distance'], v['t_in'], v['valid']))
-
         ev = EvaluatePerformance()
+
         # plot the distribution of speed
         if False:
             # Get the distances and speeds
@@ -843,13 +745,11 @@ def evaluate_accuracy():
 
             # plot det vs true
             if False:
-                paras_file = save_dir + 'figs/speed/v3_final/paras.txt'
-                norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95_clean_ultra.csv'
+                paras_file = save_dir + 's1_detector_paras.txt'
+                norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
                 norm_df = pd.read_csv(norm_df_file, index_col=0)
                 norm_df.index = norm_df.index.to_datetime()
 
-                # str2time('2017-06-08 21:40:00.0')
-                # str2time('2017-06-08 22:20:00.0')
                 ev.plot_single_lane_detection_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
                                   t_start=str2time('2017-06-08 22:05:00.0'),
                                   t_end=str2time('2017-06-08 22:15:00.0'), matches=matched_vehs)
@@ -857,13 +757,14 @@ def evaluate_accuracy():
 
     # ===============================================================================================
     # dataset Jun 09, 2017, same setup as Jun 08, 19:10~20:39
+    # ===============================================================================================
     if True:
         folder = 'Jun09_2017'
 
         # Configuration
         save_dir = '../workspace/{0}/'.format(folder)
-        est_vehs_npy = save_dir + 'figs/speed/v3_2/detected_vehs_post.npy'
-        true_file = save_dir + 'labels_Jun09_post.npy'
+        est_vehs_npy = save_dir + 's2_detected_vehs_post.npy'
+        true_file = save_dir + 'CV_truth_Jun09_post.npy'
 
         true_vehs = np.load(true_file)
         det_vehs = np.load(est_vehs_npy)
@@ -933,10 +834,9 @@ def evaluate_accuracy():
 
             # plot det vs true
             if False:
-                # str2time('2017-06-09 19:10:00.0') ~ str2time('2017-06-09 20:39:00.0')
 
-                paras_file = save_dir + 'figs/speed/v3_1/paras.txt'
-                norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95_clean_ultra.csv'
+                paras_file = save_dir + 's1_detector_paras.txt'
+                norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
                 norm_df = pd.read_csv(norm_df_file, index_col=0)
                 norm_df.index = norm_df.index.to_datetime()
 
@@ -946,174 +846,66 @@ def evaluate_accuracy():
 
 
 
-def plot_hist(s1_det, s2_det, true_s1, true_s2):
-    """
-    This function plots the speed histogram of detections
-    :param s1_det: s1 detection, a list of vehicle dict
-    :param s2_det: s2 detection
-    :param true_s1: true for s1: t_start (dt), t_end (dt), speed (mph), distance (m), ...
-    :param true_s2: true for s2
-    :return:
-    """
-
-    # s1 distance and speed
-    s1_distances = []
-    s1_speeds = []
-    for v in s1_det:
-        if v['closer_lane'] is True:
-            s1_distances.append(v['distance'])
-            s1_speeds.append(abs(v['speed']))
-
-    # s2 distance and speeds
-    s2_distances = []
-    s2_speeds = []
-    for v in s2_det:
-        if v['closer_lane'] is True:
-            s2_distances.append(v['distance'])
-            s2_speeds.append(abs(v['speed']))
-
-    # true s1 speed and distance
-    s1_true_distances = []
-    s1_true_speeds = []
-    for v in true_s1:
-        if not np.isnan(v[2]):
-            s1_true_distances.append(v[3])
-            s1_true_speeds.append(abs(v[2]))
 
 
-    # true s2 speed and distance
-    s2_true_distances = []
-    s2_true_speeds = []
-    for v in true_s2:
-        if not np.isnan(v[2]):
-            s2_true_distances.append(v[3])
-            s2_true_speeds.append(abs(v[2]))
-
-    # ------------------------------------------------------------------------------
-    # speed distribution
-    plt.figure(figsize=(10,10))
-    speeds = [s1_speeds, s2_speeds, s1_true_speeds, s2_true_speeds]
-    labels = ['s1', 's2', 's1_true', 's2_true']
-    colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
-    text = []
-    for i, s in enumerate(speeds):
-        c = next(colors)
-        mu, std = np.mean(s), np.std(s)
-        print('Speed {0}: {1}, {2}'.format(labels[i], mu, std))
-        n, bins, patches = plt.hist(s, 50, normed=1, facecolor=c, alpha=0.75, label=labels[i])
-        plt.plot(bins, mlab.normpdf(bins, mu, std), color=c, linestyle='--',
-                 linewidth=2)
-
-        text.append('{0} mean: {1:.2f}, std: {2:.2f}'.format(labels[i], mu, std))
-        # text.append('Mean: {0:.2f}\nStandard deviation: {1:.2f}'.format(mu, std))
-
-    text_str = '\n'.join(text)
-    plt.text(5, 0.10, text_str, fontsize=14)
-    # plt.text(6, 0.16, text_str, fontsize=16)
-    plt.ylim(0, np.max(n)*1.2)
-
-    plt.legend()
-    plt.xlabel('Speed (mph)', fontsize=18)
-    plt.ylabel('Distribution', fontsize=18)
-    plt.title('Two lane speed distribution', fontsize=22)
-    plt.tick_params(axis='both', which='major', labelsize=16)
-    plt.draw()
-
-    # ------------------------------------------------------------------------------
-    # distance distribution
-    plt.figure(figsize=(10,10))
-    distances = [s1_distances, s2_distances, s1_true_distances, s2_true_distances]
-    labels = ['s1', 's2', 's1_true', 's2_true']
-    colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
-    text = []
-    for i, d in enumerate(distances):
-        c = next(colors)
-        mu, std = np.mean(d), np.std(d)
-        print('Distance {0}: {1}, {2}'.format(labels[i], mu, std))
-        n, bins, patches = plt.hist(d, 50, normed=1, facecolor=c, alpha=0.75, label=labels[i])
-        plt.plot(bins, mlab.normpdf(bins, mu, std), color=c, linestyle='--',
-                 linewidth=2)
-
-        text.append('{0} mean: {1:.2f}, std: {2:.2f}'.format(labels[i], mu, std))
-        # text.append('Mean: {0:.2f}\nStandard deviation: {1:.2f}'.format(mu, std))
-
-    text_str = '\n'.join(text)
-    plt.text(1, 1.5, text_str, fontsize=14)
-    # plt.text(6, 0.16, text_str, fontsize=16)
-    plt.ylim(0, np.max(n)*1.2)
-    plt.xlim([1,8])
-
-    plt.legend()
-    plt.xlabel('Distance (m)', fontsize=18)
-    plt.ylabel('Distribution', fontsize=18)
-    plt.title('Two lane Distance distribution', fontsize=22)
-    plt.tick_params(axis='both', which='major', labelsize=16)
-    plt.draw()
 
 
-def count_vehs(vehs):
-    counter = 0
-    for v in vehs:
-        if v['closer_lane'] is True:
-            counter +=1
 
-    return counter
-
-
-# To udpate
-def generate_video_frames():
-    # ===============================================================================================
-    # generate a video
-    folder = '1013_2016'
-    data_dir = '../datasets/{0}/'.format(folder)
-    dataset = '1310-210300'     # freeflow part 1
-    # dataset = '1310-213154'   # freeflow part 2
-    # dataset ='1310-221543'       # stop and go
-
-    # ========================================================
-    # Load the raw PIR data
-    print('Loading raw data...')
-    t1 = datetime.now()
-    raw_df = pd.read_csv(data_dir+'{0}.csv'.format(dataset), index_col=0)
-    raw_df.index = raw_df.index.to_datetime()
-    t2 = datetime.now()
-    print('Loading raw data csv data took {0} s'.format((t2-t1).total_seconds()))
-
-    # ========================================================
-    # Load the normalized data file
-    print('Loading normalized data...')
-    norm_df = pd.read_csv('../workspace/1013/s1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
-    norm_df.index = norm_df.index.to_datetime()
-
-    # ========================================================
-    # Load the detected vehicles
-    print('Loading detected vehicles...')
-    det_vehs = np.load('../workspace/1013/s1_vehs__20161013_210305_738478__20161013_211516_183544_prob95.npy')
-
-    # ========================================================
-    # Construct algorithm instance
-    print('Generating video frames...')
-    # _dir = '../workspace/1013/Video_ff1/'
-    _dir = '/data_fast/Yanning_sensors/video_1013_ff1_rgb/'
-    ev = EvaluatePerformance()
-    ev.plot_video_frames(video_file='../datasets/1013_2016/1013_v1_1_ff_hq.mp4', video_fps=60.1134421399,
-                          video_start_time=str2time('2016-10-13 20:57:27.5'),
-                          raw_df=raw_df, raw_pir_clim=(20,40),
-                          ratio_tx=6.0, norm_df=norm_df, norm_df_win=5.0, det_vehs=det_vehs,
-                          save_dir=_dir)
-
-
-def update_fps(offset1, offset2, T, fps):
-    """
-    This function updates the fps based on the offsets
-    :param offset1: the offset in seconds regarding to the real time
-    :param offset2: the increased or decreased offset in seconds regarding to the real time after T
-    :param T: the duration for the offset in seconds
-    :param fps: old fps
-    :return: new fps
-    """
-    return fps*(T-offset1+offset2)/T
-
+#
+# # To udpate
+# def generate_video_frames():
+#     # ===============================================================================================
+#     # generate a video
+#     folder = '1013_2016'
+#     data_dir = '../datasets/{0}/'.format(folder)
+#     dataset = '1310-210300'     # freeflow part 1
+#     # dataset = '1310-213154'   # freeflow part 2
+#     # dataset ='1310-221543'       # stop and go
+#
+#     # ========================================================
+#     # Load the raw PIR data
+#     print('Loading raw data...')
+#     t1 = datetime.now()
+#     raw_df = pd.read_csv(data_dir+'{0}.csv'.format(dataset), index_col=0)
+#     raw_df.index = raw_df.index.to_datetime()
+#     t2 = datetime.now()
+#     print('Loading raw data csv data took {0} s'.format((t2-t1).total_seconds()))
+#
+#     # ========================================================
+#     # Load the normalized data file
+#     print('Loading normalized data...')
+#     norm_df = pd.read_csv('../workspace/1013/s1_2d_MAP__20161013_210305_738478__20161013_211516_183544_prob95.csv', index_col=0)
+#     norm_df.index = norm_df.index.to_datetime()
+#
+#     # ========================================================
+#     # Load the detected vehicles
+#     print('Loading detected vehicles...')
+#     det_vehs = np.load('../workspace/1013/s1_vehs__20161013_210305_738478__20161013_211516_183544_prob95.npy')
+#
+#     # ========================================================
+#     # Construct algorithm instance
+#     print('Generating video frames...')
+#     # _dir = '../workspace/1013/Video_ff1/'
+#     _dir = '/data_fast/Yanning_sensors/video_1013_ff1_rgb/'
+#     ev = EvaluatePerformance()
+#     ev.plot_video_frames(video_file='../datasets/1013_2016/1013_v1_1_ff_hq.mp4', video_fps=60.1134421399,
+#                           video_start_time=str2time('2016-10-13 20:57:27.5'),
+#                           raw_df=raw_df, raw_pir_clim=(20,40),
+#                           ratio_tx=6.0, norm_df=norm_df, norm_df_win=5.0, det_vehs=det_vehs,
+#                           save_dir=_dir)
+#
+#
+# def update_fps(offset1, offset2, T, fps):
+#     """
+#     This function updates the fps based on the offsets
+#     :param offset1: the offset in seconds regarding to the real time
+#     :param offset2: the increased or decreased offset in seconds regarding to the real time after T
+#     :param T: the duration for the offset in seconds
+#     :param fps: old fps
+#     :return: new fps
+#     """
+#     return fps*(T-offset1+offset2)/T
+#
 
 
 
