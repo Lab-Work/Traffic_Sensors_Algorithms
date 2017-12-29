@@ -5,12 +5,13 @@ import sys, os
 from os.path import exists
 
 import itertools
-import time, glob
+# import time
+import glob
 from datetime import datetime
 from datetime import timedelta
 from contextlib import contextmanager
 from copy import deepcopy
-import imutils
+# import imutils
 from collections import OrderedDict
 from ast import literal_eval as make_tuple
 
@@ -21,7 +22,7 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 from matplotlib import gridspec
 import matplotlib.dates as mdates
-import matplotlib.patches as patches
+# import matplotlib.patches as patches
 
 import numpy as np
 import scipy
@@ -104,6 +105,7 @@ def str2time_file(dt_str="%Y%m%d_%H%M%S_%f"):
 def print_loop_status(msg, i, total_iter):
     """
     This function prints the loop status
+    :param msg: the output message
     :param i: the current loop counter
     :param total_iter: the total number of iterations
     :return:
@@ -157,6 +159,7 @@ class TrafficSensorAlg:
           and perform speed estimation for each detected vehicle.
     """
 
+    # DONE
     def __init__(self, r2_thres=0.2, dens_thres=0.5, min_dt=0.2, pir_res=(4, 32), sampling_freq=64):
         """
         Initialize the algorithm with key parameters
@@ -248,13 +251,13 @@ class TrafficSensorAlg:
         self.dists = []
         self.vehs = []
 
-    def run(self, norm_df, TH_det=600, window_s=2.0, step_s=1.0, speed_range=(1, 50),
+    # DONE, deprecated function
+    def run(self, norm_df, window_s=2.0, step_s=1.0, speed_range=(1, 50),
             plot_final=True, plot_debug=False, save_dir='./', t_start=None, t_end=None):
         """
         This function runs the vehicle detection and speed estimation algorithm on the normalized data norm_df in a
         sliding window fashion with overlapping.
         :param norm_df: the pandas DataFrame data structure
-        :param TH_det: the threshold for determining if there are vehicles present in the window
         :param window_s: seconds, the window size
         :param step_s: seconds, moving windows by steps
         :param speed_range: (1,50) mph, the range of speeds to be estimated
@@ -275,7 +278,7 @@ class TrafficSensorAlg:
 
         # -------------------------------------------------------------------------------------------------------
         # Detect the vehicle using VehDet class
-        windows = self.detect_vehs(_norm_df, TH_det=TH_det, window_s=window_s, step_s=step_s)
+        windows = self.detect_vehs(_norm_df, window_s=window_s, step_s=step_s)
 
         # -------------------------------------------------------------------------------------------------------
         # Speed estimation
@@ -297,6 +300,7 @@ class TrafficSensorAlg:
         self._save_det_vehs_txt(self.vehs, save_dir, 'detected_vehs.txt')
         self._save_paras(save_dir, 'paras.txt')
 
+    # DONE
     def run_adaptive_window(self, norm_df, window_s=2.0, step_s=1.0, speed_range=(1, 50),
             plot_final=True, plot_debug=False, save_dir='./', sensor='s1', t_start=None, t_end=None):
         """
@@ -421,11 +425,11 @@ class TrafficSensorAlg:
             # n, bins, patches = plt.hist(_g_bad_mdl, 50, normed=1, facecolor='r', alpha=0.75, label='Bad')
             # plt.show()
 
+    # DONE
     def detect_vehs(self, norm_df, window_s=2.0, step_s=1.0):
         """
         This function outputs the windows that may contain a vehicle
         :param norm_df: the pandas DataFrame structure
-        :param TH_det: the threshold for determining if there are vehicles present in the window
         :param window_s: seconds, the window size
         :param step_s: seconds, moving windows by steps
         :return: a list of tuples (t_s, t_e) wher t_s and t_e are datetime
@@ -458,20 +462,25 @@ class TrafficSensorAlg:
                 wins.append((t_s, t_e))
         return wins
 
-    def convert_vehs_to_txt(self, vehs, save_dir, save_name):
+    # DONE
+    @staticmethod
+    def convert_vehs_to_txt(vehs, save_dir, save_name):
         """
-        This function converts the vehs dict to the txt file containing [t_in, t_out, distance, speed, valid]
-        :param vehs:
-        :param save_dir:
-        :param save_name:
+        This function converts the vehs dict to readable txt file containing
+            [t_in (datetime), t_out (datetime), distance (m), speed (mph), valid (bool], where
+            valid flag is to mark whether the ultrasonic reading is a valid reading
+        :param vehs:the detected vehicles dictionary
+        :param save_dir: the directory for saving the text file.
+        :param save_name: the name for the txt file
         :return:
         """
-        with open(save_dir+save_name, 'w+') as f:
-            f.write('t_in, t_out, dist (m), speed (mph), valid_dist\n')
+        with open(save_dir+save_name, 'w+') as fi:
+            fi.write('t_in, t_out, dist (m), speed (mph), valid_dist\n')
             for veh in vehs:
-                f.write('{0},{1},{2},{3},{4}\n'.format(veh['t_in'], veh['t_out'], veh['distance'],
+                fi.write('{0},{1},{2},{3},{4}\n'.format(veh['t_in'], veh['t_out'], veh['distance'],
                                                        veh['speed'], veh['valid']))
 
+    # DONE
     def _register_veh(self, veh, speed_range=None):
         """
         This function registers the vehicle detected in each time window. In addition:
@@ -599,6 +608,7 @@ class TrafficSensorAlg:
 
                 self.vehs.append(veh)
 
+    # DONE
     def _same_veh(self, v1, v2):
         """
         This function evaluates if v1 and v2 are essentially fitting to the trace of the same vehicle
@@ -625,20 +635,25 @@ class TrafficSensorAlg:
         else:
             return False
 
-    def _save_det_vehs_txt(self, _vehs, save_dir, save_name):
+    # DONE
+    @staticmethod
+    def _save_det_vehs_txt(_vehs, save_dir, save_name):
         """
         This function extracts and only saves the most important detection results from self.vehs
             [t_in, t_out, distance, speed, valid]
         :param save_dir: the directory for saving
         :param save_name: the file name
-        :return:
+        :return: a saved txt file with each row
+            [t_in (datetime), t_out (datetime), distance (m), speed (mph), valid (bool], where
+            valid flag is to mark whether the ultrasonic reading is a valid reading
         """
-        with open(save_dir+save_name, 'w+') as f:
-            f.write('t_in, t_out, dist (m), speed (mph), estimated_dist\n')
+        with open(save_dir+save_name, 'w+') as fi:
+            fi.write('t_in, t_out, dist (m), speed (mph), estimated_dist\n')
             for veh in _vehs:
-                f.write('{0},{1},{2},{3},{4}\n'.format(veh['t_in'], veh['t_out'], veh['distance'],
+                fi.write('{0},{1},{2},{3},{4}\n'.format(veh['t_in'], veh['t_out'], veh['distance'],
                                                        veh['speed'], veh['valid']))
 
+    # DONE
     def _save_paras(self, save_dir, save_name):
         """
         This function saves the parameters used to generate the results
@@ -646,9 +661,9 @@ class TrafficSensorAlg:
         :param save_name: the file name
         :return:
         """
-        with open(save_dir + save_name, 'w+') as f:
+        with open(save_dir + save_name, 'w+') as fi:
             for key in self.paras.keys():
-                f.write('{0}: {1}\n'.format(key, self.paras[key]))
+                fi.write('{0}: {1}\n'.format(key, self.paras[key]))
 
 
 # ==================================================================================================================
@@ -665,7 +680,7 @@ class PostProcess:
     def __init__(self):
         self.mps2mph = 2.23694  # m/s to mph
 
-
+    # DONE
     @staticmethod
     def postprocess_detection(det_npy_file, t_start, t_end,
                             ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0,70.0)):
@@ -717,11 +732,12 @@ class PostProcess:
                 vehs_idx.append(i)
         np.save(det_npy_file.replace('.npy', '_post.npy'), vehs[vehs_idx])
 
-
-    def post_trim_true_detection(self, true_det_file, init_t, offset, drift_ratio, t_start, t_end):
+    # DONE
+    def postprocess_true(self, true_det_file, init_t, offset, drift_ratio, t_start, t_end):
         """
+        OLD_NAME: post_trim_true_detection
         This function
-            - trims the true detection npy to the period [t_start, t_end], where we have PIR data
+            - trims the true detection (from CV) npy to the period [t_start, t_end], where we have PIR data
             - corrects the timestamps (which drifts when using constant 60 fps)
             - convert the speed to mph
             - remove erroneous true vehicles with speed being negative or np.nan or np.inf
@@ -801,6 +817,7 @@ class PostProcess:
         idx = _t_idx  & _speed_idx
         np.save(true_det_file.replace('.npy', '_post.npy'), true_vehs[idx,:])
 
+    # DONE
     @staticmethod
     def combine_two_lane_detections(s1_vehs_npy_file, s2_vehs_npy_file, s1_s2_shift=0.33, dt=0.5, save_dir='',
                                     speed_range=(0,70)):
@@ -809,13 +826,20 @@ class PostProcess:
         :param s1_vehs_npy_file: post processed detection result from s1, e.g., _post.npy file
         :param s2_vehs_npy_file: post processed detection result from s2
         :param s1_s2_shift: t_s1 = t_s2 + s1_s2_shift
-        :param dt: float, seconds, <= dt will be considered same trace
+        :param dt: float, seconds, <= dt will be considered same vehicle
+        :param save_dir: the directory for saving the combined data
+        :param speed_range: the range of the speed
         :return: save files:
-            s1_veh_comb_npy: with additional entry 'closer_lane' = True or False to mark the detected vehicle alne
-            s2_veh_comb_npy, with additional entry 'closer_lane' = True or False to mark the detected vehicle alne
-            combined_detections.npy: a list of unique vehicles, each vehicle (row) is
-                [
-             [ [[t_mean, idx, 0, speed], [t_mean, idx, 1, speed]], ... ] ; 0 ~ s1, 1 ~ s2
+            s1_detected_veh_post_combined.npy: with additional entry 'closer_lane' = True or False to mark the detected vehicle alne
+            s2_detected_veh_post_combined.npy, with additional entry 'closer_lane' = True or False to mark the detected vehicle alne
+            debug_combined_detections.npy: DEBUG ONLY FOR VISUALIZATION. a list of vehicles considered as the same vehicle,
+                each row is a list of detections, with one, two, or three element, clustered by the temporal distance.
+                [detection_1, detection_2,...]
+                Each detection is [t_mean, idx, 0, speed]
+                    t_mean: the time that the vehicle was detected (mean of enter and exit time)
+                    idx: the index of that detection in the corresponding detection file, e.g., s1_detected_veh_post.npy
+                    0 or 1: mark which sensor, 0 ~ s1, 1 ~s2
+                    speed: mph, the speed of the vehicle.
         """
         s1_vehs = np.load(s1_vehs_npy_file)
         s2_vehs = np.load(s2_vehs_npy_file)
@@ -885,7 +909,7 @@ class PostProcess:
         else:
             print('Warning: {0} vehicles are groupped as the same vehicle'.format(len(mini)))
 
-        np.save(save_dir+'unique_detected_vehs.npy', unique_vehs)
+        np.save(save_dir+'debug_combined_vehs.npy', unique_vehs)
 
         # Now determine the closer_lane values
         history_speeds = []
@@ -1041,10 +1065,10 @@ class PostProcess:
                 print('Warning: {0} vehicles groupped: {1}'.format(len(dup_vehs), dup_vehs[:,2]))
 
         # save the combined data
-        np.save(s1_vehs_npy_file.replace('.npy', '_comb.npy'), s1_vehs)
-        np.save(s2_vehs_npy_file.replace('.npy', '_comb.npy'), s2_vehs)
+        np.save(s1_vehs_npy_file.replace('.npy', '_combined.npy'), s1_vehs)
+        np.save(s2_vehs_npy_file.replace('.npy', '_combined.npy'), s2_vehs)
 
-
+    # DONE
     @staticmethod
     def trim_norm_df(norm_df_file, t_start, t_end):
         """
@@ -1062,6 +1086,8 @@ class PostProcess:
         frames = norm_df.index[ (norm_df.index >= t_start) & (norm_df.index <= t_end) ]
         norm_df.loc[frames,:].to_csv(norm_df_file.replace('.csv', '_post.csv'))
 
+
+    # DONE
     def add_clean_ultra_col_norm_df(self, norm_df_file, paras_file):
         """
         This function
@@ -1084,6 +1110,8 @@ class PostProcess:
 
         norm_df.to_csv(norm_df_file.replace('.csv', '_clean_ultra.csv'))
 
+
+    # DONE
     @staticmethod
     def _load_paras(paras_file):
         """
@@ -1101,6 +1129,8 @@ class PostProcess:
 
         return paras
 
+
+    # DONE
     @staticmethod
     def _clean_ultra(raw_ultra, paras, TH_ultra_fp=None):
         """
@@ -1156,15 +1186,6 @@ class PostProcess:
         return clean_ultra
 
 
-
-
-
-
-
-
-
-
-
     @staticmethod
     def _new_nonlinear_transform(paras):
         """
@@ -1191,7 +1212,7 @@ class PostProcess:
 
 
 
-class EvaluateResult:
+class EvaluatePerformance:
     """
     This class evaluates and visualizes the estimation results.
     """
@@ -1313,7 +1334,7 @@ class EvaluateResult:
         """
         paras = self._load_paras(paras_file)
 
-        fig = plt.figure(figsize=(18, 10))
+        _ = plt.figure(figsize=(18, 10))
         gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
 
         # axis 0 is the scattered PIR plot
@@ -1433,7 +1454,7 @@ class EvaluateResult:
     # DONE
     def plot_two_lanes_detection_vs_true(self, s1_df, s1_vehs, s1_true=None, s1_paras_file=None,
                                          s2_df=None, s2_vehs=None, s2_true=None, s2_paras_file=None,
-                                         s1s2_shift=0.33, t_start=None, t_end=None, combined_detections=None):
+                                         s1s2_shift=0.33, t_start=None, t_end=None, debug_combined_vehs=None):
         """
         OLD_NAME: plot_two_lane_vs_true
         This function plots the combined two lanes detection with
@@ -1448,7 +1469,8 @@ class EvaluateResult:
         :param s1s2_shift: the time shift of two PIR data stream due to the longitudinal placement error.
         :param t_start: datetime, start time of the plotted period
         :param t_end: datetime, end time of the plotted period
-        :param combined_detections: the combined detections generated combine_two_lanes_detection in Post processing
+        :param debug_combined_vehs: the combined vehicles generated combine_two_lanes_detection in Post processing. ONLY
+                used for visualization
         :return:
         """
 
@@ -1466,7 +1488,7 @@ class EvaluateResult:
 
         # ==============================================================================
         # Set figure axis
-        fig = plt.figure(figsize=(18, 10))
+        _ = plt.figure(figsize=(18, 10))
         gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
 
         # axis 0 is the scattered PIR plot
@@ -1586,8 +1608,8 @@ class EvaluateResult:
         # ==============================================================================
         # plot the matches of the same vehicles for s1 and s2
         markers = itertools.cycle(['o', 'v', '^', 's'])
-        if combined_detections is not None:
-            for vehs in combined_detections:
+        if debug_combined_vehs is not None:
+            for vehs in debug_combined_vehs:
                 m = next(markers)
                 for v in vehs:
                     ax_pir.scatter((v[0]-t_start).total_seconds(), 0, marker=m, c='r', s=50)
@@ -1657,6 +1679,7 @@ class EvaluateResult:
         colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
         text = []
         y_max = 0.0
+        mu = 0.0
         std_max = 0.0
         for i, d in enumerate(arrs):
             c = next(colors)
@@ -1696,41 +1719,41 @@ class EvaluateResult:
         plt.tick_params(axis='both', which='major', labelsize=fontsizes[2])
         plt.draw()
 
-    def visualize_results_all(self, norm_df, vehs, true_vehs=None, t_start=None, t_end=None):
+    # deprecated
+    # def visualize_results_all(self, norm_df, vehs, true_vehs=None, t_start=None, t_end=None):
+    #     """
+    #     A wrapper function. split into sub intervals; otherwise too large to plot
+    #     :param norm_df:
+    #     :param ratio_tx:
+    #     :param true_vehs:
+    #     :param t_start:
+    #     :param t_end:
+    #     :return:
+    #     """
+    #     # only plot the data in time interval
+    #     if t_start is None: t_start = norm_df.index[0]
+    #     if t_end is None: t_end = norm_df.index[-1]
+    #
+    #     _t_start = t_start
+    #     _t_end = t_start + timedelta(seconds=15*60.0)
+    #     while _t_end <= t_end:
+    #         self.visualize_results(norm_df, vehs, true_vehs=true_vehs, t_start=_t_start, t_end=_t_end)
+    #         _t_start = _t_end
+    #         _t_end = _t_start + timedelta(seconds=15*60.0)
+    #
+    #     # plot the rest
+    #     self.visualize_results(norm_df, vehs, true_vehs=true_vehs, t_start=_t_start, t_end=t_end)
+
+    # DONE
+    @staticmethod
+    def compute_statistics(matched_vehs):
         """
-        A wrapper function. split into sub intervals; otherwise too large to plot
-        :param norm_df:
-        :param ratio_tx:
-        :param true_vehs:
-        :param t_start:
-        :param t_end:
-        :return:
-        """
-        # only plot the data in time interval
-        if t_start is None: t_start = norm_df.index[0]
-        if t_end is None: t_end = norm_df.index[-1]
-
-        _t_start = t_start
-        _t_end = t_start + timedelta(seconds=15*60.0)
-        while _t_end <= t_end:
-            self.visualize_results(norm_df, vehs, true_vehs=true_vehs, t_start=_t_start, t_end=_t_end)
-            _t_start = _t_end
-            _t_end = _t_start + timedelta(seconds=15*60.0)
-
-        # plot the rest
-        self.visualize_results(norm_df, vehs, true_vehs=true_vehs, t_start=_t_start, t_end=t_end)
-
-
-
-
-
-
-
-
-    def compute_statistics(self, matched_vehs):
-        """
-        This function computes the statistics
-        :param matched_vehs: the matched vehicle [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh]
+        This function computes the performance statistics, i.e.,
+            - detection accuracy: False Positive, False Negative, True Positive
+            - speed estimation accuracy, bias and std
+        :param matched_vehs: the matched vehicle generated by match_single_lane_detectin_with_true() and
+            match_two_lanes_detection_with_true()
+            [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh]
         :return: print out
         """
 
@@ -1755,14 +1778,18 @@ class EvaluateResult:
         speed_err = matched_vehs[tp_idx,2] - matched_vehs[tp_idx,3]
         print('           Error: {0:.3f},  {1:.3f}'.format(np.mean(speed_err), np.std(speed_err)))
 
-        rmse = np.sqrt( np.sum(speed_err**2)/len(speed_err) )
+        rmse = np.sqrt( np.sum(np.power(speed_err,2))/len(speed_err) )
         print('           RMSE : {0:.3f}'.format(rmse))
 
-
-    def compute_aggregated_error(self, matched_vehs, agg_s=60):
+    # DONE
+    @staticmethod
+    def compute_aggregated_speed_error( matched_vehs, agg_s=60):
         """
+        OLD_NAME: compute_aggregated_error
         This function computes the aggregated speed estimation error in intervals agg_s
-        :param matched_vehs: [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh]
+        :param matched_vehs: the matched vehicle generated by match_single_lane_detectin_with_true() and
+            match_two_lanes_detection_with_true()
+            [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh]
         :param agg_s: second, interval to be aggregated
         :return: a list of speed error
         """
@@ -1791,7 +1818,8 @@ class EvaluateResult:
         return speed_err
 
     # deprecated
-    def _load_paras(self, paras_file):
+    @staticmethod
+    def _load_paras(paras_file):
         """
         This function loads the parameter files used for generating the results.
         :param paras_file: string, file dir + file name
@@ -1807,7 +1835,7 @@ class EvaluateResult:
 
         return paras
 
-
+    # DONE
     @staticmethod
     def _lists_matching(list1, list2, dt):
         """
@@ -1958,7 +1986,8 @@ class EvaluateResult:
 
 
     # deprecated
-    def _load_clean_detection(self, det_npy_file, ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0,70)):
+    @staticmethod
+    def _load_clean_detection(det_npy_file, ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0,70)):
         """
         This function loads the detected vehicles npy file. If the ultrasonic sensor reading is greater than ultra_fp_ub,
         the detection entry 'valid' will be marked as False, and the distance will be updated as the historical median
@@ -2112,17 +2141,20 @@ class EvaluateResult:
 
         return clean_ultra
 
+    # DONE
     def misc_plot_cleaning_ultra(self, norm_df, true_det, th_ultra_fp=4.0):
         """
         This function cleans the ultrasonic sensor data and visualizes the cleaned result
         :param norm_df: dataframe
         :param true_det: trhe detection result,
+        :param th_ultra_fp: meters, the lowerbound for determining the invalid ultrasonic sensor readings
+            if ultra_reading <= th_ultra_fp, then the reading is invalid
         :return:
         """
-        fig = plt.figure(figsize=(18, 10))
+        _ = plt.figure(figsize=(18, 10))
 
         ultra = norm_df['ultra']
-        cleaned_ultra = self._clean_ultra(ultra, TH_ultra_fp=th_ultra_fp)
+        cleaned_ultra = self._clean_ultra(ultra, None, TH_ultra_fp=th_ultra_fp)
 
         t_start = ultra.index[0]
         t_end = ultra.index[-1]
@@ -2146,9 +2178,9 @@ class EvaluateResult:
         plt.xlim([rel_t[0], rel_t[-1]])
         plt.ylim([0,12])
 
-
     # deprecated
-    def post_trim_norm_df(self, norm_df_file, t_start, t_end):
+    @staticmethod
+    def post_trim_norm_df(norm_df_file, t_start, t_end):
         """
         This function
             - trims the norm_df to contain only data in [t_start, t_end]
@@ -2301,13 +2333,220 @@ class EvaluateResult:
         idx = _t_idx  & _speed_idx
         np.save(true_det_file.replace('.npy', '_post.npy'), true_vehs[idx,:])
 
+
+    # DONE
+    def plot_video_frames(self, video_file, video_fps, video_start_time,
+                          raw_df, raw_pir_clim, ratio_tx,
+                          norm_df, norm_df_win, det_vehs, save_dir, paras):
+        """
+        This function plots the video frames. Use the following command to generate a video:
+        "ffmpeg -framerate 60 -pattern_type glob -i '*.png' -vf scale=1480:-2 -vcodec libx264 -pix_fmt yuv420p out.mp4"
+        :param video_file: the video file
+        :param video_fps: the frame rate of the video
+        :param video_start_time: the start timestamp of the video
+        :param raw_df: the raw_df for plotting the PIR data
+        :param raw_pir_clim: (cmin, cmax) for the colorbar
+        :param norm_df: Cleaned data after background subtraction
+        :param norm_df_win: in seconds, how many seconds back to plot
+        :param ratio_tx: the ratio for nonlinear transformation; speed (m/s) = slope*ratio_tx*distance
+        :param det_vehs: the detected vehicles
+        :param save_dir: directory for saving the images
+        :param paras: the parameters used for the detector
+        :return:
+        """
+
+        # ========================================================================
+        # Process the video
+        cap = cv2.VideoCapture(video_file)
+        total_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        res = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        print('Loaded video {0}:'.format(video_file))
+        print('    Resolution: {0} x {1}'.format(res[0], res[1]))
+        print('    Frame count: {0}'.format(total_video_frames))
+
+        # generating the timestamps for video
+        video_t = []
+        _dt = timedelta(seconds=1.0/video_fps)
+        for i in range(0, total_video_frames):
+            video_t.append( video_start_time + _dt*i)
+        video_t = np.asarray(video_t)
+
+        # get the start and end index of the video frames that corresponds to the data period
+        video_idx_start = np.where(video_t >= raw_df.index[0])[0][0]
+        video_idx_end = np.where(video_t <= raw_df.index[-1])[0][-1]
+
+        print('    Index: ({0}, {1})'.format(video_idx_start, video_idx_end))
+
+        # compute how many zeros to pad when naming files
+        n_digit = len(str(video_idx_end-video_idx_start))
+
+        # set the current frame position
+        cap.set(cv2.CAP_PROP_POS_FRAMES, video_idx_start+349)
+
+        # ========================================================================
+        # plot a figure for each frame
+        for cur_idx in range(video_idx_start+349, video_idx_end):
+
+            print_loop_status('Plotting frame:',cur_idx,video_idx_end)
+
+            cur_t = video_t[cur_idx]
+
+            # ---------------------------------------------------------------------
+            fig = plt.figure(figsize=(18, 10))
+            gs = gridspec.GridSpec(2, 2, height_ratios=[5, 1], width_ratios=[3,2])
+
+            ax_video = plt.subplot(gs[0])
+
+            ax_heatmap = plt.subplot(gs[1])
+            # adjust the ax_heatmap position
+            pos = ax_heatmap.get_position()
+            pos2 = [pos.x0 - 0.03, pos.y0 + 0.017,  pos.width, pos.height*0.944]
+            ax_heatmap.set_position(pos2)
+
+            ax_pir = plt.subplot(gs[2])
+            # pos = ax_pir.get_position()
+            # pos2 = [pos.x0, pos.y0,  pos.width*0.9, pos.height]
+            # ax_pir.set_position(pos2)
+            # ax_text = plt.subplot(gs[3])
+
+            # ---------------------------------------------------------------------
+            # plot 5 s heatmap after nonlinear transform
+            heatmap_start = cur_t - timedelta(seconds=norm_df_win)
+            _idx = norm_df.index[ (norm_df.index>=heatmap_start) & (norm_df.index<=cur_t) ]
+            pir_frames = norm_df.ix[_idx, :]
+            pir_pts, t_grid, x_grid = self._tx_representation(pir_frames, paras)
+
+            if len(pir_pts) <= 1:
+                print('           Skip empty frame at {0}'.format(cur_t))
+                # plt.clf()
+                plt.close()
+                continue
+
+            ax_heatmap.scatter(-pir_pts[:,0], pir_pts[:,1], color='0.6')
+
+            # print('Plotting detected vehicles...')
+            # plot the detected vehicle
+            colors = itertools.cycle( ['b', 'g', 'm', 'c', 'purple', 'r'])
+            cur_vehs=[]
+            for veh in det_vehs:
+
+                # first check if the veh is in the period to be plotted
+                if veh.t_out <= heatmap_start or veh.t_in >= cur_t:
+                    continue
+
+                # plot the supporting points
+                sup_pts = np.array( [[(p[0]-cur_t).total_seconds(), p[1]] for p in veh.pts] )
+
+                ax_heatmap.scatter(-sup_pts[:,0], sup_pts[:,1], color=next(colors), alpha=0.75)
+
+                # plot the fitted line
+                t_in_s = (veh.t_in-cur_t).total_seconds()
+                t_out_s = (veh.t_out-cur_t).total_seconds()
+                ax_heatmap.plot([-t_in_s, -t_out_s],[x_grid[0], x_grid[-1]], linewidth=2, color='k')
+
+                # add currently detected vehicles in list
+                if veh.t_in <= cur_t <= veh.t_out:
+                    cur_vehs.append(veh)
+
+            # add statistics below
+            ax_height = np.abs(x_grid[0] - x_grid[-1])
+            ax_heatmap.text(1, x_grid[-1] - ax_height*0.2, 'Detected: ')
+            if len(cur_vehs) != 0:
+                # detected
+                speeds = [np.abs(veh.slope*ratio_tx*2.24*3.5) for veh in cur_vehs]
+                points = [(len(veh.pts), len(set(veh.pts))) for veh in cur_vehs]
+
+                ax_heatmap.text(2, x_grid[-1] - ax_height*0.2, 'True',
+                                bbox=dict(facecolor='red', edgecolor=None, alpha=1, boxstyle='round'))
+                ax_heatmap.text(1, x_grid[-1] - ax_height*0.25,
+                                'Speed (mph): {0}'.format(', '.join(['{0:.02f}'.format(s) for s in speeds])))
+
+                ax_heatmap.text(1, x_grid[-1] - ax_height*0.3,
+                                'Support: {0}'.format(', '.join(['{0}/{1}'.format(p[0], p[1]) for p in points])))
+            else:
+                ax_heatmap.text(2, x_grid[-1] - ax_height*0.2, 'False',
+                                bbox=dict(facecolor='gray', edgecolor=None, alpha=0.5, boxstyle='round'))
+                ax_heatmap.text(1, x_grid[-1] - ax_height*0.25, 'Speed: -')
+                ax_heatmap.text(1, x_grid[-1] - ax_height*0.3, 'Support: -')
+
+            # set ticks and labels
+            ax_heatmap.set_xlim([0, norm_df_win])
+            ax_heatmap.set_ylim([x_grid[-1], x_grid[0]])
+            ax_heatmap.set_xticks(np.arange(0, norm_df_win+1))
+            ax_heatmap.set_xticklabels(['0']+[str(-int(i)) for i in np.arange(1, norm_df_win+1)])
+            ax_heatmap.set_xlabel('Time (s)', fontsize=16)
+            ax_heatmap.set_yticks([])
+            ax_heatmap.set_ylabel('Space', fontsize=16)
+            ax_heatmap.set_title('Heat traces', fontsize=18)
+
+            # ---------------------------------------------------------------------
+            # Plot the video
+            # print('Plotting the video frame...')
+            ret, v_frame = cap.read()
+
+            # mark time at the video
+            time_str = time2str( cur_t )
+            cv2.putText(v_frame, time_str, (150, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
+
+            rbg_frame = cv2.cvtColor(v_frame, cv2.COLOR_BGR2RGB)
+            ax_video.imshow(rbg_frame)
+            ax_video.set_xticks([])
+            ax_video.set_yticks([])
+            ax_video.set_title('Video', fontsize=18)
+
+            # ---------------------------------------------------------------------
+            # plot the last and latest raw PIR frame
+            # print('Plotting the PIR frame...')
+            pir_idx = np.where(raw_df.index <= cur_t)[0][-1]
+            raw_pir = raw_df.ix[pir_idx, [i for i in raw_df.columns if 'pir' in i]].values
+            raw_pir = raw_pir.reshape(self.pir_res[1], self.pir_res[0]).T
+
+            im = ax_pir.imshow(raw_pir, cmap=plt.get_cmap('jet'), interpolation='nearest', aspect='auto',
+                               vmin=raw_pir_clim[0], vmax=raw_pir_clim[1])
+
+            ax_pir.set_xticks([])
+            ax_pir.set_yticks([])
+            ax_pir.set_title('PIR data', fontsize=18)
+            cax = fig.add_axes([0.56, 0.1, 0.01, 0.12])
+            cbar_ticks = [raw_pir_clim[0], int(np.mean(raw_pir_clim)), raw_pir_clim[1]]
+            cbar = fig.colorbar(im, cax=cax, orientation='vertical', ticks=cbar_ticks)
+            cbar.ax.set_yticklabels([str(i) for i in cbar_ticks])
+
+            # ---------------------------------------------------------------------
+            # save the figure
+            # print('Saving the figure...')
+            f_name = save_dir + str(cur_idx-video_idx_start).zfill(n_digit) + '.png'
+            t1 = datetime.now()
+            plt.savefig(f_name, bbox_inches='tight')
+            # plt.clf()
+            plt.cla()
+            plt.close()
+            t2 = datetime.now()
+            print('Saving figure took {0} s'.format((t2-t1).total_seconds()))
+
+
+
+        cap.release()
+
+
 class SpeedEst:
     """
-    This class is used to estimate the speed of vehicles within a time window.
+    This class is used to confirm detection of a vehicle and estimate the vehicle speed using a batch of PIR data.
     """
 
     def __init__(self, norm_df, paras, window_s=5.0, speed_range=(1, 50),
                  plot_final=True, plot_debug=False, save_dir='./'):
+        """
+        Initialize the speed estimator with parameters
+        :param norm_df: the nomalized dataframe of the sensor data
+        :param paras: the parameters used to run the estimator
+        :param window_s: float, seconds, the time window of the data
+        :param speed_range: tuple, mph, the valid speed range
+        :param plot_final: Bool, whether to plot the final estimation result; one figure per window.
+        :param plot_debug: Bool, whether to plot the itermediate regression steps. WILL GENERATE A LOT OF FIGURES
+        :param save_dir: the directory for saving the figures.
+        :return:
+        """
 
         self.paras = paras
         self._debug = False
@@ -3484,7 +3723,7 @@ class SpeedEst:
         ref_line = slope, 0.0
 
         # plot the initial figure
-        fig = plt.figure(figsize=(10, 9))
+        _ = plt.figure(figsize=(10, 9))
         gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1])
 
         # Axis 1 will be used to plot the analysis of the fitting
@@ -3580,7 +3819,7 @@ class SpeedEst:
                 ## ax0: Color those scattered points belong to each cluster
                 if True:
                     # plot within in 2 std
-                    _idx = (residuals >= mean-2*std) & (residuals <= mean+2*std)
+                    # _idx = (residuals >= mean-2*std) & (residuals <= mean+2*std)
                     # plot within minimum
                     _idx = (residuals >= minimas[_i_before]) & (residuals <= minimas[_i_after])
                     ax0.scatter(self.time[pt_idx][_idx], self.space[pt_idx][_idx], color=c)
@@ -3648,17 +3887,19 @@ class SpeedEst:
         """
         This function is only used for debugging. It visualizes how the subclusters are obtained using kernel density
         estimation
-        :param clusters
+        :param clusters: the clusters
+        :param title: the title of the plot
+        :param save_name: the saved file name for the plot
         :return:
         """
 
         # plot the initial figure
-        fig = plt.figure(figsize=(10, 9))
+        _ = plt.figure(figsize=(10, 9))
         gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1])
 
         # Axis 1 will be used to plot the analysis of the fitting
         ax0 = plt.subplot(gs[0])
-        ax1 = plt.subplot(gs[1])
+        _ = plt.subplot(gs[1])
 
         # ----------------------------------------------------
         # plot ax0: plot the all data points
@@ -3714,6 +3955,7 @@ class SensorData:
         The data format in the file is assumed to be:
             - timestamps|pir_data(row by row)|ultra|Tamb1|Tamb2
         :param data_file: data file name
+        :param flip: Bool, whether to flip the left and right sensors.
         :return: a pandas data frame. The index is timestamps,
                  the columns are [pir_0x0, pir_1x0, ..., ultra, Tamb_1, Tamb_2]
         """
@@ -3731,8 +3973,8 @@ class SensorData:
 
         if data_file is not None and exists(data_file):
 
-            with open(data_file, 'r') as f:
-                for line in f:
+            with open(data_file, 'r') as fi:
+                for line in fi:
                     item = line.strip().split('|')
                     timestamps.append( str2time(item[0]) )
 
@@ -3787,6 +4029,8 @@ class SensorData:
         frames = raw_data.index[ (raw_data.index >= t_start) & (raw_data.index <= t_end) ]
         norm_data = deepcopy(raw_data.loc[frames,:])
 
+        noise_means = None
+        noise_stds = None
         if window_s is None:
             # then use the entire period as the window
             _, _, noise_means, noise_stds = self._get_noise_distribution(norm_data, t_start=t_start, t_end=t_end,
@@ -3835,6 +4079,7 @@ class SensorData:
         :param noise_pt_thres: the minimum number of noise point to close a detection cycle.
         :param prob_int: the confidence interval used to determine whether a point is noise or vehicle
         :param pixels: the list of pixels for performing the background subtraction
+        :param debug: Bool, If true will print and plot the KF process
         :return:
         """
 
@@ -4047,6 +4292,9 @@ class SensorData:
         if t_start is None: t_start = raw_data.index[0]
         if t_end is None: t_end = raw_data.index[-1]
 
+        _mean = None
+        _std = None
+
         # t_start and t_end may not be in the index, hence replace by _t_start >= t_start and _t_end <= t_end
         _t_start = raw_data.index[np.where(raw_data.index>=t_start)[0][0]]
         _t_end = raw_data.index[np.where(raw_data.index<=t_end)[0][-1]]
@@ -4122,10 +4370,10 @@ class SensorData:
             else:
                 raise Exception('Specify file type: txt or npy')
 
-            for f in files:
+            for f_name in files:
 
                 # get the sensor config
-                sensor_id = f.split('/')[-1].replace('.{0}'.format(f_type), '')
+                sensor_id = f_name.split('/')[-1].replace('.{0}'.format(f_type), '')
 
                 if f_type == 'npy':
                     d = np.load(f)
@@ -4133,7 +4381,7 @@ class SensorData:
                     t_end = d[-1][0]
 
                 elif f_type == 'txt':
-                    with open(f,'r') as fi:
+                    with open(f_name,'r') as fi:
                         first_line = fi.readline()
 
                         t_start = str2time( first_line.strip().split('|')[0] )
@@ -4153,9 +4401,9 @@ class SensorData:
                 periods[sensor_id] = (t_start, t_end)
 
             # save in a file
-            with open(f_periods, 'w') as f:
+            with open(f_periods, 'w') as fi:
                 for key in periods:
-                    f.write('{0},{1},{2}\n'.format(key, time2str(periods[key][0]),
+                    fi.write('{0},{1},{2}\n'.format(key, time2str(periods[key][0]),
                                                    time2str(periods[key][1]) ))
             print('Updated dataset_periods.cfg.')
         else:
@@ -4265,6 +4513,8 @@ class SensorData:
         """
         Plot the evolution of the time series noise distribution for pixel
         :param data: pandas dataframe
+        :param t_start: datetime, start time of the plotted period
+        :param t_end: datetime, end time of the plotted period
         :param p_outlier: [0,1], points outside of (1-p_outlier) confidence interval will be considered as outlier
         :param stop_thres: (delta_mu, delta_sigma) degrees in temperature
         :param pixel: tuple, (row, col)
@@ -4398,14 +4648,14 @@ class SensorData:
 
             # the histogram of the data
             num_bins = 200
-            fig = plt.figure(figsize=(8,5), dpi=100)
+            _ = plt.figure(figsize=(8,5), dpi=100)
             n, bins, patches = plt.hist(time_series, num_bins,
                                         normed=1, facecolor='green', alpha=0.75)
 
             # add a 'best fit' line
             norm_fit_line = mlab.normpdf(bins, noise_mu[row, col],
                                                noise_sigma[row, col])
-            l = plt.plot(bins, norm_fit_line, 'r--', linewidth=1.5, label='Background')
+            _ = plt.plot(bins, norm_fit_line, 'r--', linewidth=1.5, label='Background')
 
             print('PIR pixel {0} x {1}:'.format(row, col))
             print('    All: ({0}, {1})'.format(mu[row, col], sigma[row, col]))

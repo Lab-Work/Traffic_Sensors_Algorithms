@@ -22,7 +22,7 @@ def main():
     """
 
     # ===============================================================================================
-    # This function is used to perform preprocessing and analysis of the data, including
+    # Run preprocessing data
     #     - loading the raw data from txt file to pandas data frame structure
     #     - visualizing the raw PIR and ultrasonic sensor data
     #     - visualizing the evolution and distribution of the temperature data from each pixel
@@ -39,8 +39,14 @@ def main():
 
 
     # ===============================================================================================
-    #
+    # Run post processing result, including
+    #   - trimming detection results and video ground truth into interested period
+    #   - DEBUG ONLY, quickly regenerate the result with new ultrasonic sensor parameters without
+    #     reruning the traffic detection algorithm
+    #   - correcting the time drift of the ground truth caused by the constant video drift assumption
+    #   - combine two sensors detection result for two lanes
     # ===============================================================================================
+
 
     # ===============================================================================================
     # Run the following function to evaluate the traffic detection accuracy.
@@ -205,7 +211,7 @@ def preprocess_data():
         norm_df = pd.read_csv(save_dir+'{0}_2d_KF__{1}__{2}_prob95.csv'.format(sensor, time2str_file(t_start),
                                                                                time2str_file(t_end)), index_col=0)
         norm_df.index = norm_df.index.to_datetime()
-        fig, ax = data.plot_heatmap_in_period(norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
+        _, _ = data.plot_heatmap_in_period(norm_df, t_start=t_start, t_end=t_end, cbar=(0,4),
                                               option='vec', nan_thres_p=None, plot=True, save_dir=save_dir, save_img=False,
                                               save_df=False, figsize=(18,8))
 
@@ -317,7 +323,7 @@ def run_traffic_detection():
 
 
     # ===============================================================================================
-    # Test 2: dataset Jun 09, 2017, 19:10~20:39
+    # Test 2: dataset Jun 09, 2017, 19:10~20:39 UTC
     # ===============================================================================================
     if False:
 
@@ -341,7 +347,7 @@ def run_traffic_detection():
                                 t_start=None, t_end=None)
 
     # ===============================================================================================
-    # Test 3, sensor 1:  data set 0530, S1: 20:55 ~ 21:45
+    # Test 3, sensor 1:  data set 0530, S1: 20:55 ~ 21:45 UTC
     # ===============================================================================================
     if False:
 
@@ -366,7 +372,7 @@ def run_traffic_detection():
                                 t_end=str2time('2017-05-30 21:45:00.0'))
 
     # ===============================================================================================
-    # Test 3, sensor 2: data set 0530, S2: 20:55 ~ 21:45
+    # Test 3, sensor 2: data set 0530, S2: 20:55 ~ 21:45 UTC
     # ===============================================================================================
     if False:
 
@@ -391,6 +397,188 @@ def run_traffic_detection():
                                 t_start=str2time('2017-05-30 20:55:00.0'),
                                 t_end=str2time('2017-05-30 21:45:00.0'))
 
+def post_process():
+    """
+    This function post processes the detection results, including
+       - trimming detection results and video ground truth into interested period
+       - DEBUG ONLY, quickly regenerate the result with new ultrasonic sensor parameters without
+         rerunning the traffic detection algorithm
+       - correcting the time drift of the ground truth caused by the constant video drift assumption
+       - combine two sensors detection result for two lanes
+
+    SET TRUE/FALSE to run the post processing for each dataset
+
+    :return:
+    """
+    # ===============================================================================================
+    # data set Jun08, 2017, S1: trim to 21:40~22:20 UTC
+    # ===============================================================================================
+    if False:
+        folder = 'Jun08_2017'
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        t_period_start = str2time('2017-06-08 21:40:00.0')
+        t_period_end = str2time('2017-06-08 22:20:00.0')
+
+        vehs_npy = save_dir + 'figs/speed/v3_final/detected_vehs.npy'
+
+        # Ground truth
+        init_t = str2time('2017-06-08 21:32:18.252811')
+        offset = -0.28
+        drift_ratio = 1860.5/1864.0
+        true_file = save_dir + 'labels_Jun08.npy'
+
+        # Trimming
+        post = PostProcess()
+
+        # trim the norm_df
+        if False:
+            norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
+            post.trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
+
+        if True:
+            # paras_file = save_dir + 'figs/speed/v3_final/paras.txt'
+            # norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
+            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
+
+            post.postprocess_detection(vehs_npy, t_period_start, t_period_end,
+                                 ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
+
+        if False:
+            post.postprocess_true(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
+
+
+    # ===============================================================================================
+    # data set Jun09, 2017, S1, trim to 19:10~20:39
+    # ===============================================================================================
+    if True:
+        folder = 'Jun09_2017'
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        t_period_start = str2time('2017-06-09 19:10:00.0')
+        t_period_end = str2time('2017-06-09 20:39:00.0')
+
+        vehs_npy = save_dir + 'figs/speed/detected_vehs.npy'
+
+        # Ground truth
+        init_t = str2time('2017-06-09 19:09:00.0')
+        offset = -0.66
+        drift_ratio = 1860.5/1864.0
+        true_file = save_dir + 'labels_Jun09.npy'
+
+        # Trimming
+        post = PostProcess()
+
+        # trim the norm_df
+        if False:
+            norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
+            post.trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
+
+        if True:
+            # paras_file = save_dir + 'figs/speed/paras.txt'
+            # norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
+            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
+
+            post.postprocess_detection(vehs_npy, t_period_start, t_period_end,
+                                 ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
+
+        if False:
+            post.postprocess_true(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
+
+
+    # ===============================================================================================
+    # data set 0530, 2017, S1: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
+    # ===============================================================================================
+    if False:
+        folder = 'May30_2017'
+        t_period_start = str2time('2017-05-30 20:55:00.0')
+        t_period_end = str2time('2017-05-30 21:45:00.0')
+
+        # Configuration
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        # Detections
+        paras_file = save_dir + 'figs/speed/s1/paras.txt'
+        norm_df_file = save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
+        vehs_npy = save_dir + 'figs/speed/s1/detected_vehs.npy'
+
+        # Ground truth
+        # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
+        init_t = str2time('2017-05-30 20:55:00.0')
+        offset = -0.48
+        drift_ratio = 1860.6/1864.0
+        true_file = save_dir + 'labels_v11.npy'
+
+        # Trimming
+        post = PostProcess()
+
+        # trim the norm_df
+        if False:
+            post.trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
+
+        if False:
+            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
+
+            post.postprocess_detection(vehs_npy, t_period_start, t_period_end,
+                                 ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
+
+        if True:
+            post.postprocess_true(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
+
+    # ===============================================================================================
+    # data set 0530, 2017, S2: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
+    # ===============================================================================================
+    if False:
+        folder = 'May30_2017'
+        t_period_start = str2time('2017-05-30 20:55:00.0')
+        t_period_end = str2time('2017-05-30 21:45:00.0')
+
+        # Configuration
+        save_dir = '../workspace/{0}/'.format(folder)
+
+        # Detection
+        paras_file = save_dir + 'figs/speed/s2/paras.txt'
+        norm_df_file = save_dir + 's2_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
+        vehs_npy = save_dir + 'figs/speed/s2/detected_vehs.npy'
+
+        # Ground truth
+        # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
+        init_t = str2time('2017-05-30 20:55:00.0')
+        offset = 2.102
+        drift_ratio = 1860.6/1864.0
+        true_file = save_dir + 'labels_v21_post.npy'
+
+        # Trimming
+        post = PostProcess()
+
+        # trim the norm_df
+        if False:
+            post.trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
+
+        if False:
+            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
+            post.postprocess_detection(vehs_npy, t_period_start, t_period_end,
+                                 ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
+
+        if True:
+            post.postprocess_true(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
+
+
+        # -----------------------------------------------------------------------------------------------
+        # Combine detections from two lanes
+        if False:
+            folder = 'May30_2017'
+            save_dir = '../workspace/{0}/'.format(folder)
+
+            s1_vehs_npy = save_dir + 'figs/speed/s1/v2_3/detected_vehs_post.npy'
+            s2_vehs_npy = save_dir + 'figs/speed/s2/v2_3/detected_vehs_post.npy'
+
+            # combine detection
+            s1_s2_shift = 0.33
+            post.combine_two_lane_detections(s1_vehs_npy, s2_vehs_npy, s1_s2_shift=s1_s2_shift, dt=0.5, save_dir=save_dir,
+                                           speed_range=(0.0,70.0))
+
+
 
 def evaluate_accuracy():
     """
@@ -400,22 +588,6 @@ def evaluate_accuracy():
     # ===============================================================================================
     # data set 0530, 2017: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
     # ===============================================================================================
-    # S1 and S2
-    # -----------------------------------------------------------------------------------------------
-    # Combine detections
-    if False:
-        folder = 'May30_2017'
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        s1_vehs_npy = save_dir + 'figs/speed/s1/v2_3/detected_vehs_post.npy'
-        s2_vehs_npy = save_dir + 'figs/speed/s2/v2_3/detected_vehs_post.npy'
-
-        # combine detection
-        s1_s2_shift = 0.33
-        ev = EvaluateResult()
-        # ev.combine_detections(s1_vehs_npy, s2_vehs_npy, s1_s2_shift=s1_s2_shift, dt=0.5)
-        ev.combine_two_lane_detections(s1_vehs_npy, s2_vehs_npy, s1_s2_shift=s1_s2_shift, dt=0.5, save_dir=save_dir,
-                                       speed_range=(0.0,70.0))
 
     # -----------------------------------------------------------------------------------------------
     # S1 and S2, plot combined detection vs true
@@ -431,21 +603,21 @@ def evaluate_accuracy():
         s1_vehs_comb = np.load(save_dir + 'figs/speed/s1/v2_3/detected_vehs_post_comb_v2.npy')
         s2_vehs_comb = np.load(save_dir + 'figs/speed/s2/v2_3/detected_vehs_post_comb_v2.npy')
 
-        unique_vehs = np.load(save_dir + 'unique_detected_vehs.npy')
+        debug_combined_vehs = np.load(save_dir + 'unique_detected_vehs.npy')
 
-        ev = EvaluateResult()
+        ev = EvaluatePerformance()
         if False:
             s1_norm_df = pd.read_csv(save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95_clean_ultra.csv', index_col=0)
             s1_norm_df.index = s1_norm_df.index.to_datetime()
             s2_norm_df = pd.read_csv(save_dir + 's2_2d_KF__20170530_205400_0__20170530_214500_0_prob95_clean_ultra.csv', index_col=0)
             s2_norm_df.index = s2_norm_df.index.to_datetime()
             s1_s2_shift = 0.33
-            ev.plot_two_lane_vs_true(s1_df=s1_norm_df, s1_vehs=s1_vehs_comb, s1_true=s1_true,
+            ev.plot_two_lanes_detection_vs_true(s1_df=s1_norm_df, s1_vehs=s1_vehs_comb, s1_true=s1_true,
                                      s2_df=s2_norm_df, s2_vehs=s2_vehs_comb, s2_true=s2_true,
                                      s1s2_shift=s1_s2_shift, s1_paras_file=paras_file,
                                      t_start=str2time('2017-05-30 21:29:00.0'),
                                      t_end=str2time('2017-05-30 21:44:00.0'),
-                                     unique_vehs=unique_vehs)
+                                     debug_combined_vehs=debug_combined_vehs)
 
             # ev.plot_two_lane_vs_true(s1_df=s1_norm_df, s1_vehs=s1_vehs_comb, s1_true=s1_true,
             #                          s2_df=s2_norm_df, s2_vehs=s2_vehs_comb, s2_true=s2_true,
@@ -463,7 +635,7 @@ def evaluate_accuracy():
 
         # Match vehicle and compute statistics
         if True:
-            matched_vehs = ev.match_two_lane_det_with_true(s1_vehs_comb, s2_vehs_comb,
+            matched_vehs = ev.match_two_lanes_detection_with_true(s1_vehs_comb, s2_vehs_comb,
                                                            s1_true, s2_true, dt=0.6)
             matched_vehs = np.asarray(matched_vehs)
 
@@ -479,7 +651,7 @@ def evaluate_accuracy():
                          fontsizes=(34, 30, 28), xlim=(-25, 25), ylim=(0, 0.13), text_loc=(10, 0.11))
 
             # Plot one-minute speed error distribution
-            one_min_err = ev.compute_aggregated_error(matched_vehs[tp_idx,:], agg_s=60)
+            one_min_err = ev.compute_aggregated_speed_error(matched_vehs[tp_idx,:], agg_s=60)
             one_min_err = np.asarray(one_min_err)
             rmse = np.sqrt( np.sum(one_min_err**2)/len(one_min_err) )
             print('One minute rmse: {0}'.format(rmse))
@@ -548,7 +720,7 @@ def evaluate_accuracy():
         true_file = save_dir + 'labels_v11_post.npy'
 
         # Plot the detection VS true
-        ev = EvaluateResult()
+        ev = EvaluatePerformance()
 
         # load norm df data
         norm_df = pd.read_csv(norm_df_file, index_col=0)
@@ -559,7 +731,7 @@ def evaluate_accuracy():
         # ev.plot_det_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
         #                       t_start=str2time('2017-05-30 20:55:00.0'),
         #                       t_end=str2time('2017-05-30 21:05:00.0'))
-        ev.plot_det_vs_true(norm_df, paras_file, vehs=None, true_vehs=None,
+        ev.plot_single_lane_detection_vs_true(norm_df, paras_file, vehs=None, true_vehs=None,
                               t_start=str2time('2017-05-30 21:30:00.0'),
                               t_end=str2time('2017-05-30 21:35:00.0'))
 
@@ -576,7 +748,7 @@ def evaluate_accuracy():
         true_file = save_dir + 'labels_v21_post.npy'
 
         # Plot the detection VS true
-        ev = EvaluateResult()
+        ev = EvaluatePerformance()
 
         # load norm df data
         norm_df = pd.read_csv(norm_df_file, index_col=0)
@@ -585,7 +757,7 @@ def evaluate_accuracy():
         true_vehs[:,2] = -true_vehs[:,2]
         det_vehs = np.load(est_vehs_npy)
 
-        ev.plot_det_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
+        ev.plot_single_lane_detection_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
                               t_start=str2time('2017-05-30 21:35:00.0'),
                               t_end=str2time('2017-05-30 21:50:00.0'))
 
@@ -609,7 +781,7 @@ def evaluate_accuracy():
         #     if abs(v['distance']) <= 4:
         #         print('outlier vehicles {0:.2f} m: {1}, {2}'.format(v['distance'], v['t_in'], v['valid']))
 
-        ev = EvaluateResult()
+        ev = EvaluatePerformance()
         # plot the distribution of speed
         if False:
             # Get the distances and speeds
@@ -633,7 +805,7 @@ def evaluate_accuracy():
 
         # Match with true labels, and compute statistics
         if True:
-            matched_vehs = ev.match_one_lane_det_with_true(det_vehs, true_vehs, dt=0.5)
+            matched_vehs = ev.match_single_lane_detection_with_true(det_vehs, true_vehs, dt=0.5)
             matched_vehs = np.asarray(matched_vehs)
 
             ev.compute_statistics(matched_vehs)
@@ -645,7 +817,7 @@ def evaluate_accuracy():
                          fontsizes=(34, 30, 28), xlim=(-7, 7), ylim=(0, 0.5), text_loc=(3, 0.42))
 
             # plot one minute error
-            one_min_err = ev.compute_aggregated_error(matched_vehs[tp_idx,:], agg_s=60)
+            one_min_err = ev.compute_aggregated_speed_error(matched_vehs[tp_idx,:], agg_s=60)
             one_min_err = np.asarray(one_min_err)
             rmse = np.sqrt( np.sum(one_min_err**2)/len(one_min_err) )
             print('One minute rmse: {0}'.format(rmse))
@@ -669,18 +841,18 @@ def evaluate_accuracy():
                     if abs(v[2]-v[3]) >= 4:
                         print('Outlier speed error: {0:.3f}, {1}'.format(v[2]-v[3], v[4]))
 
-        # plot det vs true
-        if False:
-            paras_file = save_dir + 'figs/speed/v3_final/paras.txt'
-            norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95_clean_ultra.csv'
-            norm_df = pd.read_csv(norm_df_file, index_col=0)
-            norm_df.index = norm_df.index.to_datetime()
+            # plot det vs true
+            if False:
+                paras_file = save_dir + 'figs/speed/v3_final/paras.txt'
+                norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95_clean_ultra.csv'
+                norm_df = pd.read_csv(norm_df_file, index_col=0)
+                norm_df.index = norm_df.index.to_datetime()
 
-            # str2time('2017-06-08 21:40:00.0')
-            # str2time('2017-06-08 22:20:00.0')
-            ev.plot_det_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
-                              t_start=str2time('2017-06-08 22:05:00.0'),
-                              t_end=str2time('2017-06-08 22:15:00.0'), matches=matched_vehs)
+                # str2time('2017-06-08 21:40:00.0')
+                # str2time('2017-06-08 22:20:00.0')
+                ev.plot_single_lane_detection_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
+                                  t_start=str2time('2017-06-08 22:05:00.0'),
+                                  t_end=str2time('2017-06-08 22:15:00.0'), matches=matched_vehs)
 
 
     # ===============================================================================================
@@ -696,7 +868,7 @@ def evaluate_accuracy():
         true_vehs = np.load(true_file)
         det_vehs = np.load(est_vehs_npy)
 
-        ev = EvaluateResult()
+        ev = EvaluatePerformance()
         # plot the distribution
         if False:
             # Get the distances and speeds
@@ -721,7 +893,7 @@ def evaluate_accuracy():
         # Match with true labels, and compute statistics
         if True:
             # matched_vehs: [idx_veh, idx_true_veh, est_speed, true_speed, t_veh, t_true_veh]
-            matched_vehs = ev.match_one_lane_det_with_true(det_vehs, true_vehs, dt=1.5)
+            matched_vehs = ev.match_single_lane_detection_with_true(det_vehs, true_vehs, dt=1.5)
             matched_vehs = np.array(matched_vehs)
 
             if True:
@@ -734,7 +906,7 @@ def evaluate_accuracy():
                          fontsizes=(34, 30, 28), xlim=(-7, 6), ylim=(0, 0.35), text_loc=(2, 0.3))
 
                 # plot one-minute error distribution
-                one_min_err = ev.compute_aggregated_error(matched_vehs[tp_idx,:], agg_s=60)
+                one_min_err = ev.compute_aggregated_speed_error(matched_vehs[tp_idx,:], agg_s=60)
                 one_min_err = np.asarray(one_min_err)
                 rmse = np.sqrt( np.sum(one_min_err**2)/len(one_min_err) )
                 print('One minute rmse: {0}'.format(rmse))
@@ -759,20 +931,18 @@ def evaluate_accuracy():
                         print('Outlier speed error: {0:.3f} - {1:.3f}= {2:.3f}, {3}'.format(v[2], v[3],
                                                                                             v[2]-v[3], v[4]))
 
-        # plot det vs true
-        if False:
-            # str2time('2017-06-09 19:10:00.0') ~ str2time('2017-06-09 20:39:00.0')
+            # plot det vs true
+            if False:
+                # str2time('2017-06-09 19:10:00.0') ~ str2time('2017-06-09 20:39:00.0')
 
-            paras_file = save_dir + 'figs/speed/v3_1/paras.txt'
-            norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95_clean_ultra.csv'
-            norm_df = pd.read_csv(norm_df_file, index_col=0)
-            norm_df.index = norm_df.index.to_datetime()
+                paras_file = save_dir + 'figs/speed/v3_1/paras.txt'
+                norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95_clean_ultra.csv'
+                norm_df = pd.read_csv(norm_df_file, index_col=0)
+                norm_df.index = norm_df.index.to_datetime()
 
-            ev.plot_det_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
-                              t_start=str2time('2017-06-09 19:25:00.0'),
-                              t_end=str2time('2017-06-09 19:35:00.0'), matches=matched_vehs)
-
-
+                ev.plot_single_lane_detection_vs_true(norm_df,det_vehs, paras_file, true_vehs=true_vehs,
+                                  t_start=str2time('2017-06-09 19:25:00.0'),
+                                  t_end=str2time('2017-06-09 19:35:00.0'), matches=matched_vehs)
 
 
 
@@ -890,7 +1060,7 @@ def count_vehs(vehs):
     return counter
 
 
-
+# To udpate
 def generate_video_frames():
     # ===============================================================================================
     # generate a video
@@ -925,8 +1095,8 @@ def generate_video_frames():
     print('Generating video frames...')
     # _dir = '../workspace/1013/Video_ff1/'
     _dir = '/data_fast/Yanning_sensors/video_1013_ff1_rgb/'
-    alg = TrafficSensorAlg(pir_res=(4,32))
-    alg.plot_video_frames(video_file='../datasets/1013_2016/1013_v1_1_ff_hq.mp4', video_fps=60.1134421399,
+    ev = EvaluatePerformance()
+    ev.plot_video_frames(video_file='../datasets/1013_2016/1013_v1_1_ff_hq.mp4', video_fps=60.1134421399,
                           video_start_time=str2time('2016-10-13 20:57:27.5'),
                           raw_df=raw_df, raw_pir_clim=(20,40),
                           ratio_tx=6.0, norm_df=norm_df, norm_df_win=5.0, det_vehs=det_vehs,
@@ -945,165 +1115,6 @@ def update_fps(offset1, offset2, T, fps):
     return fps*(T-offset1+offset2)/T
 
 
-def trim_results():
-    """
-    This function trims the same time period out from the datasets for evaluation.
-    For detection result:
-        - Add a column
-    :return:
-    """
-    # ===============================================================================================
-    # data set Jun08, 2017, S1: trim to 21:40~22:20
-    # ===============================================================================================
-    if False:
-        folder = 'Jun08_2017'
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        t_period_start = str2time('2017-06-08 21:40:00.0')
-        t_period_end = str2time('2017-06-08 22:20:00.0')
-
-        vehs_npy = save_dir + 'figs/speed/v3_final/detected_vehs.npy'
-
-        # Ground truth
-        init_t = str2time('2017-06-08 21:32:18.252811')
-        offset = -0.28
-        drift_ratio = 1860.5/1864.0
-        true_file = save_dir + 'labels_Jun08.npy'
-
-        # Trimming
-        eval = EvaluateResult()
-
-        # trim the norm_df
-        if False:
-            norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
-            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
-
-        if True:
-            # paras_file = save_dir + 'figs/speed/v3_final/paras.txt'
-            # norm_df_file = save_dir + 's1_2d_KF__20170608_213900_001464__20170608_222037_738293_prob95.csv'
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
-
-            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
-                                 ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
-
-        if False:
-            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
-
-
-    # ===============================================================================================
-    # data set Jun09, 2017, S1, trim to 19:10~20:39
-    # ===============================================================================================
-    if True:
-        folder = 'Jun09_2017'
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        t_period_start = str2time('2017-06-09 19:10:00.0')
-        t_period_end = str2time('2017-06-09 20:39:00.0')
-
-        vehs_npy = save_dir + 'figs/speed/detected_vehs.npy'
-
-        # Ground truth
-        init_t = str2time('2017-06-09 19:09:00.0')
-        offset = -0.66
-        drift_ratio = 1860.5/1864.0
-        true_file = save_dir + 'labels_Jun09.npy'
-
-        # Trimming
-        eval = EvaluateResult()
-
-        # trim the norm_df
-        if False:
-            norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
-            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
-
-        if True:
-            # paras_file = save_dir + 'figs/speed/paras.txt'
-            # norm_df_file = save_dir + 's1_2d_KF__20170609_190900_009011__20170609_203930_905936_prob95.csv'
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
-
-            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
-                                 ultra_fp_lb=4.0, ultra_fp_ub=8.0, speed_range=(0.0, 30.0))
-
-        if False:
-            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
-
-
-    # ===============================================================================================
-    # data set 0530, 2017, S1: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
-    # ===============================================================================================
-    if False:
-        folder = 'May30_2017'
-        t_period_start = str2time('2017-05-30 20:55:00.0')
-        t_period_end = str2time('2017-05-30 21:45:00.0')
-
-        # Configuration
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        # Detections
-        paras_file = save_dir + 'figs/speed/s1/paras.txt'
-        norm_df_file = save_dir + 's1_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
-        vehs_npy = save_dir + 'figs/speed/s1/detected_vehs.npy'
-
-        # Ground truth
-        # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
-        init_t = str2time('2017-05-30 20:55:00.0')
-        offset = -0.48
-        drift_ratio = 1860.6/1864.0
-        true_file = save_dir + 'labels_v11.npy'
-
-        # Trimming
-        eval = EvaluateResult()
-
-        # trim the norm_df
-        if False:
-            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
-
-        if False:
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
-
-            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
-                                 ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
-
-        if True:
-            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
-
-    # ===============================================================================================
-    # data set 0530, 2017, S2: 2017-05-30 20:55:00.0 ~ 2017-05-30 21:45:00.0
-    # ===============================================================================================
-    if False:
-        folder = 'May30_2017'
-        t_period_start = str2time('2017-05-30 20:55:00.0')
-        t_period_end = str2time('2017-05-30 21:45:00.0')
-
-        # Configuration
-        save_dir = '../workspace/{0}/'.format(folder)
-
-        # Detection
-        paras_file = save_dir + 'figs/speed/s2/paras.txt'
-        norm_df_file = save_dir + 's2_2d_KF__20170530_205400_0__20170530_214500_0_prob95.csv'
-        vehs_npy = save_dir + 'figs/speed/s2/detected_vehs.npy'
-
-        # Ground truth
-        # 30/05: 2017-05-30 20:55:00 ~ 2017-05-30 21:55:00
-        init_t = str2time('2017-05-30 20:55:00.0')
-        offset = 2.102
-        drift_ratio = 1860.6/1864.0
-        true_file = save_dir + 'labels_v21_post.npy'
-
-        # Trimming
-        eval = EvaluateResult()
-
-        # trim the norm_df
-        if False:
-            eval.post_trim_norm_df(norm_df_file, t_period_start-timedelta(seconds=60), t_period_end)
-
-        if False:
-            # eval.post_clean_ultra_norm_df(norm_df_file, paras_file)
-            eval.post_trim_detection(vehs_npy, t_period_start, t_period_end,
-                                 ultra_fp_lb=None, ultra_fp_ub=8.0, speed_range=(0.0, 70.0))
-
-        if True:
-            eval.post_trim_true_detection(true_file, init_t, offset, drift_ratio, t_period_start, t_period_end)
 
 
 if __name__ == '__main__':
