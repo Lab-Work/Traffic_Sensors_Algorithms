@@ -1,4 +1,1 @@
-Please download dataset from the following link. 
-May 30, 2017
-Jun 08, 2017
-Jun 09, 2017
+Please download datasets from this [link](https://www.dropbox.com/sh/6iaxq7uopeofiia/AAD9a6YsEXkoKG-bX4KLoNO_a?dl=0). Total size is about 1.79 GB. 
